@@ -19,11 +19,24 @@ export default async function BoardPage({ params }: BoardPageProps) {
     }
 
     const board = await prisma.board.findUnique({
-        where: { id: boardId }
+        where: { id: boardId },
+        include: {
+            members: {
+                where: { email: session.user.email }
+            }
+        }
     });
 
     if (!board) {
         notFound();
+    }
+
+    // Security: Only author or members can access
+    const isAuthor = board.authorId === session.user.id;
+    const isMember = board.members.length > 0;
+
+    if (!isAuthor && !isMember) {
+        redirect("/dashboard");
     }
 
     return (
