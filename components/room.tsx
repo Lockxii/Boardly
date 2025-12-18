@@ -17,13 +17,17 @@ interface RoomProps {
 
 export function Room({ children, roomId, template, title }: RoomProps) {
   return (
-    <RoomProvider id={roomId} initialPresence={{ selection: [], cursor: null }} initialStorage={{
-      layers: new LiveMap<string, LiveObject<Layer>>(),
-      layerIds: new LiveList([]),
-      auditLog: new LiveList([]),
-    }}>
-      <ClientSideSuspense fallback={<div>Loading…</div>}>
-        <Canvas template={template} title={title} />
+    <RoomProvider 
+        id={roomId} 
+        initialPresence={{ selection: [], cursor: null }} 
+        initialStorage={{
+            layers: new LiveMap<string, LiveObject<Layer>>(),
+            layerIds: new LiveList([]),
+            auditLog: new LiveList([]),
+        }}
+    >
+      <ClientSideSuspense fallback={<Loading />}>
+        {() => <Canvas template={template} title={title} />}
       </ClientSideSuspense>
     </RoomProvider>
   );
