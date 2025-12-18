@@ -45,14 +45,13 @@ export async function inviteUserByEmail(boardId: string, email: string) {
     const senderImage = session.user.image;
 
     try {
-        await resend.emails.send({
-            from: "Boardly <onboarding@resend.dev>", // Note: requires domain verification for custom from
+        const data = await resend.emails.send({
+            from: "Boardly <onboarding@resend.dev>",
             to: email,
             subject: `${senderName} vous invite sur le board '${board.title}'`,
             html: `
-                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; rounded: 12px;">
-                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
-                        ${senderImage ? `<img src="${senderImage}" style="width: 40px; height: 40px; border-radius: 50%;" />` : `<div style="width: 40px; height: 40px; border-radius: 50%; background: #3b82f6; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold;">${senderName[0]}</div>`}
+                <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e5e7eb; border-radius: 12px;">
+                    <div style="margin-bottom: 20px;">
                         <span style="font-size: 16px; font-weight: 600;">${senderName}</span>
                     </div>
                     <h2 style="color: #111827; margin-bottom: 16px;">Invitation à collaborer</h2>
@@ -71,10 +70,17 @@ export async function inviteUserByEmail(boardId: string, email: string) {
                 </div>
             `
         });
+
+        if (data.error) {
+            console.error("Resend Error Detail:", data.error);
+            return { error: `Resend: ${data.error.message}` };
+        }
+
+        console.log("Email sent successfully:", data.data?.id);
         return { success: true };
-    } catch (error) {
-        console.error(error);
-        return { error: "Erreur lors de l'envoi de l'email" };
+    } catch (error: any) {
+        console.error("Critical Resend Error:", error);
+        return { error: error.message || "Erreur lors de l'envoi de l'email" };
     }
 }
 

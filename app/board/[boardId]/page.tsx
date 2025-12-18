@@ -29,15 +29,24 @@ export default async function BoardPage({ params }: BoardPageProps) {
     // Security: Only author or members can access
     const isAuthor = board.authorId === session.user.id;
     
-    // Check membership separately to avoid stale client issues with 'include'
-    const member = await prisma.boardMember.findFirst({
-        where: {
-            boardId: boardId,
-            email: session.user.email as string
-        }
-    });
+    // Debug: Check what's available in prisma
+    console.log("Prisma models available:", Object.keys(prisma).filter(k => !k.startsWith('_')));
 
-    const isMember = !!member;
+    // Check membership safely
+    let isMember = false;
+    const boardMemberModel = (prisma as any).boardMember;
+    
+    if (boardMemberModel) {
+        const member = await boardMemberModel.findFirst({
+            where: {
+                boardId: boardId,
+                email: session.user.email as string
+            }
+        });
+        isMember = !!member;
+    } else {
+        console.warn("prisma.boardMember is NOT available at runtime.");
+    }
 
     if (!isAuthor && !isMember) {
         redirect("/dashboard");

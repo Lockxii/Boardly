@@ -82,6 +82,11 @@ export function InviteDialog() {
                             Invitation envoyée avec succès !
                         </p>
                     )}
+                    {error && (
+                        <p className="text-sm text-red-600 font-medium text-center">
+                            {error}
+                        </p>
+                    )}
                 </form>
                 <DialogFooter>
                     <Button 
