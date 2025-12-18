@@ -1,10 +1,11 @@
 "use client";
 
-import { ChevronLeft, Share2, Users, MoreHorizontal, Check } from "lucide-react";
+import { ChevronLeft, Share2, Users, MoreHorizontal, Check, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useOthers, useSelf } from "@/liveblocks.config";
 import { useState } from "react";
+import { InviteDialog } from "./invite-dialog";
 
 interface NavbarProps {
     title: string;
@@ -81,6 +82,7 @@ export function Navbar({ title }: NavbarProps) {
 
             {/* Right Section: Actions */}
             <div className="flex items-center gap-2">
+                <InviteDialog />
                 <Button 
                     variant="outline" 
                     size="sm" 
@@ -93,7 +95,7 @@ export function Navbar({ title }: NavbarProps) {
                 >
                     {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
                     <span className="hidden sm:inline">
-                        {copied ? "Copié !" : "Inviter"}
+                        {copied ? "Copié !" : "Lien"}
                     </span>
                 </Button>
                 <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20">
