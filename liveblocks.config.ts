@@ -48,6 +48,14 @@ export type Storage = {
   layerIds: LiveList<string>;
 };
 
+export type UserMeta = {
+  id: string;
+  info: {
+    name: string;
+    picture?: string;
+  };
+};
+
 export const {
   RoomProvider,
   useMyPresence,
@@ -58,4 +66,4 @@ export const {
   useHistory,
   useCanUndo,
   useCanRedo
-} = createRoomContext<Presence, Storage>(client);
+} = createRoomContext<Presence, Storage, UserMeta>(client);

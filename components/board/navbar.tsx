@@ -3,7 +3,7 @@
 import { ChevronLeft, Share2, Users, MoreHorizontal, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import { useOthers } from "@/liveblocks.config";
+import { useOthers, useSelf } from "@/liveblocks.config";
 import { useState } from "react";
 
 interface NavbarProps {
@@ -12,6 +12,7 @@ interface NavbarProps {
 
 export function Navbar({ title }: NavbarProps) {
     const others = useOthers();
+    const self = useSelf();
     const activeUsersCount = others.length + 1;
     const [copied, setCopied] = useState(false);
 
@@ -36,12 +37,46 @@ export function Navbar({ title }: NavbarProps) {
                 </h1>
             </div>
 
-            {/* Middle Section: Active Users (Presence) */}
-            <div className="hidden md:flex items-center bg-white/30 dark:bg-black/20 px-3 py-1.5 rounded-full gap-2 mr-4 border border-neutral-200/30 dark:border-neutral-700/30">
-                <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-xs font-medium text-neutral-700 dark:text-neutral-200">
-                    {activeUsersCount} {activeUsersCount > 1 ? "actifs" : "seul"}
-                </span>
+            {/* Middle Section: Avatars & Active Count */}
+            <div className="hidden md:flex items-center bg-white/10 dark:bg-black/10 px-3 py-1.5 rounded-full gap-3 mr-4 border border-neutral-200/20 dark:border-neutral-700/20">
+                <div className="flex -space-x-2 overflow-hidden">
+                    {others.slice(0, 3).map(({ connectionId, info }) => (
+                        <div 
+                            key={connectionId} 
+                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white/50 dark:ring-neutral-800/50 bg-neutral-200 dark:bg-neutral-700 overflow-hidden"
+                            title={info?.name}
+                        >
+                            {info?.picture ? (
+                                <img src={info.picture} alt={info.name} className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-neutral-500">
+                                    {info?.name?.[0]}
+                                </div>
+                            )}
+                        </div>
+                    ))}
+                    {self && (
+                        <div 
+                            className="inline-block h-6 w-6 rounded-full ring-2 ring-white/50 dark:ring-neutral-800/50 bg-blue-100 dark:bg-blue-900 overflow-hidden"
+                            title={`${self.info?.name} (Vous)`}
+                        >
+                            {self.info?.picture ? (
+                                <img src={self.info.picture} alt={self.info.name} className="h-full w-full object-cover" />
+                            ) : (
+                                <div className="h-full w-full flex items-center justify-center text-[10px] font-bold text-blue-600 dark:text-blue-300">
+                                    {self.info?.name?.[0]}
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+                
+                <div className="flex items-center gap-1.5">
+                    <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse" />
+                    <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-200">
+                        {activeUsersCount} {activeUsersCount > 1 ? "actifs" : "seul"}
+                    </span>
+                </div>
             </div>
 
             {/* Right Section: Actions */}
@@ -52,7 +87,7 @@ export function Navbar({ title }: NavbarProps) {
                     className={`h-9 gap-2 transition-all duration-300 ${
                         copied 
                         ? "bg-green-500 text-white border-green-500 hover:bg-green-600 hover:text-white" 
-                        : "bg-white/50 text-blue-600 border-blue-200 hover:bg-blue-50 dark:bg-blue-900/30 dark:border-blue-800 dark:text-blue-400"
+                        : "bg-white/10 text-blue-600 border-blue-200/50 hover:bg-white/20 dark:border-blue-800/50 dark:text-blue-400"
                     }`}
                     onClick={onCopy}
                 >
