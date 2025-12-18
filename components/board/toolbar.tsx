@@ -8,6 +8,7 @@ import { useCanRedo, useCanUndo, useHistory, useMyPresence, useStorage } from "@
 import { nanoid } from "nanoid";
 import { LiveObject } from "@liveblocks/client";
 import { useRef, useState } from "react";
+import { LayersPanel } from "./layers-panel";
 
 export function Toolbar() {
     const { canvasState, setCanvasState, camera } = useCanvasStore();
@@ -16,69 +17,7 @@ export function Toolbar() {
     const canRedo = useCanRedo();
     const fileInputRef = useRef<HTMLInputElement>(null);
     const [showShapesMenu, setShowShapesMenu] = useState(false);
-    const [showLayersMenu, setShowLayersMenu] = useState(false);
-
-    const [{ selection }] = useMyPresence();
-
-    const moveToFront = useMutation(({ storage }) => {
-        const liveLayerIds = storage.get("layerIds");
-        const indices: number[] = [];
-
-        selection.forEach((id) => {
-            const index = liveLayerIds.indexOf(id);
-            if (index !== -1) indices.push(index);
-        });
-
-        indices.sort((a, b) => a - b).forEach((oldIndex, i) => {
-            liveLayerIds.move(oldIndex, liveLayerIds.length - 1);
-        });
-    }, [selection]);
-
-    const moveToBack = useMutation(({ storage }) => {
-        const liveLayerIds = storage.get("layerIds");
-        const indices: number[] = [];
-
-        selection.forEach((id) => {
-            const index = liveLayerIds.indexOf(id);
-            if (index !== -1) indices.push(index);
-        });
-
-        indices.sort((a, b) => b - a).forEach((oldIndex, i) => {
-            liveLayerIds.move(oldIndex, 0);
-        });
-    }, [selection]);
-
-    const moveForward = useMutation(({ storage }) => {
-        const liveLayerIds = storage.get("layerIds");
-        const indices: number[] = [];
-
-        selection.forEach((id) => {
-            const index = liveLayerIds.indexOf(id);
-            if (index !== -1) indices.push(index);
-        });
-
-        indices.sort((a, b) => b - a).forEach((oldIndex) => {
-            if (oldIndex < liveLayerIds.length - 1) {
-                liveLayerIds.move(oldIndex, oldIndex + 1);
-            }
-        });
-    }, [selection]);
-
-    const moveBackward = useMutation(({ storage }) => {
-        const liveLayerIds = storage.get("layerIds");
-        const indices: number[] = [];
-
-        selection.forEach((id) => {
-            const index = liveLayerIds.indexOf(id);
-            if (index !== -1) indices.push(index);
-        });
-
-        indices.sort((a, b) => a - b).forEach((oldIndex) => {
-            if (oldIndex > 0) {
-                liveLayerIds.move(oldIndex, oldIndex - 1);
-            }
-        });
-    }, [selection]);
+    const [showLayersPanel, setShowLayersPanel] = useState(false);
 
     const isShapeActive = canvasState.mode === "inserting" && 
         ["Triangle", "Arrow", "Diamond", "Star"].includes(canvasState.layerType);
@@ -229,7 +168,7 @@ export function Toolbar() {
                     onClick={() => {
                         setCanvasState({ mode: "pencil" });
                         setShowShapesMenu(false);
-                        setShowLayersMenu(false);
+                        setShowLayersPanel(false);
                     }}
                     icon={Pencil}
                     title="Crayon"
@@ -238,55 +177,16 @@ export function Toolbar() {
                 {/* Layers Group Button */}
                 <div className="relative">
                     <ToolButton 
-                        isActive={showLayersMenu}
+                        isActive={showLayersPanel}
                         onClick={() => {
-                            setShowLayersMenu(!showLayersMenu);
+                            setShowLayersPanel(!showLayersPanel);
                             setShowShapesMenu(false);
                         }}
                         icon={Layers}
-                        title="Ordre des calques"
+                        title="Liste des calques"
                     />
                     
-                    {showLayersMenu && (
-                        <div className="absolute left-14 top-0 flex flex-row gap-2 bg-white dark:bg-neutral-800 p-2 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700">
-                            <ToolButton 
-                                isActive={false}
-                                onClick={() => {
-                                    moveToFront();
-                                    setShowLayersMenu(false);
-                                }}
-                                icon={ArrowUpToLine}
-                                title="Mettre au premier plan"
-                            />
-                            <ToolButton 
-                                isActive={false}
-                                onClick={() => {
-                                    moveForward();
-                                    setShowLayersMenu(false);
-                                }}
-                                icon={ArrowUp}
-                                title="Avancer"
-                            />
-                            <ToolButton 
-                                isActive={false}
-                                onClick={() => {
-                                    moveBackward();
-                                    setShowLayersMenu(false);
-                                }}
-                                icon={ArrowDown}
-                                title="Reculer"
-                            />
-                            <ToolButton 
-                                isActive={false}
-                                onClick={() => {
-                                    moveToBack();
-                                    setShowLayersMenu(false);
-                                }}
-                                icon={ArrowDownToLine}
-                                title="Mettre à l'arrière-plan"
-                            />
-                        </div>
-                    )}
+                    {showLayersPanel && <LayersPanel />}
                 </div>
                 
                 {/* Image Upload Button */}
