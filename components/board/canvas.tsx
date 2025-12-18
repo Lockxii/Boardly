@@ -9,13 +9,12 @@ import { LayerPreview } from "./layer-preview";
 import { Toolbar } from "./toolbar";
 import { PencilToolbar } from "./pencil-toolbar";
 import { BrushPreview } from "./brush-preview";
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, useEffect } from "react";
 import { CursorsPresence } from "./cursors-presence";
 
 import { SelectionTools } from "./selection-tools";
 import { ZoomControls } from "./zoom-controls";
 import { Navbar } from "./navbar";
-import { useEffect } from "react";
 
 export function Canvas({ template, title }: { template: string, title: string }) {
     const { camera, setCamera, canvasState, setCanvasState, lastUsedColor, pencilThickness, pencilTool } = useCanvasStore();
@@ -25,8 +24,6 @@ export function Canvas({ template, title }: { template: string, title: string })
     const self = useSelf();
     const pencilDraft = React.useRef<string | null>(null);
     
-    // --- Actions ---
-
     const addAuditEntry = (storage: any, action: string, layerType: string) => {
         const auditLog = storage.get("auditLog");
         if (auditLog.length > 50) auditLog.delete(0);
@@ -181,28 +178,17 @@ export function Canvas({ template, title }: { template: string, title: string })
         const liveLayers = storage.get("layers");
         const liveLayerIds = storage.get("layerIds");
         const newSelection: string[] = [];
-
         selection.forEach(id => {
             const layer = liveLayers.get(id);
             if (!layer) return;
-
             const layerId = nanoid();
             const layerData = layer.toObject();
-            
-            // Offset the duplicate slightly
-            const newLayer = new LiveObject<Layer>({
-                ...layerData,
-                x: layerData.x + 20,
-                y: layerData.y + 20,
-            });
-
+            const newLayer = new LiveObject<Layer>({ ...layerData, x: layerData.x + 20, y: layerData.y + 20, locked: false });
             liveLayers.set(layerId, newLayer);
             liveLayerIds.push(layerId);
             newSelection.push(layerId);
-            
             addAuditEntry(storage, "created", `Copie de ${layerData.type}`);
         });
-
         setMyPresence({ selection: newSelection }, { addToHistory: true });
     }, [selection, self]);
 
@@ -294,6 +280,10 @@ export function Canvas({ template, title }: { template: string, title: string })
         }
     }, [camera, canvasState, translateSelectedLayers, resizeSelectedLayer, rotateSelectedLayer, continueDrawing, eraser, pencilTool, setCanvasState]);
 
+    const onPointerLeave = useMutation(({ setMyPresence }) => {
+        setMyPresence({ cursor: null });
+    }, []);
+
     const onPointerDown = useCallback((e: React.PointerEvent) => {
         const point = pointerEventToCanvasPoint(e, camera);
         if (canvasState.mode === "inserting") {
@@ -310,14 +300,11 @@ export function Canvas({ template, title }: { template: string, title: string })
 
     const onPointerUp = useMutation(({ storage, setMyPresence }, e) => {
         const point = pointerEventToCanvasPoint(e, camera);
-        
         if (canvasState.mode === "translating" || canvasState.mode === "resizing" || canvasState.mode === "rotating") {
-             // Log modification
              if (selection.length > 0) {
                  const layer = storage.get("layers").get(selection[0]);
                  if (layer) addAuditEntry(storage, "modified", layer.get("type"));
              }
-             
              setCanvasState({ mode: "none" });
              history.resume(); 
         } else if (canvasState.mode === "selectionNet") {
@@ -346,19 +333,35 @@ export function Canvas({ template, title }: { template: string, title: string })
             if (pencilTool === "draw") insertPath();
             else history.resume();
         }
-    }, [camera, canvasState, setCanvasState, history, insertPath, pencilTool, insertLayer]);
+    }, [camera, canvasState, setCanvasState, history, insertPath, pencilTool, insertLayer, selection]);
 
+    const onLayerRotatePointerDown = useMutation(({ storage }, e: React.PointerEvent, layerId: string) => {
+        e.stopPropagation();
+        const layer = storage.get("layers").get(layerId);
+        if (!layer || layer.get("locked")) return;
+        const centerX = layer.get("x") + layer.get("width") / 2;
+        const centerY = layer.get("y") + layer.get("height") / 2;
+        history.pause();
+        setCanvasState({ mode: "rotating", initialAngle: layer.get("rotation") || 0, centerX, centerY });
+    }, [setCanvasState, history]);
+
+    const onResizeHandlePointerDown = useCallback((e: React.PointerEvent, initialBounds: any) => {
+        e.stopPropagation();
+        const point = pointerEventToCanvasPoint(e, camera);
+        history.pause(); 
+        setCanvasState({ mode: "resizing", initialBounds, initialStart: point, corner: "bottom-right" });
+    }, [camera, setCanvasState, history]);
+
+    // !! FIX: Define onLayerPointerDown at the top level, outside of the loop !!
     const onLayerPointerDown = useMutation((
         { self, setMyPresence, storage },
         e: React.PointerEvent,
         layerId: string
     ) => {
-        const liveLayers = storage.get("layers");
-        const layer = liveLayers.get(layerId);
-        if (layer?.get("locked")) return; // Skip if locked
-
         e.stopPropagation();
         const point = pointerEventToCanvasPoint(e, camera);
+        const layer = storage.get("layers").get(layerId);
+        if (layer?.get("locked")) return;
 
         if (!self.presence.selection.includes(layerId)) {
             setMyPresence({ selection: [layerId] }, { addToHistory: true });
@@ -367,24 +370,6 @@ export function Canvas({ template, title }: { template: string, title: string })
         history.pause();
         setCanvasState({ mode: "translating", current: point });
     }, [camera, history, setCanvasState]);
-
-    const onLayerRotatePointerDown = useMutation(({ storage }, e: React.PointerEvent, layerId: string) => {
-        const layer = storage.get("layers").get(layerId);
-        if (!layer || layer.get("locked")) return; // Skip if locked
-
-        e.stopPropagation();
-        const centerX = layer.get("x") + layer.get("width") / 2;
-        const centerY = layer.get("y") + layer.get("height") / 2;
-        history.pause();
-        setCanvasState({ mode: "rotating", initialAngle: layer.get("rotation") || 0, centerX, centerY });
-    }, [setCanvasState, history]);
-
-    const onLayerResizePointerDown = useCallback((e: React.PointerEvent, initialBounds: any) => {
-        e.stopPropagation();
-        const point = pointerEventToCanvasPoint(e, camera);
-        history.pause(); 
-        setCanvasState({ mode: "resizing", initialBounds, initialStart: point, corner: "bottom-right" });
-    }, [camera, setCanvasState, history]);
 
     if (!layerIds) return null;
     const bgClass = template === "blueprint" ? "bg-[#1e40af]" : "bg-neutral-100 dark:bg-neutral-900";
@@ -416,7 +401,7 @@ export function Canvas({ template, title }: { template: string, title: string })
                             key={id} 
                             id={id} 
                             onLayerPointerDown={onLayerPointerDown} 
-                            onLayerResizePointerDown={onLayerResizePointerDown} 
+                            onLayerResizePointerDown={onResizeHandlePointerDown} 
                             onLayerRotatePointerDown={onLayerRotatePointerDown} 
                             onChange={(val) => updateLayer(id, val)} 
                             selectionColor={selection.includes(id) ? "#3b82f6" : undefined} 

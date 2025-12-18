@@ -78,5 +78,13 @@ export const {
   useCanUndo,
   useCanRedo,
   useOther,
-  useOthersConnectionIds
-} = createRoomContext<Presence, Storage, UserMeta>(client);
+  useOthersConnectionIds,
+  useThreads,
+  useCreateThread
+} = createRoomContext<Presence, Storage, UserMeta, never, ThreadMetadata>(client);
+
+export type ThreadMetadata = {
+  x: number;
+  y: number;
+  resolved: boolean;
+};
