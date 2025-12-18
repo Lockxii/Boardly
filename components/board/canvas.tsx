@@ -666,13 +666,23 @@ export function Canvas({ template }: { template: string }) {
 
                     {/* Insertion Preview */}
                     {canvasState.mode === "inserting" && canvasState.origin && canvasState.current && (
-                        <rect
-                            className="fill-blue-500/5 stroke-blue-500 stroke-1"
-                            x={Math.min(canvasState.origin.x, canvasState.current.x)}
-                            y={Math.min(canvasState.origin.y, canvasState.current.y)}
-                            width={Math.abs(canvasState.origin.x - canvasState.current.x)}
-                            height={Math.abs(canvasState.origin.y - canvasState.current.y)}
-                        />
+                        canvasState.layerType === "Ellipse" ? (
+                            <ellipse
+                                className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                                cx={(canvasState.origin.x + canvasState.current.x) / 2}
+                                cy={(canvasState.origin.y + canvasState.current.y) / 2}
+                                rx={Math.abs(canvasState.origin.x - canvasState.current.x) / 2}
+                                ry={Math.abs(canvasState.origin.y - canvasState.current.y) / 2}
+                            />
+                        ) : (
+                            <rect
+                                className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                                x={Math.min(canvasState.origin.x, canvasState.current.x)}
+                                y={Math.min(canvasState.origin.y, canvasState.current.y)}
+                                width={Math.abs(canvasState.origin.x - canvasState.current.x)}
+                                height={Math.abs(canvasState.origin.y - canvasState.current.y)}
+                            />
+                        )
                     )}
 
                     <CursorsPresence />
