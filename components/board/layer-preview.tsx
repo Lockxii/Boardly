@@ -7,6 +7,7 @@ interface LayerPreviewProps {
   id: string;
   onLayerPointerDown: (e: React.PointerEvent, layerId: string) => void;
   onLayerResizePointerDown: (e: React.PointerEvent, initialBounds: { x: number, y: number, width: number, height: number }) => void;
+  onLayerRotatePointerDown: (e: React.PointerEvent, layerId: string) => void;
   onChange: (newValue: string) => void;
   selectionColor?: string;
 }
@@ -26,7 +27,6 @@ function getSvgPathFromPoints(points: number[][]) {
 
     for (let i = 0; i < points.length; i++) {
         const point = points[i];
-        // If point[3] is 1, it's a gap/erased point
         if (point[3] === 1) {
             isNextMove = true;
             continue;
@@ -43,7 +43,7 @@ function getSvgPathFromPoints(points: number[][]) {
     return d;
 }
 
-export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointerDown, onChange, selectionColor }: LayerPreviewProps) => {
+export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointerDown, onLayerRotatePointerDown, onChange, selectionColor }: LayerPreviewProps) => {
   const layer = useStorage((root) => root.layers.get(id));
   const [isEditing, setIsEditing] = useState(false);
   const editableRef = useRef<HTMLDivElement>(null);
@@ -76,6 +76,7 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
   }
 
   const isSelected = !!selectionColor;
+  const rotation = layer.rotation || 0;
   
   const handleDoubleClick = (e: React.MouseEvent) => {
       e.stopPropagation();
@@ -98,17 +99,15 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
       e.stopPropagation();
   };
 
-  // Wrapper style for Vertical Alignment
   const wrapperStyle: React.CSSProperties = {
       width: "100%",
       height: "100%",
       display: "flex",
       flexDirection: "column",
       justifyContent: justify,
-      pointerEvents: "none" // Pass clicks through to group if not editing
+      pointerEvents: "none"
   };
 
-  // Editable style (Block display to keep text inline)
   const editableStyle: React.CSSProperties = {
       width: "100%",
       outline: "none",
@@ -127,10 +126,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
       wordBreak: "break-word",
       cursor: isEditing ? "text" : "move",
       userSelect: isEditing ? "text" : "none",
-      WebkitUserSelect: isEditing ? "text" : "none"
   };
 
-  // Calculate scaling for Path
   let pathScaleX = 1;
   let pathScaleY = 1;
   let isDrawing = false;
@@ -141,7 +138,6 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
           pathScaleX = 1;
           pathScaleY = 1;
       } else if (layer.points && layer.points.length > 0) {
-          // Calculate original bounds from points
           const xs = layer.points.map(p => p[0]);
           const ys = layer.points.map(p => p[1]);
           const minX = Math.min(...xs);
@@ -157,18 +153,21 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
       }
   }
 
+  const cornerRadius = layer.cornerRadius || 0;
+
   return (
     <g
       onPointerDown={(e) => onLayerPointerDown(e, id)}
       onDoubleClick={handleDoubleClick}
       style={{
-        transform: `translate(${layer.x}px, ${layer.y}px)`,
+        transform: `translate(${layer.x}px, ${layer.y}px) rotate(${rotation}deg)`,
+        transformOrigin: `${layer.width / 2}px ${layer.height / 2}px`
       }}
     >
       {layer.type === "Path" && (
           <path
               d={getSvgPathFromPoints(layer.points || [])}
-              stroke={isDrawing ? "#9ca3af" : (layer.fill || "#000")} // Gray-400 for preview
+              stroke={isDrawing ? "#9ca3af" : (layer.fill || "#000")}
               strokeWidth={layer.strokeWidth || 2}
               fill="none"
               strokeLinecap="round"
@@ -183,6 +182,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
              <rect
                 width={layer.width}
                 height={layer.height}
+                rx={cornerRadius}
+                ry={cornerRadius}
                 fill={layer.fill}
                 className="drop-shadow-sm"
              />
@@ -273,7 +274,10 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
         <foreignObject width={layer.width} height={layer.height} style={{ overflow: 'visible' }}>
              <div 
                 className="w-full h-full relative shadow-md flex flex-col"
-                style={{ backgroundColor: layer.fill ? layer.fill : "#fef3c7" }}
+                style={{ 
+                    backgroundColor: layer.fill ? layer.fill : "#fef3c7",
+                    borderRadius: cornerRadius
+                }}
              >
                 <div style={wrapperStyle}>
                     <div 
@@ -309,27 +313,42 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
         />
       )}
 
-      {/* Unified Selection Border */}
       {isSelected && (
           <>
             <rect
                 className="stroke-blue-500 stroke-2 fill-transparent pointer-events-none"
-                x={0}
-                y={0}
-                width={layer.width}
-                height={layer.height}
+                x={-2}
+                y={-2}
+                width={layer.width + 4}
+                height={layer.height + 4}
             />
-             {/* Resize Handle (Bottom Right) */}
              <rect
                 className="fill-white stroke-blue-500 stroke-1 cursor-nwse-resize"
-                x={layer.width - 8}
-                y={layer.height - 8}
-                width={8}
-                height={8}
+                x={layer.width - 6}
+                y={layer.height - 6}
+                width={12}
+                height={12}
                 onPointerDown={(e) => {
                     e.stopPropagation(); 
                     onLayerResizePointerDown(e, { x: layer.x, y: layer.y, width: layer.width, height: layer.height });
                 }}
+            />
+            <circle
+                className="fill-white stroke-blue-500 stroke-1 cursor-grab active:cursor-grabbing"
+                cx={layer.width / 2}
+                cy={-20}
+                r={6}
+                onPointerDown={(e) => {
+                    e.stopPropagation();
+                    onLayerRotatePointerDown(e, id);
+                }}
+            />
+            <line 
+                x1={layer.width / 2}
+                y1={-2}
+                x2={layer.width / 2}
+                y2={-14}
+                className="stroke-blue-500 stroke-1"
             />
           </>
       )}

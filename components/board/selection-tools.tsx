@@ -118,6 +118,20 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
         })
     }, [selection]);
 
+    const setCornerRadius = useMutation(({ storage }, radius: number) => {
+        const liveLayers = storage.get("layers");
+        selection?.forEach(id => {
+            liveLayers.get(id)?.update({ cornerRadius: radius });
+        })
+    }, [selection]);
+
+    const resetRotation = useMutation(({ storage }) => {
+        const liveLayers = storage.get("layers");
+        selection?.forEach(id => {
+            liveLayers.get(id)?.update({ rotation: 0 });
+        })
+    }, [selection]);
+
     const toggleBold = useMutation(({ storage }) => {
         const liveLayers = storage.get("layers");
         selection?.forEach(id => {
@@ -190,6 +204,20 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                             title="Couleur de remplissage"
                         />
                     </div>
+                    
+                    <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-1" />
+                    
+                    <span className="text-[10px] uppercase font-bold text-neutral-500">Angles</span>
+                    <input 
+                        type="range" 
+                        min="0" 
+                        max="100" 
+                        className="w-16 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer dark:bg-neutral-700"
+                        onChange={(e) => setCornerRadius(parseInt(e.target.value))}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        title="Arrondi des angles"
+                    />
+
                     <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-1" />
                 </div>
             )}

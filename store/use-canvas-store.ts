@@ -7,6 +7,7 @@ export type CanvasMode =
   | { mode: "translating", current: { x: number, y: number } }
   | { mode: "inserting", layerType: LayerType, origin?: { x: number, y: number }, current?: { x: number, y: number } }
   | { mode: "resizing", initialBounds: { x: number, y: number, width: number, height: number }, initialStart: { x: number, y: number }, corner: "bottom-right" }
+  | { mode: "rotating", initialAngle: number, centerX: number, centerY: number }
   | { mode: "pencil" }
 
 interface CanvasState {

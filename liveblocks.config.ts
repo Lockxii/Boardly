@@ -32,7 +32,9 @@ export type Layer = {
   alignY?: "top" | "center" | "bottom";
   fontWeight?: string;
   fontStyle?: string;
-  textDecoration?: string;
+  textDecoration?: "none" | "underline";
+  cornerRadius?: number;
+  rotation?: number;
 };
 
 export type Presence = {
