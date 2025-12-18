@@ -83,17 +83,59 @@ export function Canvas({ template }: { template: string }) {
         for (const id of ids) {
             const layer = liveLayers.get(id);
             if (!layer) continue;
+
+            // PARTIAL ERASURE FOR PATHS
+            if (layer.get("type") === "Path") {
+                const points = layer.get("points");
+                if (points) {
+                    const layerX = layer.get("x");
+                    const layerY = layer.get("y");
+                    // Assuming path is not scaled heavily for now, or apply inverse scale
+                    // Ideally we transform point to local space. 
+                    // Simple local space check:
+                    const localX = point.x - layerX;
+                    const localY = point.y - layerY;
+
+                    let changed = false;
+                    const eraserRadius = (pencilThickness || 5) * 2; // Eraser size relative to pencil
+
+                    // Map points and check distance
+                    // We need to clone points to avoid mutation issues if we were editing in place
+                    // but liveblocks .update requires a new value usually or deep update.
+                    // We will map to a new array.
+                    const newPoints = points.map((p: number[]) => {
+                        if (p.length > 3 && p[3] === 1) return p; // Already erased
+
+                        const dx = p[0] - localX;
+                        const dy = p[1] - localY;
+                        const dist = Math.sqrt(dx * dx + dy * dy);
+
+                        if (dist < eraserRadius / camera.zoom) {
+                            changed = true;
+                            // Mark as gap: [x, y, p, 1]
+                            return [p[0], p[1], p[2], 1]; 
+                        }
+                        return p;
+                    });
+
+                    if (changed) {
+                        layer.update({ points: newPoints });
+                        return; // Erased part of this path, stop strictly if we want to erase one thing at a time
+                        // or continue if we want to erase multiple layers
+                    }
+                }
+            }
             
-            // Check bounding box + simple proximity for paths
+            // OBJECT ERASURE FOR OTHERS
             const x = layer.get("x");
             const y = layer.get("y");
             const width = layer.get("width");
             const height = layer.get("height");
             
-            // Padding for easier erasure
             const padding = 10 / camera.zoom;
             
             if (
+                layer.get("type") !== "Path" && // Only erase whole object if not Path
                 point.x >= x - padding &&
                 point.x <= x + width + padding &&
                 point.y >= y - padding &&
@@ -102,10 +144,10 @@ export function Canvas({ template }: { template: string }) {
                  liveLayers.delete(id);
                  const index = liveLayerIds.indexOf(id);
                  if (index !== -1) liveLayerIds.delete(index);
-                 return; // Delete one at a time per move event to avoid wiping everything instantly
+                 return; 
             }
         }
-    }, [camera]);
+    }, [camera, pencilThickness]);
 
     const insertPath = useMutation((
         { storage, self }

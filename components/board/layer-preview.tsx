@@ -21,12 +21,23 @@ const fontMap: Record<string, string> = {
 function getSvgPathFromPoints(points: number[][]) {
     if (!points || points.length === 0) return "";
     
-    // Move to first point
-    let d = `M ${points[0][0]} ${points[0][1]}`;
-    
-    // Line to subsequent points
-    for (let i = 1; i < points.length; i++) {
-        d += ` L ${points[i][0]} ${points[i][1]}`;
+    let d = "";
+    let isNextMove = true;
+
+    for (let i = 0; i < points.length; i++) {
+        const point = points[i];
+        // If point[3] is 1, it's a gap/erased point
+        if (point[3] === 1) {
+            isNextMove = true;
+            continue;
+        }
+
+        if (isNextMove) {
+            d += `M ${point[0]} ${point[1]}`;
+            isNextMove = false;
+        } else {
+            d += `L ${point[0]} ${point[1]}`;
+        }
     }
     
     return d;
@@ -159,6 +170,7 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
+              strokeOpacity={isDrawing ? 0.5 : 1}
               transform={`scale(${pathScaleX}, ${pathScaleY})`}
               style={{ transformOrigin: "top left" }}
           />
