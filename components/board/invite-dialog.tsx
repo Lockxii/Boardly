@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { Mail, Send, Loader2 } from "lucide-react";
+import { useParams } from "next/navigation";
+import { inviteUserByEmail } from "@/app/board/actions";
 import { 
     Dialog, 
     DialogContent, 
@@ -16,24 +18,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export function InviteDialog() {
+    const params = useParams();
+    const boardId = params.boardId as string;
     const [email, setEmail] = useState("");
     const [isLoading, setIsLoading] = useState(false);
     const [sent, setSent] = useState(false);
+    const [error, setError] = useState("");
 
     const onInvite = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!email) return;
 
         setIsLoading(true);
-        // Simulation d'envoi d'email
-        await new Promise((resolve) => setTimeout(resolve, 1500));
+        setError("");
         
-        console.log(`Invitation envoyée à: ${email}`);
-        setIsLoading(false);
-        setSent(true);
-        setEmail("");
-        
-        setTimeout(() => setSent(false), 3000);
+        try {
+            const result = await inviteUserByEmail(boardId, email);
+            if (result.error) {
+                setError(result.error);
+            } else {
+                setSent(true);
+                setEmail("");
+                setTimeout(() => setSent(false), 3000);
+            }
+        } catch (err) {
+            setError("Une erreur est survenue");
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     return (
