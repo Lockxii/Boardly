@@ -1,26 +1,62 @@
 "use client";
 
-import { ChevronLeft, Share2, Users, MoreHorizontal, Check, Mail } from "lucide-react";
+import { ChevronLeft, Share2, Users, MoreHorizontal, Check, Mail, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useOthers, useSelf } from "@/liveblocks.config";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { InviteDialog } from "./invite-dialog";
+import { useParams } from "next/navigation";
+import { updateBoardTitle } from "@/app/board/actions";
 
 interface NavbarProps {
     title: string;
 }
 
 export function Navbar({ title }: NavbarProps) {
+    const params = useParams();
+    const boardId = params.boardId as string;
+    
     const others = useOthers();
     const self = useSelf();
     const activeUsersCount = others.length + 1;
+    
     const [copied, setCopied] = useState(false);
+    const [isEditing, setIsEditing] = useState(false);
+    const [newTitle, setNewTitle] = useState(title);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        setNewTitle(title);
+    }, [title]);
 
     const onCopy = () => {
         navigator.clipboard.writeText(window.location.href);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000);
+    };
+
+    const onSubmit = async () => {
+        if (newTitle === title || !newTitle.trim()) {
+            setIsEditing(false);
+            setNewTitle(title);
+            return;
+        }
+
+        setIsEditing(false);
+        try {
+            await updateBoardTitle(boardId, newTitle);
+        } catch (error) {
+            setNewTitle(title);
+        }
+    };
+
+    const onKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === "Enter") onSubmit();
+        if (e.key === "Escape") {
+            setIsEditing(false);
+            setNewTitle(title);
+        }
     };
 
     return (
@@ -33,9 +69,28 @@ export function Navbar({ title }: NavbarProps) {
                     </Link>
                 </Button>
                 <div className="h-6 w-[1px] bg-neutral-300 dark:bg-neutral-600" />
-                <h1 className="text-sm font-semibold truncate max-w-[200px] dark:text-white">
-                    {title}
-                </h1>
+                
+                {isEditing ? (
+                    <input
+                        ref={inputRef}
+                        autoFocus
+                        value={newTitle}
+                        onChange={(e) => setNewTitle(e.target.value)}
+                        onBlur={onSubmit}
+                        onKeyDown={onKeyDown}
+                        className="text-sm font-semibold bg-white/20 dark:bg-black/20 outline-none px-2 py-1 rounded border border-blue-500/50 dark:text-white"
+                    />
+                ) : (
+                    <div 
+                        onClick={() => setIsEditing(true)}
+                        className="flex items-center gap-2 cursor-pointer hover:bg-white/10 dark:hover:bg-black/10 px-2 py-1 rounded transition group"
+                    >
+                        <h1 className="text-sm font-semibold truncate max-w-[200px] dark:text-white">
+                            {title}
+                        </h1>
+                        <Pencil className="h-3 w-3 text-neutral-400 opacity-0 group-hover:opacity-100 transition" />
+                    </div>
+                )}
             </div>
 
             {/* Middle Section: Avatars & Active Count */}
