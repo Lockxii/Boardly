@@ -43,9 +43,19 @@ export type Presence = {
   selection: string[];
 };
 
+export type AuditEntry = {
+  id: string;
+  userId: string;
+  userName: string;
+  action: string; // "created", "moved", "deleted", "modified"
+  layerType: string;
+  timestamp: number;
+};
+
 export type Storage = {
   layers: LiveMap<string, LiveObject<Layer>>;
   layerIds: LiveList<string>;
+  auditLog: LiveList<AuditEntry>;
 };
 
 export type UserMeta = {
