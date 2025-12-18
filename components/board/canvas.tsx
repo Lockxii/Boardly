@@ -236,7 +236,12 @@ export function Canvas({ template }: { template: string }) {
                 case "Delete":
                 case "Backspace":
                     // Don't delete if editing text
-                    if (document.activeElement?.tagName === "TEXTAREA" || document.activeElement?.tagName === "INPUT") {
+                    const activeElement = document.activeElement as HTMLElement;
+                    if (
+                        activeElement?.tagName === "TEXTAREA" || 
+                        activeElement?.tagName === "INPUT" ||
+                        activeElement?.isContentEditable
+                    ) {
                         return;
                     }
                     deleteLayers();
