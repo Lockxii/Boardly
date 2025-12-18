@@ -45,18 +45,18 @@ export function HistoryDialog() {
                                     <div className="h-8 w-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center shrink-0">
                                         <User className="h-4 w-4 text-blue-600 dark:text-blue-300" />
                                     </div>
-                                    <div className="flex flex-col gap-0.5">
+                                    <div className="flex flex-col gap-0.5 flex-1">
                                         <div className="text-sm">
-                                            <span className="font-bold dark:text-white">{entry.userName}</span>
+                                            <span className="font-bold text-blue-600 dark:text-blue-400">{entry.userName}</span>
                                             {" "}
-                                            <span className="text-neutral-600 dark:text-neutral-400">
-                                                {entry.action === "created" && `a créé un ${entry.layerType}`}
-                                                {entry.action === "deleted" && `a supprimé un ${entry.layerType}`}
-                                                {entry.action === "moved" && `a déplacé un ${entry.layerType}`}
-                                                {entry.action === "modified" && `a modifié un ${entry.layerType}`}
+                                            <span className="text-neutral-700 dark:text-neutral-300">
+                                                {entry.action === "created" && `a créé un(e) ${entry.layerType}`}
+                                                {entry.action === "deleted" && `a supprimé un(e) ${entry.layerType}`}
+                                                {entry.action === "moved" && `a déplacé un(e) ${entry.layerType}`}
+                                                {entry.action === "modified" && `a modifié un(e) ${entry.layerType}`}
                                             </span>
                                         </div>
-                                        <div className="flex items-center gap-1 text-[10px] text-neutral-500 uppercase font-medium">
+                                        <div className="flex items-center gap-1 text-[10px] text-neutral-500 uppercase font-bold mt-1">
                                             <Clock className="h-3 w-3" />
                                             {formatDistanceToNow(entry.timestamp, { addSuffix: true, locale: fr })}
                                         </div>
