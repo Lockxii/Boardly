@@ -8,6 +8,7 @@ import { LiveObject } from "@liveblocks/client";
 import { LayerPreview } from "./layer-preview";
 import { Toolbar } from "./toolbar";
 import { PencilToolbar } from "./pencil-toolbar";
+import { BrushPreview } from "./brush-preview";
 import React, { useCallback, useMemo, useState } from "react";
 import { CursorsPresence } from "./cursors-presence";
 
@@ -551,12 +552,9 @@ export function Canvas({ template }: { template: string }) {
     const bgClass = template === "blueprint" ? "bg-[#1e40af]" : "bg-neutral-100 dark:bg-neutral-900";
 
     // Custom Cursors
-    const PENCIL_CURSOR = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>') 0 24, auto`;
-    const ERASER_CURSOR = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>') 12 12, auto`;
-
     let cursorStyle = "default";
     if (canvasState.mode === "pencil") {
-        cursorStyle = pencilTool === "draw" ? PENCIL_CURSOR : ERASER_CURSOR;
+        cursorStyle = "none";
     } else if (canvasState.mode === "inserting") {
         cursorStyle = "crosshair";
     } else if (canvasState.mode === "translating") {
@@ -574,6 +572,8 @@ export function Canvas({ template }: { template: string }) {
             <PencilToolbar />
             <SelectionTools camera={camera} />
             <ZoomControls />
+            <BrushPreview />
+            
             <div className="absolute top-4 right-4 z-10">
                  {/* <CursorsPresence /> moved inside SVG */}
             </div>

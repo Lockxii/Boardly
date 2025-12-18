@@ -3,7 +3,6 @@
 import { useCanvasStore } from "@/store/use-canvas-store";
 import { Button } from "@/components/ui/button";
 import { Eraser, Pencil } from "lucide-react";
-import { useSelf, useMutation } from "@/liveblocks.config";
 
 export function PencilToolbar() {
     const { 
@@ -19,15 +18,15 @@ export function PencilToolbar() {
     if (canvasState.mode !== "pencil") return null;
 
     return (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 flex items-center gap-4 bg-white dark:bg-neutral-800 p-3 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
+        <div className="absolute top-4 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-2 p-2 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
             
             {/* Tool Switcher */}
-            <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-md p-1">
+            <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-md p-0.5">
                 <Button 
                     variant={pencilTool === "draw" ? "secondary" : "ghost"} 
                     size="icon" 
                     onClick={() => setPencilTool("draw")}
-                    className={pencilTool === "draw" ? "bg-white shadow-sm" : ""}
+                    className={`h-8 w-8 ${pencilTool === "draw" ? "bg-white shadow-sm" : ""}`}
                     title="Dessiner"
                 >
                     <Pencil className="h-4 w-4" />
@@ -36,18 +35,18 @@ export function PencilToolbar() {
                     variant={pencilTool === "erase" ? "secondary" : "ghost"} 
                     size="icon" 
                     onClick={() => setPencilTool("erase")}
-                    className={pencilTool === "erase" ? "bg-white shadow-sm" : ""}
+                    className={`h-8 w-8 ${pencilTool === "erase" ? "bg-white shadow-sm" : ""}`}
                     title="Gomme"
                 >
                     <Eraser className="h-4 w-4" />
                 </Button>
             </div>
 
-            <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700" />
+            <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-2" />
 
-            {/* Thickness Slider */}
-            <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-neutral-500">Épaisseur</span>
+            {/* Thickness Control */}
+            <div className="flex items-center gap-3">
+                <span className="text-[10px] uppercase font-bold text-neutral-500">Épaisseur</span>
                 <input 
                     type="range" 
                     min="2" 
@@ -56,25 +55,27 @@ export function PencilToolbar() {
                     onChange={(e) => setPencilThickness(parseInt(e.target.value))}
                     className="w-24 h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer dark:bg-neutral-700"
                 />
-                {/* Thickness Preview */}
-                <div className="w-8 h-8 flex items-center justify-center border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-900 mx-1">
+                {/* Visual Preview Circle */}
+                <div className="w-8 h-8 flex items-center justify-center border border-neutral-200 dark:border-neutral-700 rounded-md bg-neutral-50 dark:bg-neutral-900">
                     <div 
                         style={{ 
-                            width: Math.min(pencilThickness, 24), // Cap visual size for UI
-                            height: Math.min(pencilThickness, 24), 
+                            width: Math.min(pencilThickness, 20),
+                            height: Math.min(pencilThickness, 20), 
                             borderRadius: '50%',
-                            backgroundColor: pencilTool === "draw" ? lastUsedColor : "#e5e5e5", // Grey for eraser
-                            border: pencilTool === "erase" ? "1px solid #a3a3a3" : "none"
+                            backgroundColor: pencilTool === "draw" ? lastUsedColor : "#fff",
+                            border: pencilTool === "erase" ? "1px solid #000" : "none",
+                            boxShadow: pencilTool === "erase" ? "inset 0 0 2px rgba(0,0,0,0.2)" : "none"
                         }}
                     />
                 </div>
             </div>
 
-            {/* Only show Color Picker if Drawing */}
+            {/* Color Picker (Draw Mode Only) */}
             {pencilTool === "draw" && (
                 <>
-                    <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700" />
+                    <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-2" />
                     <div className="flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold text-neutral-500">Couleur</span>
                          <div className="relative overflow-hidden rounded-full border border-neutral-300 w-6 h-6 shadow-sm hover:scale-110 transition" style={{ backgroundColor: lastUsedColor }}>
                             <input 
                                 type="color" 
