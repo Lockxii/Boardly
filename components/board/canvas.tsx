@@ -349,10 +349,14 @@ export function Canvas({ template, title }: { template: string, title: string })
     }, [camera, canvasState, setCanvasState, history, insertPath, pencilTool, insertLayer]);
 
     const onLayerPointerDown = useMutation((
-        { self, setMyPresence },
+        { self, setMyPresence, storage },
         e: React.PointerEvent,
         layerId: string
     ) => {
+        const liveLayers = storage.get("layers");
+        const layer = liveLayers.get(layerId);
+        if (layer?.get("locked")) return; // Skip if locked
+
         e.stopPropagation();
         const point = pointerEventToCanvasPoint(e, camera);
 
@@ -365,9 +369,10 @@ export function Canvas({ template, title }: { template: string, title: string })
     }, [camera, history, setCanvasState]);
 
     const onLayerRotatePointerDown = useMutation(({ storage }, e: React.PointerEvent, layerId: string) => {
-        e.stopPropagation();
         const layer = storage.get("layers").get(layerId);
-        if (!layer) return;
+        if (!layer || layer.get("locked")) return; // Skip if locked
+
+        e.stopPropagation();
         const centerX = layer.get("x") + layer.get("width") / 2;
         const centerY = layer.get("y") + layer.get("height") / 2;
         history.pause();

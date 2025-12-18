@@ -36,6 +36,7 @@ export type Layer = {
   textDecoration?: "none" | "underline";
   cornerRadius?: number;
   rotation?: number;
+  locked?: boolean;
 };
 
 export type Presence = {
