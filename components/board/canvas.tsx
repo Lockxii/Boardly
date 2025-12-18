@@ -410,11 +410,11 @@ export function Canvas({ template, title }: { template: string, title: string })
             
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
                 <div style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`, transformOrigin: "top left", width: "100%", height: "100%" }}>
-                    {threads && threads.map((thread) => (
+                    {/* {threads && threads.map((thread) => (
                         <div key={thread.id} style={{ position: "absolute", left: thread.metadata.x, top: thread.metadata.y, transform: "translate(-50%, -50%)", pointerEvents: "auto", zIndex: 50 }}>
                             <Thread thread={thread} />
                         </div>
-                    ))}
+                    ))} */}
                     {creatingComment && (
                         <div style={{ position: "absolute", left: creatingComment.x, top: creatingComment.y, pointerEvents: "auto", zIndex: 60, background: "white", padding: "8px", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}>
                             <Composer onComposerSubmit={onComposerSubmit} />
