@@ -2,7 +2,7 @@
 
 import { useCanvasStore } from "@/store/use-canvas-store";
 import { Layer, LayerType, useMutation } from "@/liveblocks.config";
-import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil } from "lucide-react";
+import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil, Triangle as TriangleIcon, MoveRight, Diamond, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanRedo, useCanUndo, useHistory } from "@/liveblocks.config";
 import { nanoid } from "nanoid";
@@ -76,6 +76,30 @@ export function Toolbar() {
                 onClick={() => setCanvasState({ mode: "inserting", layerType: "Ellipse" })}
                 icon={Circle}
                 title="Cercle"
+            />
+            <ToolButton 
+                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Triangle"}
+                onClick={() => setCanvasState({ mode: "inserting", layerType: "Triangle" })}
+                icon={TriangleIcon}
+                title="Triangle"
+            />
+            <ToolButton 
+                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Arrow"}
+                onClick={() => setCanvasState({ mode: "inserting", layerType: "Arrow" })}
+                icon={MoveRight}
+                title="Flèche"
+            />
+            <ToolButton 
+                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Diamond"}
+                onClick={() => setCanvasState({ mode: "inserting", layerType: "Diamond" })}
+                icon={Diamond}
+                title="Losange"
+            />
+            <ToolButton 
+                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Star"}
+                onClick={() => setCanvasState({ mode: "inserting", layerType: "Star" })}
+                icon={Star}
+                title="Étoile"
             />
             <ToolButton 
                 isActive={canvasState.mode === "inserting" && canvasState.layerType === "Note"}

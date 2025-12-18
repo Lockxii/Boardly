@@ -199,6 +199,54 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
              </foreignObject>
          </>
       )}
+      {layer.type === "Triangle" && (
+          <polygon
+              points={`0,${layer.height} ${layer.width / 2},0 ${layer.width},${layer.height}`}
+              fill={layer.fill}
+              className="drop-shadow-sm"
+          />
+      )}
+      {layer.type === "Diamond" && (
+          <polygon
+              points={`${layer.width / 2},0 ${layer.width},${layer.height / 2} ${layer.width / 2},${layer.height} 0,${layer.height / 2}`}
+              fill={layer.fill}
+              className="drop-shadow-sm"
+          />
+      )}
+      {layer.type === "Star" && (
+          <polygon
+              points={`
+                  ${layer.width * 0.5},${layer.height * 0} 
+                  ${layer.width * 0.63},${layer.height * 0.38} 
+                  ${layer.width * 1},${layer.height * 0.38} 
+                  ${layer.width * 0.69},${layer.height * 0.59} 
+                  ${layer.width * 0.82},${layer.height * 1} 
+                  ${layer.width * 0.5},${layer.height * 0.75} 
+                  ${layer.width * 0.18},${layer.height * 1} 
+                  ${layer.width * 0.31},${layer.height * 0.59} 
+                  ${layer.width * 0},${layer.height * 0.38} 
+                  ${layer.width * 0.37},${layer.height * 0.38}
+              `}
+              fill={layer.fill}
+              className="drop-shadow-sm"
+          />
+      )}
+      {layer.type === "Arrow" && (
+          <path
+              d={`
+                  M 0,${layer.height * 0.3} 
+                  L ${layer.width * 0.6},${layer.height * 0.3} 
+                  L ${layer.width * 0.6},0 
+                  L ${layer.width},${layer.height * 0.5} 
+                  L ${layer.width * 0.6},${layer.height} 
+                  L ${layer.width * 0.6},${layer.height * 0.7} 
+                  L 0,${layer.height * 0.7} 
+                  Z
+              `}
+              fill={layer.fill}
+              className="drop-shadow-sm"
+          />
+      )}
       {layer.type === "Ellipse" && (
          <>
              <ellipse

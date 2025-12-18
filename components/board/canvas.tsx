@@ -666,23 +666,55 @@ export function Canvas({ template }: { template: string }) {
 
                     {/* Insertion Preview */}
                     {canvasState.mode === "inserting" && canvasState.origin && canvasState.current && (
-                        canvasState.layerType === "Ellipse" ? (
-                            <ellipse
-                                className="fill-blue-500/5 stroke-blue-500 stroke-1"
-                                cx={(canvasState.origin.x + canvasState.current.x) / 2}
-                                cy={(canvasState.origin.y + canvasState.current.y) / 2}
-                                rx={Math.abs(canvasState.origin.x - canvasState.current.x) / 2}
-                                ry={Math.abs(canvasState.origin.y - canvasState.current.y) / 2}
-                            />
-                        ) : (
-                            <rect
-                                className="fill-blue-500/5 stroke-blue-500 stroke-1"
-                                x={Math.min(canvasState.origin.x, canvasState.current.x)}
-                                y={Math.min(canvasState.origin.y, canvasState.current.y)}
-                                width={Math.abs(canvasState.origin.x - canvasState.current.x)}
-                                height={Math.abs(canvasState.origin.y - canvasState.current.y)}
-                            />
-                        )
+                        (() => {
+                            const x = Math.min(canvasState.origin.x, canvasState.current.x);
+                            const y = Math.min(canvasState.origin.y, canvasState.current.y);
+                            const width = Math.abs(canvasState.origin.x - canvasState.current.x);
+                            const height = Math.abs(canvasState.origin.y - canvasState.current.y);
+
+                            if (canvasState.layerType === "Ellipse") {
+                                return (
+                                    <ellipse
+                                        className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                                        cx={(canvasState.origin.x + canvasState.current.x) / 2}
+                                        cy={(canvasState.origin.y + canvasState.current.y) / 2}
+                                        rx={width / 2}
+                                        ry={height / 2}
+                                    />
+                                );
+                            } else if (canvasState.layerType === "Triangle") {
+                                return (
+                                    <polygon
+                                        className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                                        points={`${x + width / 2},${y} ${x + width},${y + height} ${x},${y + height}`}
+                                    />
+                                );
+                            } else if (canvasState.layerType === "Diamond") {
+                                return (
+                                    <polygon
+                                        className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                                        points={`${x + width / 2},${y} ${x + width},${y + height / 2} ${x + width / 2},${y + height} ${x},${y + height / 2}`}
+                                    />
+                                );
+                            } else if (canvasState.layerType === "Arrow") {
+                                return (
+                                    <path
+                                        className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                                        d={`M ${x},${y + height * 0.3} L ${x + width * 0.6},${y + height * 0.3} L ${x + width * 0.6},${y} L ${x + width},${y + height * 0.5} L ${x + width * 0.6},${y + height} L ${x + width * 0.6},${y + height * 0.7} L ${x},${y + height * 0.7} Z`}
+                                    />
+                                );
+                            }
+
+                            return (
+                                <rect
+                                    className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                                    x={x}
+                                    y={y}
+                                    width={width}
+                                    height={height}
+                                />
+                            );
+                        })()
                     )}
 
                     <CursorsPresence />
