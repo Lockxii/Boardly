@@ -275,7 +275,14 @@ export function Canvas({ template, title }: { template: string, title: string })
 
     const onPointerUp = useMutation(({ storage, setMyPresence }, e) => {
         const point = pointerEventToCanvasPoint(e, camera);
+        
         if (canvasState.mode === "translating" || canvasState.mode === "resizing" || canvasState.mode === "rotating") {
+             // Log modification
+             if (selection.length > 0) {
+                 const layer = storage.get("layers").get(selection[0]);
+                 if (layer) addAuditEntry(storage, "modified", layer.get("type"));
+             }
+             
              setCanvasState({ mode: "none" });
              history.resume(); 
         } else if (canvasState.mode === "selectionNet") {

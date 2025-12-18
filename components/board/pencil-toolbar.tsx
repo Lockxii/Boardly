@@ -12,7 +12,6 @@ export function PencilToolbar() {
         pencilThickness, 
         setPencilThickness,
         pencilTool,
-        setPencilTool
     } = useCanvasStore();
 
     if (canvasState.mode !== "pencil") return null;
@@ -20,26 +19,16 @@ export function PencilToolbar() {
     return (
         <div className="absolute top-20 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-2 p-2 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
             
-            {/* Tool Switcher */}
-            <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-md p-0.5">
-                <Button 
-                    variant={pencilTool === "draw" ? "secondary" : "ghost"} 
-                    size="icon" 
-                    onClick={() => setPencilTool("draw")}
-                    className={`h-8 w-8 ${pencilTool === "draw" ? "bg-white shadow-sm" : ""}`}
-                    title="Dessiner"
-                >
-                    <Pencil className="h-4 w-4" />
-                </Button>
-                <Button 
-                    variant={pencilTool === "erase" ? "secondary" : "ghost"} 
-                    size="icon" 
-                    onClick={() => setPencilTool("erase")}
-                    className={`h-8 w-8 ${pencilTool === "erase" ? "bg-white shadow-sm" : ""}`}
-                    title="Gomme"
-                >
-                    <Eraser className="h-4 w-4" />
-                </Button>
+            {/* Tool Indicator */}
+            <div className="flex items-center gap-2 px-2">
+                {pencilTool === "draw" ? (
+                    <Pencil className="h-4 w-4 text-neutral-500" />
+                ) : (
+                    <Eraser className="h-4 w-4 text-neutral-500" />
+                )}
+                <span className="text-[10px] uppercase font-bold text-neutral-500">
+                    {pencilTool === "draw" ? "Dessin" : "Gomme"}
+                </span>
             </div>
 
             <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-2" />
