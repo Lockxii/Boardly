@@ -1,6 +1,5 @@
 # Boardly - Tableau Blanc Collaboratif Temps Réel
 
-Un clone de Miro moderne et performant construit avec **Next.js 14**, **Liveblocks**, **BetterAuth**, et **NeonDB**.
 
 ![Aperçu](public/logo.svg)
 
