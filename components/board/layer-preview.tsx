@@ -164,9 +164,18 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
       {isSelected && (
           <>
             <rect className={`stroke-blue-500 stroke-2 fill-transparent pointer-events-none ${isLocked ? "stroke-red-400 opacity-50" : ""}`} x={-2} y={-2} width={layer.width + 4} height={layer.height + 4} />
-            {isLocked ? (
-                <g transform={`translate(${layer.width / 2 - 8}, -25)`}><circle r="10" fill="#f87171" /><Lock className="h-3 w-3 text-white" x="-6" y="-6" /></g>
-            ) : (
+                        {isLocked ? (
+                            <g transform={`translate(${layer.width / 2}, -22)`}>
+                                <circle r="10" fill="#ef4444" className="shadow-sm" />
+                                <Lock 
+                                    size={12} 
+                                    className="text-white" 
+                                    style={{ 
+                                        transform: "translate(-6px, -6px)" 
+                                    }} 
+                                />
+                            </g>
+                        ) : (
                 <>
                     <rect className="fill-white stroke-blue-500 stroke-1 cursor-nwse-resize" x={layer.width - 6} y={layer.height - 6} width={12} height={12} onPointerDown={(e) => { e.stopPropagation(); onLayerResizePointerDown(e, { x: layer.x, y: layer.y, width: layer.width, height: layer.height }); }} />
                     <circle className="fill-white stroke-blue-500 stroke-1 cursor-grab active:cursor-grabbing" cx={layer.width / 2} cy={-20} r={6} onPointerDown={(e) => { e.stopPropagation(); onLayerRotatePointerDown(e, id); }} />
