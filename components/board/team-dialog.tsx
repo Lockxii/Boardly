@@ -1,0 +1,90 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Users, ShieldAlert, XCircle, Loader2 } from "lucide-react";
+import { 
+    Dialog, 
+    DialogContent, 
+    DialogHeader, 
+    DialogTitle, 
+    DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { getBoardMembers, removeBoardMember } from "@/app/board/actions";
+import { useSelf } from "@/liveblocks.config";
+
+interface TeamDialogProps {
+    boardId: string;
+}
+
+export function TeamDialog({ boardId }: TeamDialogProps) {
+    const [members, setMembers] = useState<any[]>([]);
+    const [isLoading, setIsLoading] = useState(false);
+    const self = useSelf();
+
+    const fetchMembers = async () => {
+        setIsLoading(true);
+        const data = await getBoardMembers(boardId);
+        setMembers(data);
+        setIsLoading(false);
+    };
+
+    const onRemove = async (email: string) => {
+        if (!confirm(`Voulez-vous vraiment retirer l'accès à ${email} ?`)) return;
+        
+        await removeBoardMember(boardId, email);
+        await fetchMembers();
+    };
+
+    return (
+        <Dialog onOpenChange={(open) => open && fetchMembers()}>
+            <DialogTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20">
+                    <Users className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
+                </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+                <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Gestion de l'équipe
+                    </DialogTitle>
+                </DialogHeader>
+                <div className="py-4">
+                    {isLoading ? (
+                        <div className="flex justify-center py-8">
+                            <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+                        </div>
+                    ) : members.length === 0 ? (
+                        <p className="text-sm text-neutral-500 text-center py-8">
+                            Aucun collaborateur invité pour le moment.
+                        </p>
+                    ) : (
+                        <div className="space-y-3">
+                            {members.map((member) => (
+                                <div 
+                                    key={member.id} 
+                                    className="flex items-center justify-between p-3 rounded-lg bg-neutral-50 dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800"
+                                >
+                                    <div className="flex flex-col">
+                                        <span className="text-sm font-medium dark:text-white">{member.email}</span>
+                                        <span className="text-[10px] text-neutral-500 uppercase">{member.role}</span>
+                                    </div>
+                                    <Button 
+                                        variant="ghost" 
+                                        size="icon" 
+                                        className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
+                                        onClick={() => onRemove(member.email)}
+                                        title="Bannir du board"
+                                    >
+                                        <XCircle className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            </DialogContent>
+        </Dialog>
+    );
+}

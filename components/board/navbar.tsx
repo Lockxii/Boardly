@@ -1,13 +1,22 @@
 "use client";
 
-import { ChevronLeft, Share2, Users, MoreHorizontal, Check, Mail, Pencil } from "lucide-react";
+import { ChevronLeft, Share2, Users, MoreHorizontal, Check, Mail, Pencil, Download, ImageIcon, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { useOthers, useSelf } from "@/liveblocks.config";
 import { useState, useRef, useEffect } from "react";
 import { InviteDialog } from "./invite-dialog";
+import { TeamDialog } from "./team-dialog";
 import { useParams } from "next/navigation";
 import { updateBoardTitle } from "@/app/board/actions";
+import { 
+    DropdownMenu, 
+    DropdownMenuContent, 
+    DropdownMenuItem, 
+    DropdownMenuTrigger,
+    DropdownMenuLabel,
+    DropdownMenuSeparator
+} from "@/components/ui/dropdown-menu";
 
 interface NavbarProps {
     title: string;
@@ -29,6 +38,35 @@ export function Navbar({ title }: NavbarProps) {
     useEffect(() => {
         setNewTitle(title);
     }, [title]);
+
+    const handleExport = (format: "png" | "jpeg") => {
+        const svg = document.querySelector("svg");
+        if (!svg) return;
+
+        const svgData = new XMLSerializer().serializeToString(svg);
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const img = new Image();
+
+        canvas.width = svg.clientWidth;
+        canvas.height = svg.clientHeight;
+
+        img.onload = () => {
+            if (!ctx) return;
+            if (format === "jpeg") {
+                ctx.fillStyle = "white";
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+            }
+            ctx.drawImage(img, 0, 0);
+            const dataUrl = canvas.toDataURL(`image/${format}`);
+            const link = document.createElement("a");
+            link.download = `${title || "board"}.${format}`;
+            link.href = dataUrl;
+            link.click();
+        };
+
+        img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+    };
 
     const onCopy = () => {
         navigator.clipboard.writeText(window.location.href);
@@ -61,11 +99,10 @@ export function Navbar({ title }: NavbarProps) {
 
     return (
         <nav className="absolute top-4 left-4 right-4 h-14 flex items-center bg-transparent backdrop-blur-sm rounded-xl border border-neutral-200/20 dark:border-neutral-700/20 px-4 pointer-events-auto z-20 transition-all">
-            {/* Left Section: Back & Title */}
             <div className="flex items-center gap-4 flex-1">
                 <Button variant="ghost" size="icon" asChild className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20">
                     <Link href="/dashboard">
-                        <ChevronLeft className="h-5 w-5" />
+                        <ChevronLeft className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
                     </Link>
                 </Button>
                 <div className="h-6 w-[1px] bg-neutral-300 dark:bg-neutral-600" />
@@ -93,8 +130,7 @@ export function Navbar({ title }: NavbarProps) {
                 )}
             </div>
 
-            {/* Middle Section: Avatars & Active Count */}
-            <div className="hidden md:flex items-center bg-white/10 dark:bg-black/10 px-3 py-1.5 rounded-full gap-3 mr-4 border border-neutral-200/20 dark:border-neutral-700/20">
+            <div className="hidden lg:flex items-center bg-white/10 dark:bg-black/10 px-3 py-1.5 rounded-full gap-3 mr-4 border border-neutral-200/20 dark:border-neutral-700/20">
                 <div className="flex -space-x-2 overflow-hidden">
                     {others.slice(0, 3).map(({ connectionId, info }) => (
                         <div 
@@ -135,8 +171,8 @@ export function Navbar({ title }: NavbarProps) {
                 </div>
             </div>
 
-            {/* Right Section: Actions */}
             <div className="flex items-center gap-2">
+                <TeamDialog boardId={boardId} />
                 <InviteDialog />
                 <Button 
                     variant="outline" 
@@ -153,9 +189,27 @@ export function Navbar({ title }: NavbarProps) {
                         {copied ? "Copié !" : "Lien"}
                     </span>
                 </Button>
-                <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20">
-                    <MoreHorizontal className="h-5 w-5" />
-                </Button>
+                
+                <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20">
+                            <MoreHorizontal className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
+                        </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48">
+                        <DropdownMenuLabel>Exporter</DropdownMenuLabel>
+                        <DropdownMenuItem onClick={() => handleExport("png")} className="gap-2 cursor-pointer">
+                            <ImageIcon className="h-4 w-4" /> PNG
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleExport("jpeg")} className="gap-2 cursor-pointer">
+                            <Download className="h-4 w-4" /> JPEG
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-red-600 dark:text-red-400 gap-2 cursor-pointer">
+                            <ShieldAlert className="h-4 w-4" /> Signaler un abus
+                        </DropdownMenuItem>
+                    </DropdownMenuContent>
+                </DropdownMenu>
             </div>
         </nav>
     );

@@ -21,3 +21,35 @@ export async function updateBoardTitle(boardId: string, title: string) {
     
     return { success: true };
 }
+
+export async function getBoardMembers(boardId: string) {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session) return [];
+
+    const members = await prisma.boardMember.findMany({
+        where: { boardId }
+    });
+
+    return members;
+}
+
+export async function removeBoardMember(boardId: string, email: string) {
+    const session = await auth.api.getSession({ headers: await headers() });
+    if (!session) return { error: "Non autorisé" };
+
+    const board = await prisma.board.findUnique({ where: { id: boardId } });
+    if (!board || board.authorId !== session.user.id) return { error: "Seul le créateur peut bannir des membres" };
+
+    await prisma.boardMember.delete({
+        where: {
+            boardId_email: {
+                boardId,
+                email
+            }
+        }
+    });
+
+    revalidatePath(`/board/${boardId}`);
+    return { success: true };
+}
+

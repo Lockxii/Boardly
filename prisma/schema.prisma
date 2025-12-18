@@ -85,8 +85,22 @@ model Board {
   objects   BoardObject[]
   connections Connection[]
   presences Presence[]
+  members   BoardMember[]
 
   @@map("board")
+}
+
+model BoardMember {
+  id        String   @id @default(cuid())
+  boardId   String
+  email     String
+  role      String   @default("editor") // "editor", "viewer"
+  createdAt DateTime @default(now())
+
+  board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, email])
+  @@map("board_member")
 }
 
 model BoardObject {
