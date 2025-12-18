@@ -6,7 +6,7 @@ export type CanvasMode =
   | { mode: "selectionNet", origin: { x: number, y: number }, current?: { x: number, y: number } }
   | { mode: "translating", current: { x: number, y: number } }
   | { mode: "inserting", layerType: LayerType }
-  | { mode: "resizing", initialBounds: { x: number, y: number, width: number, height: number }, initialStart: { x: number, y: number }, corner: "bottom-right" } // Added initialStart
+  | { mode: "resizing", initialBounds: { x: number, y: number, width: number, height: number }, initialStart: { x: number, y: number }, corner: "bottom-right" }
   | { mode: "pencil" }
 
 interface CanvasState {
@@ -16,6 +16,10 @@ interface CanvasState {
   setCanvasState: (state: CanvasMode) => void;
   lastUsedColor: string;
   setLastUsedColor: (color: string) => void;
+  pencilThickness: number;
+  setPencilThickness: (thickness: number) => void;
+  pencilTool: "draw" | "erase";
+  setPencilTool: (tool: "draw" | "erase") => void;
 }
 
 export const useCanvasStore = create<CanvasState>((set) => ({
@@ -23,6 +27,10 @@ export const useCanvasStore = create<CanvasState>((set) => ({
   setCamera: (camera) => set({ camera }),
   canvasState: { mode: "none" },
   setCanvasState: (canvasState) => set({ canvasState }),
-  lastUsedColor: "#FF5733", 
+  lastUsedColor: "#000000", 
   setLastUsedColor: (lastUsedColor) => set({ lastUsedColor }),
+  pencilThickness: 5,
+  setPencilThickness: (pencilThickness) => set({ pencilThickness }),
+  pencilTool: "draw",
+  setPencilTool: (pencilTool) => set({ pencilTool }),
 }));

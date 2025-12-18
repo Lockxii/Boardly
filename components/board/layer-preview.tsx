@@ -18,6 +18,20 @@ const fontMap: Record<string, string> = {
     "font-handwriting": "\"Comic Sans MS\", \"Chalkboard SE\", sans-serif"
 };
 
+function getSvgPathFromPoints(points: number[][]) {
+    if (!points || points.length === 0) return "";
+    
+    // Move to first point
+    let d = `M ${points[0][0]} ${points[0][1]}`;
+    
+    // Line to subsequent points
+    for (let i = 1; i < points.length; i++) {
+        d += ` L ${points[i][0]} ${points[i][1]}`;
+    }
+    
+    return d;
+}
+
 export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointerDown, onChange, selectionColor }: LayerPreviewProps) => {
   const layer = useStorage((root) => root.layers.get(id));
   const [isEditing, setIsEditing] = useState(false);
@@ -102,6 +116,33 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
       WebkitUserSelect: isEditing ? "text" : "none"
   };
 
+  // Calculate scaling for Path
+  let pathScaleX = 1;
+  let pathScaleY = 1;
+  let isDrawing = false;
+  
+  if (layer.type === "Path") {
+      if (layer.width === 0 || layer.height === 0) {
+          isDrawing = true;
+          pathScaleX = 1;
+          pathScaleY = 1;
+      } else if (layer.points && layer.points.length > 0) {
+          // Calculate original bounds from points
+          const xs = layer.points.map(p => p[0]);
+          const ys = layer.points.map(p => p[1]);
+          const minX = Math.min(...xs);
+          const maxX = Math.max(...xs);
+          const minY = Math.min(...ys);
+          const maxY = Math.max(...ys);
+          
+          const originalWidth = maxX - minX || 1;
+          const originalHeight = maxY - minY || 1;
+          
+          pathScaleX = layer.width / originalWidth;
+          pathScaleY = layer.height / originalHeight;
+      }
+  }
+
   return (
     <g
       onPointerDown={(e) => onLayerPointerDown(e, id)}
@@ -110,6 +151,18 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
         transform: `translate(${layer.x}px, ${layer.y}px)`,
       }}
     >
+      {layer.type === "Path" && (
+          <path
+              d={getSvgPathFromPoints(layer.points || [])}
+              stroke={isDrawing ? "#9ca3af" : (layer.fill || "#000")} // Gray-400 for preview
+              strokeWidth={layer.strokeWidth || 2}
+              fill="none"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              transform={`scale(${pathScaleX}, ${pathScaleY})`}
+              style={{ transformOrigin: "top left" }}
+          />
+      )}
       {layer.type === "Rectangle" && (
          <>
              <rect

@@ -32,7 +32,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
         let fontSize = 16;
         let fontFamily = "font-sans";
 
-        selection.forEach(id => {
+        selection?.forEach(id => {
             const layer = layers.get(id);
             if (!layer) return;
 
@@ -64,42 +64,42 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
     // Mutations
     const setFill = useMutation(({ storage }, fill: string) => {
         const liveLayers = storage.get("layers");
-        selection.forEach(id => {
+        selection?.forEach(id => {
             liveLayers.get(id)?.update({ fill });
         })
     }, [selection]);
 
     const setTextColor = useMutation(({ storage }, color: string) => {
         const liveLayers = storage.get("layers");
-        selection.forEach(id => {
+        selection?.forEach(id => {
             liveLayers.get(id)?.update({ textColor: color });
         })
     }, [selection]);
 
     const setAlignX = useMutation(({ storage }, align: "left" | "center" | "right") => {
         const liveLayers = storage.get("layers");
-        selection.forEach(id => {
+        selection?.forEach(id => {
             liveLayers.get(id)?.update({ alignX: align });
         })
     }, [selection]);
 
     const setAlignY = useMutation(({ storage }, align: "top" | "center" | "bottom") => {
         const liveLayers = storage.get("layers");
-        selection.forEach(id => {
+        selection?.forEach(id => {
             liveLayers.get(id)?.update({ alignY: align });
         })
     }, [selection]);
 
     const setFontFamily = useMutation(({ storage }, font: string) => {
         const liveLayers = storage.get("layers");
-        selection.forEach(id => {
+        selection?.forEach(id => {
             liveLayers.get(id)?.update({ fontFamily: font });
         })
     }, [selection]);
 
     const setFontSize = useMutation(({ storage }, size: number) => {
         const liveLayers = storage.get("layers");
-        selection.forEach(id => {
+        selection?.forEach(id => {
             liveLayers.get(id)?.update({ fontSize: size });
         })
     }, [selection]);
@@ -108,7 +108,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
         const liveLayers = storage.get("layers");
         const liveLayerIds = storage.get("layerIds");
         
-        selection.forEach(id => {
+        selection?.forEach(id => {
             liveLayers.delete(id);
             const index = liveLayerIds.indexOf(id);
             if (index !== -1) liveLayerIds.delete(index);

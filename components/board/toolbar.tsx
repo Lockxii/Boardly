@@ -2,7 +2,7 @@
 
 import { useCanvasStore } from "@/store/use-canvas-store";
 import { Layer, LayerType, useMutation } from "@/liveblocks.config";
-import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon } from "lucide-react";
+import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanRedo, useCanUndo, useHistory } from "@/liveblocks.config";
 import { nanoid } from "nanoid";
@@ -88,6 +88,12 @@ export function Toolbar() {
                 onClick={() => setCanvasState({ mode: "inserting", layerType: "Text" })}
                 icon={Type}
                 title="Texte"
+            />
+            <ToolButton 
+                isActive={canvasState.mode === "pencil"}
+                onClick={() => setCanvasState({ mode: "pencil" })}
+                icon={Pencil}
+                title="Crayon"
             />
             
             {/* Image Upload Button */}

@@ -5,7 +5,7 @@ const client = createClient({
   authEndpoint: "/api/liveblocks-auth",
 });
 
-export type LayerType = "Rectangle" | "Ellipse" | "Text" | "Note" | "Image";
+export type LayerType = "Rectangle" | "Ellipse" | "Text" | "Note" | "Image" | "Path";
 
 export type Color = {
     r: number;
@@ -20,6 +20,8 @@ export type Layer = {
   height: number;
   width: number;
   fill: string;
+  points?: number[][];
+  strokeWidth?: number;
   value?: string;
   src?: string;
   textColor?: string; 

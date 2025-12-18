@@ -7,6 +7,7 @@ import { nanoid } from "nanoid";
 import { LiveObject } from "@liveblocks/client";
 import { LayerPreview } from "./layer-preview";
 import { Toolbar } from "./toolbar";
+import { PencilToolbar } from "./pencil-toolbar";
 import React, { useCallback, useMemo, useState } from "react";
 import { CursorsPresence } from "./cursors-presence";
 
@@ -15,12 +16,140 @@ import { ZoomControls } from "./zoom-controls";
 import { useEffect } from "react";
 
 export function Canvas({ template }: { template: string }) {
-    const { camera, setCamera, canvasState, setCanvasState, lastUsedColor } = useCanvasStore();
+    const { camera, setCamera, canvasState, setCanvasState, lastUsedColor, pencilThickness, pencilTool } = useCanvasStore();
     const layerIds = useStorage((root) => root.layerIds);
     const [presence, updateMyPresence] = useMyPresence();
     const history = useHistory();
+    const pencilDraft = React.useRef<string | null>(null);
     
     // --- Actions ---
+
+    const startDrawing = useMutation((
+        { storage, setMyPresence },
+        point: { x: number; y: number },
+        pressure: number
+    ) => {
+        const liveLayers = storage.get("layers");
+        const liveLayerIds = storage.get("layerIds");
+        const layerId = nanoid();
+        
+        const layer = new LiveObject<Layer>({
+            type: "Path",
+            x: 0, 
+            y: 0,
+            height: 0, 
+            width: 0, 
+            fill: lastUsedColor,
+            strokeWidth: pencilThickness,
+            points: [[point.x, point.y, pressure]]
+        });
+
+        liveLayers.set(layerId, layer);
+        liveLayerIds.push(layerId);
+
+        pencilDraft.current = layerId;
+        setMyPresence({ selection: [layerId] }, { addToHistory: true });
+    }, [lastUsedColor, pencilThickness]);
+
+    const continueDrawing = useMutation((
+        { storage, self },
+        point: { x: number; y: number },
+        e: React.PointerEvent
+    ) => {
+        const layerId = pencilDraft.current;
+        if (!layerId) return;
+
+        const liveLayers = storage.get("layers");
+        const layer = liveLayers.get(layerId);
+        
+        if (layer) {
+            const points = layer.get("points") || [];
+            points.push([point.x, point.y, e.pressure]);
+            layer.update({ points: [...points] }); 
+        }
+    }, []);
+
+    const eraser = useMutation((
+        { storage, setMyPresence },
+        point: { x: number; y: number }
+    ) => {
+        const liveLayers = storage.get("layers");
+        const liveLayerIds = storage.get("layerIds");
+        
+        // Simple Hit Test
+        // Iterate backwards to delete top-most first
+        const ids = liveLayerIds.toArray().reverse();
+        
+        for (const id of ids) {
+            const layer = liveLayers.get(id);
+            if (!layer) continue;
+            
+            // Check bounding box + simple proximity for paths
+            const x = layer.get("x");
+            const y = layer.get("y");
+            const width = layer.get("width");
+            const height = layer.get("height");
+            
+            // Padding for easier erasure
+            const padding = 10 / camera.zoom;
+            
+            if (
+                point.x >= x - padding &&
+                point.x <= x + width + padding &&
+                point.y >= y - padding &&
+                point.y <= y + height + padding
+            ) {
+                 liveLayers.delete(id);
+                 const index = liveLayerIds.indexOf(id);
+                 if (index !== -1) liveLayerIds.delete(index);
+                 return; // Delete one at a time per move event to avoid wiping everything instantly
+            }
+        }
+    }, [camera]);
+
+    const insertPath = useMutation((
+        { storage, self }
+    ) => {
+        const layerId = pencilDraft.current;
+        if (!layerId) return;
+        
+        const liveLayers = storage.get("layers");
+        const layer = liveLayers.get(layerId);
+        
+        if (layer) {
+             const points = layer.get("points") || [];
+             if (points.length < 2) {
+                 liveLayers.delete(layerId);
+                 const liveLayerIds = storage.get("layerIds");
+                 const index = liveLayerIds.indexOf(layerId);
+                 if (index !== -1) liveLayerIds.delete(index);
+                 return;
+             }
+             
+             // Normalize
+             const xs = points.map(p => p[0]);
+             const ys = points.map(p => p[1]);
+             const minX = Math.min(...xs);
+             const maxX = Math.max(...xs);
+             const minY = Math.min(...ys);
+             const maxY = Math.max(...ys);
+             
+             const width = maxX - minX;
+             const height = maxY - minY;
+             
+             const newPoints = points.map(p => [p[0] - minX, p[1] - minY, p[2]]);
+             
+             layer.update({
+                 x: minX,
+                 y: minY,
+                 width,
+                 height,
+                 points: newPoints
+             });
+        }
+        
+        pencilDraft.current = null;
+    }, []);
 
     const deleteLayers = useMutation(({ storage, setMyPresence }) => {
         const selection = presence.selection;
@@ -270,11 +399,18 @@ export function Canvas({ template }: { template: string }) {
         if (canvasState.mode === "translating") {
             translateSelectedLayers(current);
         } else if (canvasState.mode === "resizing") {
-            resizeSelectedLayer(current);
+            resizeSelectedLayer(current, e.shiftKey);
         } else if (canvasState.mode === "selectionNet") {
             updateSelectionNet(current, canvasState.origin);
+        } else if (canvasState.mode === "pencil") {
+            if (pencilTool === "draw") {
+                continueDrawing(current, e);
+            } else if (pencilTool === "erase" && e.buttons === 1) {
+                // Erase while dragging
+                eraser(current);
+            }
         }
-    }, [camera, canvasState, translateSelectedLayers, resizeSelectedLayer, updateSelectionNet]);
+    }, [camera, canvasState, translateSelectedLayers, resizeSelectedLayer, updateSelectionNet, continueDrawing, eraser, pencilTool]);
 
     const onPointerLeave = useMutation(({ setMyPresence }) => {
         setMyPresence({ cursor: null });
@@ -288,11 +424,20 @@ export function Canvas({ template }: { template: string }) {
             return;
         }
 
+        if (canvasState.mode === "pencil") {
+            if (pencilTool === "draw") {
+                startDrawing(point, e.pressure);
+            } else {
+                eraser(point);
+            }
+            return;
+        }
+
         // Clicking on canvas deselects and starts selection net
         if (canvasState.mode === "none") {
             startDrawingSelectionNet(e);
         }
-    }, [camera, canvasState, insertLayer, setCanvasState, startDrawingSelectionNet]);
+    }, [camera, canvasState, insertLayer, setCanvasState, startDrawingSelectionNet, startDrawing, eraser, pencilTool]);
 
     const onLayerPointerDown = useMutation((
         { self, setMyPresence },
@@ -330,16 +475,37 @@ export function Canvas({ template }: { template: string }) {
              history.resume(); // End batching history
         } else if (canvasState.mode === "selectionNet") {
              startMultiSelection(point, canvasState.origin);
+        } else if (canvasState.mode === "pencil") {
+            insertPath();
         }
-    }, [camera, canvasState, setCanvasState, history, startMultiSelection]);
+    }, [camera, canvasState, setCanvasState, history, startMultiSelection, insertPath]);
 
     if (!layerIds) return null;
 
     const bgClass = template === "blueprint" ? "bg-[#1e40af]" : "bg-neutral-100 dark:bg-neutral-900";
 
+    // Custom Cursors
+    const PENCIL_CURSOR = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>') 0 24, auto`;
+    const ERASER_CURSOR = `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/><path d="M22 21H7"/><path d="m5 11 9 9"/></svg>') 12 12, auto`;
+
+    let cursorStyle = "default";
+    if (canvasState.mode === "pencil") {
+        cursorStyle = pencilTool === "draw" ? PENCIL_CURSOR : ERASER_CURSOR;
+    } else if (canvasState.mode === "inserting") {
+        cursorStyle = "crosshair";
+    } else if (canvasState.mode === "translating") {
+        cursorStyle = "grabbing";
+    } else if (canvasState.mode === "resizing") {
+        cursorStyle = "nwse-resize"; // Simplified, ideally depends on corner
+    }
+
     return (
-        <main className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`}>
+        <main 
+            className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`}
+            style={{ cursor: cursorStyle }}
+        >
             <Toolbar />
+            <PencilToolbar />
             <SelectionTools camera={camera} />
             <ZoomControls />
             <div className="absolute top-4 right-4 z-10">
