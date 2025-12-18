@@ -348,6 +348,22 @@ export function Canvas({ template, title }: { template: string, title: string })
         }
     }, [camera, canvasState, setCanvasState, history, insertPath, pencilTool, insertLayer]);
 
+    const onLayerPointerDown = useMutation((
+        { self, setMyPresence },
+        e: React.PointerEvent,
+        layerId: string
+    ) => {
+        e.stopPropagation();
+        const point = pointerEventToCanvasPoint(e, camera);
+
+        if (!self.presence.selection.includes(layerId)) {
+            setMyPresence({ selection: [layerId] }, { addToHistory: true });
+        }
+        
+        history.pause();
+        setCanvasState({ mode: "translating", current: point });
+    }, [camera, history, setCanvasState]);
+
     const onLayerRotatePointerDown = useMutation(({ storage }, e: React.PointerEvent, layerId: string) => {
         e.stopPropagation();
         const layer = storage.get("layers").get(layerId);
@@ -357,6 +373,13 @@ export function Canvas({ template, title }: { template: string, title: string })
         history.pause();
         setCanvasState({ mode: "rotating", initialAngle: layer.get("rotation") || 0, centerX, centerY });
     }, [setCanvasState, history]);
+
+    const onLayerResizePointerDown = useCallback((e: React.PointerEvent, initialBounds: any) => {
+        e.stopPropagation();
+        const point = pointerEventToCanvasPoint(e, camera);
+        history.pause(); 
+        setCanvasState({ mode: "resizing", initialBounds, initialStart: point, corner: "bottom-right" });
+    }, [camera, setCanvasState, history]);
 
     if (!layerIds) return null;
     const bgClass = template === "blueprint" ? "bg-[#1e40af]" : "bg-neutral-100 dark:bg-neutral-900";
@@ -384,7 +407,15 @@ export function Canvas({ template, title }: { template: string, title: string })
                     {template === "grid" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid-pattern)" />}
                     {template === "blueprint" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#blueprint-pattern)" />}
                     {layerIds.map((id) => (
-                        <LayerPreview key={id} id={id} onLayerPointerDown={useMutation(({ self, setMyPresence }, e: React.PointerEvent, lid: string) => { e.stopPropagation(); const p = pointerEventToCanvasPoint(e, camera); if (!self.presence.selection.includes(lid)) setMyPresence({ selection: [lid] }, { addToHistory: true }); history.pause(); setCanvasState({ mode: "translating", current: p }); }, [camera, history, setCanvasState])} onLayerResizePointerDown={(e, ib) => { e.stopPropagation(); const p = pointerEventToCanvasPoint(e, camera); history.pause(); setCanvasState({ mode: "resizing", initialBounds: ib, initialStart: p, corner: "bottom-right" }); }} onLayerRotatePointerDown={onLayerRotatePointerDown} onChange={(val) => updateLayer(id, val)} selectionColor={selection.includes(id) ? "#3b82f6" : undefined} />
+                        <LayerPreview 
+                            key={id} 
+                            id={id} 
+                            onLayerPointerDown={onLayerPointerDown} 
+                            onLayerResizePointerDown={onLayerResizePointerDown} 
+                            onLayerRotatePointerDown={onLayerRotatePointerDown} 
+                            onChange={(val) => updateLayer(id, val)} 
+                            selectionColor={selection.includes(id) ? "#3b82f6" : undefined} 
+                        />
                     ))}
                     {canvasState.mode === "selectionNet" && canvasState.current && (
                         <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" x={Math.min(canvasState.origin.x, canvasState.current.x)} y={Math.min(canvasState.origin.y, canvasState.current.y)} width={Math.abs(canvasState.origin.x - canvasState.current.x)} height={Math.abs(canvasState.origin.y - canvasState.current.y)} />
