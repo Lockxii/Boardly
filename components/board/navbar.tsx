@@ -22,7 +22,7 @@ export function Navbar({ title }: NavbarProps) {
     };
 
     return (
-        <nav className="absolute top-4 left-4 right-4 h-14 flex items-center bg-white/40 dark:bg-neutral-800/40 backdrop-blur-md rounded-xl shadow-sm border border-neutral-200/50 dark:border-neutral-700/50 px-4 pointer-events-auto z-20 transition-all">
+        <nav className="absolute top-4 left-4 right-4 h-14 flex items-center bg-transparent backdrop-blur-sm rounded-xl border border-neutral-200/20 dark:border-neutral-700/20 px-4 pointer-events-auto z-20 transition-all">
             {/* Left Section: Back & Title */}
             <div className="flex items-center gap-4 flex-1">
                 <Button variant="ghost" size="icon" asChild className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20">
