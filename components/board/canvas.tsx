@@ -266,7 +266,9 @@ export function Canvas({ template }: { template: string }) {
     const insertLayer = useMutation((
         { storage, setMyPresence },
         layerType: LayerType,
-        position: { x: number; y: number }
+        position: { x: number; y: number },
+        width: number = 100,
+        height: number = 100
     ) => {
         const liveLayers = storage.get("layers");
         if (liveLayers.size >= 100) return; // Limit for demo
@@ -277,8 +279,8 @@ export function Canvas({ template }: { template: string }) {
             type: layerType,
             x: position.x,
             y: position.y,
-            height: 100,
-            width: 100,
+            height: height,
+            width: width,
             fill: lastUsedColor,
         });
 
@@ -469,6 +471,11 @@ export function Canvas({ template }: { template: string }) {
             resizeSelectedLayer(current, e.shiftKey);
         } else if (canvasState.mode === "selectionNet") {
             updateSelectionNet(current, canvasState.origin);
+        } else if (canvasState.mode === "inserting" && canvasState.origin) {
+            setCanvasState({
+                ...canvasState,
+                current,
+            });
         } else if (canvasState.mode === "pencil") {
             if (pencilTool === "draw") {
                 continueDrawing(current, e);
@@ -477,7 +484,7 @@ export function Canvas({ template }: { template: string }) {
                 eraser(current);
             }
         }
-    }, [camera, canvasState, translateSelectedLayers, resizeSelectedLayer, updateSelectionNet, continueDrawing, eraser, pencilTool]);
+    }, [camera, canvasState, translateSelectedLayers, resizeSelectedLayer, updateSelectionNet, continueDrawing, eraser, pencilTool, setCanvasState]);
 
     const onPointerLeave = useMutation(({ setMyPresence }) => {
         setMyPresence({ cursor: null });
@@ -487,7 +494,11 @@ export function Canvas({ template }: { template: string }) {
         const point = pointerEventToCanvasPoint(e, camera);
 
         if (canvasState.mode === "inserting") {
-            insertLayer(canvasState.layerType, point);
+            setCanvasState({
+                ...canvasState,
+                origin: point,
+                current: point,
+            });
             return;
         }
 
@@ -505,7 +516,7 @@ export function Canvas({ template }: { template: string }) {
         if (canvasState.mode === "none") {
             startDrawingSelectionNet(e);
         }
-    }, [camera, canvasState, insertLayer, setCanvasState, startDrawingSelectionNet, startDrawing, eraser, pencilTool]);
+    }, [camera, canvasState, setCanvasState, startDrawingSelectionNet, startDrawing, eraser, pencilTool]);
 
     const onLayerPointerDown = useMutation((
         { self, setMyPresence },
@@ -543,6 +554,21 @@ export function Canvas({ template }: { template: string }) {
              history.resume(); // End batching history
         } else if (canvasState.mode === "selectionNet") {
              startMultiSelection(point, canvasState.origin);
+        } else if (canvasState.mode === "inserting") {
+            const { origin } = canvasState;
+            if (origin) {
+                const width = Math.abs(point.x - origin.x);
+                const height = Math.abs(point.y - origin.y);
+                const x = Math.min(point.x, origin.x);
+                const y = Math.min(point.y, origin.y);
+                
+                // If the drag is very small, use default size
+                if (width < 5 && height < 5) {
+                    insertLayer(canvasState.layerType, point);
+                } else {
+                    insertLayer(canvasState.layerType, { x, y }, width, height);
+                }
+            }
         } else if (canvasState.mode === "pencil") {
             if (pencilTool === "draw") {
                 insertPath();
@@ -550,7 +576,7 @@ export function Canvas({ template }: { template: string }) {
                 history.resume();
             }
         }
-    }, [camera, canvasState, setCanvasState, history, startMultiSelection, insertPath, pencilTool]);
+    }, [camera, canvasState, setCanvasState, history, startMultiSelection, insertPath, pencilTool, insertLayer]);
 
     if (!layerIds) return null;
 
@@ -629,6 +655,17 @@ export function Canvas({ template }: { template: string }) {
                     
                     {/* Selection Net Visual */}
                     {canvasState.mode === "selectionNet" && canvasState.current && (
+                        <rect
+                            className="fill-blue-500/5 stroke-blue-500 stroke-1"
+                            x={Math.min(canvasState.origin.x, canvasState.current.x)}
+                            y={Math.min(canvasState.origin.y, canvasState.current.y)}
+                            width={Math.abs(canvasState.origin.x - canvasState.current.x)}
+                            height={Math.abs(canvasState.origin.y - canvasState.current.y)}
+                        />
+                    )}
+
+                    {/* Insertion Preview */}
+                    {canvasState.mode === "inserting" && canvasState.origin && canvasState.current && (
                         <rect
                             className="fill-blue-500/5 stroke-blue-500 stroke-1"
                             x={Math.min(canvasState.origin.x, canvasState.current.x)}
