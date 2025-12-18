@@ -170,7 +170,7 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
               fill="none"
               strokeLinecap="round"
               strokeLinejoin="round"
-              strokeOpacity={isDrawing ? 0.5 : 1}
+              strokeOpacity={isDrawing ? 0.3 : 1}
               transform={`scale(${pathScaleX}, ${pathScaleY})`}
               style={{ transformOrigin: "top left" }}
           />

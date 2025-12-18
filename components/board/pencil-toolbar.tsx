@@ -50,13 +50,24 @@ export function PencilToolbar() {
                 <span className="text-xs font-medium text-neutral-500">Épaisseur</span>
                 <input 
                     type="range" 
-                    min="1" 
+                    min="2" 
                     max="50" 
                     value={pencilThickness} 
                     onChange={(e) => setPencilThickness(parseInt(e.target.value))}
                     className="w-24 h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer dark:bg-neutral-700"
                 />
-                <span className="text-xs text-neutral-500 w-4">{pencilThickness}</span>
+                {/* Thickness Preview */}
+                <div className="w-8 h-8 flex items-center justify-center border border-neutral-200 dark:border-neutral-700 rounded-md bg-white dark:bg-neutral-900 mx-1">
+                    <div 
+                        style={{ 
+                            width: Math.min(pencilThickness, 24), // Cap visual size for UI
+                            height: Math.min(pencilThickness, 24), 
+                            borderRadius: '50%',
+                            backgroundColor: pencilTool === "draw" ? lastUsedColor : "#e5e5e5", // Grey for eraser
+                            border: pencilTool === "erase" ? "1px solid #a3a3a3" : "none"
+                        }}
+                    />
+                </div>
             </div>
 
             {/* Only show Color Picker if Drawing */}

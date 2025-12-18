@@ -76,75 +76,92 @@ export function Canvas({ template }: { template: string }) {
         const liveLayers = storage.get("layers");
         const liveLayerIds = storage.get("layerIds");
         
-        // Simple Hit Test
-        // Iterate backwards to delete top-most first
+        // Use half thickness as radius (thickness is diameter)
+        const eraserRadius = pencilThickness / 2;
+        const eraserRadiusSq = eraserRadius * eraserRadius; // Squared for distance check optimization
+
+        // Iterate backwards
         const ids = liveLayerIds.toArray().reverse();
         
         for (const id of ids) {
             const layer = liveLayers.get(id);
             if (!layer) continue;
 
-            // PARTIAL ERASURE FOR PATHS
+            const layerX = layer.get("x");
+            const layerY = layer.get("y");
+            const width = layer.get("width");
+            const height = layer.get("height");
+
+            // --- 1. Fast Bounding Box Check ---
+            // If the cursor + radius isn't touching the layer's box, skip immediately.
+            // Add a small buffer.
+            if (
+                point.x < layerX - eraserRadius ||
+                point.x > layerX + width + eraserRadius ||
+                point.y < layerY - eraserRadius ||
+                point.y > layerY + height + eraserRadius
+            ) {
+                continue;
+            }
+
+            // --- 2. Partial Erasure for Paths ---
             if (layer.get("type") === "Path") {
                 const points = layer.get("points");
                 if (points) {
-                    const layerX = layer.get("x");
-                    const layerY = layer.get("y");
-                    // Assuming path is not scaled heavily for now, or apply inverse scale
-                    // Ideally we transform point to local space. 
-                    // Simple local space check:
+                    // Local coordinates of the cursor relative to the layer
                     const localX = point.x - layerX;
                     const localY = point.y - layerY;
 
                     let changed = false;
-                    const eraserRadius = (pencilThickness || 5) * 2; // Eraser size relative to pencil
+                    const newPoints: number[][] = [];
+                    
+                    // Optimization: Use a simple for loop instead of map for speed
+                    // and avoid allocations if possible (though we need new array for update)
+                    for (let i = 0; i < points.length; i++) {
+                        const p = points[i];
+                        
+                        // If already erased (gap), keep it as is
+                        if (p.length > 3 && p[3] === 1) {
+                            newPoints.push(p);
+                            continue;
+                        }
 
-                    // Map points and check distance
-                    // We need to clone points to avoid mutation issues if we were editing in place
-                    // but liveblocks .update requires a new value usually or deep update.
-                    // We will map to a new array.
-                    const newPoints = points.map((p: number[]) => {
-                        if (p.length > 3 && p[3] === 1) return p; // Already erased
-
+                        // Distance check
                         const dx = p[0] - localX;
                         const dy = p[1] - localY;
-                        const dist = Math.sqrt(dx * dx + dy * dy);
-
-                        if (dist < eraserRadius / camera.zoom) {
+                        
+                        // Avoid Math.sqrt for performance (compare squares)
+                        if ((dx * dx + dy * dy) < eraserRadiusSq) {
                             changed = true;
-                            // Mark as gap: [x, y, p, 1]
-                            return [p[0], p[1], p[2], 1]; 
+                            // Mark as gap: [x, y, pressure, 1]
+                            newPoints.push([p[0], p[1], p[2], 1]); 
+                        } else {
+                            newPoints.push(p);
                         }
-                        return p;
-                    });
+                    }
 
                     if (changed) {
                         layer.update({ points: newPoints });
-                        return; // Erased part of this path, stop strictly if we want to erase one thing at a time
-                        // or continue if we want to erase multiple layers
+                        // Don't return here, allows erasing overlapping paths in one go
+                        // or return if you want to be very precise/slow
                     }
                 }
+                continue; // Done with this path
             }
             
-            // OBJECT ERASURE FOR OTHERS
-            const x = layer.get("x");
-            const y = layer.get("y");
-            const width = layer.get("width");
-            const height = layer.get("height");
-            
-            const padding = 10 / camera.zoom;
-            
+            // --- 3. Object Erasure for Shapes ---
+            // Simple box intersection (already checked roughly above, strict check here)
+            const padding = 5; 
             if (
-                layer.get("type") !== "Path" && // Only erase whole object if not Path
-                point.x >= x - padding &&
-                point.x <= x + width + padding &&
-                point.y >= y - padding &&
-                point.y <= y + height + padding
+                point.x >= layerX - padding &&
+                point.x <= layerX + width + padding &&
+                point.y >= layerY - padding &&
+                point.y <= layerY + height + padding
             ) {
                  liveLayers.delete(id);
                  const index = liveLayerIds.indexOf(id);
                  if (index !== -1) liveLayerIds.delete(index);
-                 return; 
+                 // return; // Optional: delete one object per tick or all under cursor
             }
         }
     }, [camera, pencilThickness]);
@@ -165,6 +182,8 @@ export function Canvas({ template }: { template: string }) {
                  const liveLayerIds = storage.get("layerIds");
                  const index = liveLayerIds.indexOf(layerId);
                  if (index !== -1) liveLayerIds.delete(index);
+                 history.resume(); // Ensure history resumes even if cancelled
+                 pencilDraft.current = null;
                  return;
              }
              
@@ -179,7 +198,7 @@ export function Canvas({ template }: { template: string }) {
              const width = maxX - minX;
              const height = maxY - minY;
              
-             const newPoints = points.map(p => [p[0] - minX, p[1] - minY, p[2]]);
+             const newPoints = points.map(p => [p[0] - minX, p[1] - minY, p[2], p[3] ?? 0]); // Keep gap info
              
              layer.update({
                  x: minX,
@@ -470,6 +489,7 @@ export function Canvas({ template }: { template: string }) {
             if (pencilTool === "draw") {
                 startDrawing(point, e.pressure);
             } else {
+                history.pause(); // Batch erasure
                 eraser(point);
             }
             return;
@@ -518,9 +538,13 @@ export function Canvas({ template }: { template: string }) {
         } else if (canvasState.mode === "selectionNet") {
              startMultiSelection(point, canvasState.origin);
         } else if (canvasState.mode === "pencil") {
-            insertPath();
+            if (pencilTool === "draw") {
+                insertPath();
+            } else {
+                history.resume();
+            }
         }
-    }, [camera, canvasState, setCanvasState, history, startMultiSelection, insertPath]);
+    }, [camera, canvasState, setCanvasState, history, startMultiSelection, insertPath, pencilTool]);
 
     if (!layerIds) return null;
 
