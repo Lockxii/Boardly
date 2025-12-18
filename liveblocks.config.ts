@@ -76,5 +76,7 @@ export const {
   useSelf,
   useHistory,
   useCanUndo,
-  useCanRedo
+  useCanRedo,
+  useOther,
+  useOthersConnectionIds
 } = createRoomContext<Presence, Storage, UserMeta>(client);
