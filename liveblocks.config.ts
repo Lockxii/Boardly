@@ -30,6 +30,9 @@ export type Layer = {
   // Alignment
   alignX?: "left" | "center" | "right";
   alignY?: "top" | "center" | "bottom";
+  fontWeight?: string;
+  fontStyle?: string;
+  textDecoration?: string;
 };
 
 export type Presence = {

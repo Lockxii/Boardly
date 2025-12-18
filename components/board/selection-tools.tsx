@@ -2,7 +2,7 @@
 
 import { useMutation, useSelf, useStorage } from "@/liveblocks.config";
 import { memo } from "react";
-import { Trash2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyCenter, AlignVerticalJustifyStart, AlignVerticalJustifyEnd } from "lucide-react";
+import { Trash2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyCenter, AlignVerticalJustifyStart, AlignVerticalJustifyEnd, Bold, Italic, Underline } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
@@ -104,6 +104,39 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
         })
     }, [selection]);
 
+    const toggleBold = useMutation(({ storage }) => {
+        const liveLayers = storage.get("layers");
+        selection?.forEach(id => {
+            const layer = liveLayers.get(id);
+            if (layer) {
+                const current = layer.get("fontWeight");
+                layer.update({ fontWeight: current === "bold" ? "normal" : "bold" });
+            }
+        })
+    }, [selection]);
+
+    const toggleItalic = useMutation(({ storage }) => {
+        const liveLayers = storage.get("layers");
+        selection?.forEach(id => {
+            const layer = liveLayers.get(id);
+            if (layer) {
+                const current = layer.get("fontStyle");
+                layer.update({ fontStyle: current === "italic" ? "normal" : "italic" });
+            }
+        })
+    }, [selection]);
+
+    const toggleUnderline = useMutation(({ storage }) => {
+        const liveLayers = storage.get("layers");
+        selection?.forEach(id => {
+            const layer = liveLayers.get(id);
+            if (layer) {
+                const current = layer.get("textDecoration");
+                layer.update({ textDecoration: current === "underline" ? "none" : "underline" });
+            }
+        })
+    }, [selection]);
+
     const deleteLayers = useMutation(({ storage, setMyPresence }) => {
         const liveLayers = storage.get("layers");
         const liveLayerIds = storage.get("layerIds");
@@ -189,6 +222,21 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                         onMouseDown={(e) => e.stopPropagation()}
                         title="Taille de police"
                     />
+
+                    <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-1" />
+
+                    {/* Text Formatting */}
+                    <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-md p-0.5">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm hover:bg-white" onClick={() => toggleBold()} onMouseDown={preventFocusLoss} title="Gras">
+                            <Bold className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm hover:bg-white" onClick={() => toggleItalic()} onMouseDown={preventFocusLoss} title="Italique">
+                            <Italic className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm hover:bg-white" onClick={() => toggleUnderline()} onMouseDown={preventFocusLoss} title="Souligné">
+                            <Underline className="h-3 w-3" />
+                        </Button>
+                    </div>
 
                     <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-1" />
 
