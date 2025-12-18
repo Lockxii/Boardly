@@ -1,16 +1,17 @@
 "use client";
 
 import { useCanvasStore } from "@/store/use-canvas-store";
-import { useHistory, useMutation, useStorage, useOthers, useMyPresence, useSelf, Layer, LayerType, AuditEntry } from "@/liveblocks.config";
+import { useHistory, useMutation, useStorage, useOthers, useMyPresence, useSelf, Layer, LayerType, AuditEntry, useThreads, useCreateThread } from "@/liveblocks.config";
 import { pointerEventToCanvasPoint } from "@/lib/utils";
 import { nanoid } from "nanoid";
-import { LiveObject, LiveMap, LiveList } from "@liveblocks/client";
+import { LiveObject } from "@liveblocks/client";
 import { LayerPreview } from "./layer-preview";
 import { Toolbar } from "./toolbar";
 import { PencilToolbar } from "./pencil-toolbar";
 import { BrushPreview } from "./brush-preview";
 import React, { useCallback, useMemo, useState, useEffect } from "react";
 import { CursorsPresence } from "./cursors-presence";
+import { Thread, Composer } from "@liveblocks/react-comments";
 
 import { SelectionTools } from "./selection-tools";
 import { ZoomControls } from "./zoom-controls";
@@ -24,6 +25,36 @@ export function Canvas({ template, title }: { template: string, title: string })
     const self = useSelf();
     const pencilDraft = React.useRef<string | null>(null);
     
+    // Comments
+    const { threads } = useThreads();
+    const createThread = useCreateThread();
+    const [creatingComment, setCreatingComment] = useState<{ x: number, y: number } | null>(null);
+
+    const onContextMenu = useCallback((e: React.MouseEvent) => {
+        // Mac: Option + Click / Right Click
+        if (!e.altKey) return;
+        
+        e.preventDefault();
+        const x = Math.round((e.clientX - camera.x) / camera.zoom);
+        const y = Math.round((e.clientY - camera.y) / camera.zoom);
+        setCreatingComment({ x, y });
+    }, [camera]);
+
+    const onComposerSubmit = useCallback(({ body }: { body: any }, event: React.FormEvent) => {
+        event.preventDefault();
+        if (creatingComment) {
+            createThread({
+                body,
+                metadata: {
+                    x: creatingComment.x,
+                    y: creatingComment.y,
+                    resolved: false
+                }
+            });
+            setCreatingComment(null);
+        }
+    }, [createThread, creatingComment]);
+
     const addAuditEntry = (storage: any, action: string, layerType: string) => {
         const auditLog = storage.get("auditLog");
         if (auditLog.length > 50) auditLog.delete(0);
@@ -202,17 +233,10 @@ export function Canvas({ template, title }: { template: string, title: string })
                     deleteLayers();
                     break;
                 case "d":
-                    if (e.ctrlKey || e.metaKey) {
-                        e.preventDefault();
-                        duplicateLayers();
-                    }
+                    if (e.ctrlKey || e.metaKey) { e.preventDefault(); duplicateLayers(); }
                     break;
                 case "z":
-                    if (e.ctrlKey || e.metaKey) {
-                        if (e.shiftKey) history.redo();
-                        else history.undo();
-                        e.preventDefault();
-                    }
+                    if (e.ctrlKey || e.metaKey) { if (e.shiftKey) history.redo(); else history.undo(); e.preventDefault(); }
                     break;
             }
         }
@@ -243,8 +267,7 @@ export function Canvas({ template, title }: { template: string, title: string })
              let h = Math.max(bounds.height + deltaY, 10);
              if (isShiftPressed) {
                  const ar = bounds.width / bounds.height;
-                 if (Math.abs(deltaX) > Math.abs(deltaY)) h = w / ar;
-                 else w = h * ar;
+                 if (Math.abs(deltaX) > Math.abs(deltaY)) h = w / ar; else w = h * ar;
              }
              layer.update({ width: w, height: h });
         }
@@ -279,10 +302,6 @@ export function Canvas({ template, title }: { template: string, title: string })
             else if (pencilTool === "erase" && e.buttons === 1) eraser(current);
         }
     }, [camera, canvasState, translateSelectedLayers, resizeSelectedLayer, rotateSelectedLayer, continueDrawing, eraser, pencilTool, setCanvasState]);
-
-    const onPointerLeave = useMutation(({ setMyPresence }) => {
-        setMyPresence({ cursor: null });
-    }, []);
 
     const onPointerDown = useCallback((e: React.PointerEvent) => {
         const point = pointerEventToCanvasPoint(e, camera);
@@ -330,8 +349,7 @@ export function Canvas({ template, title }: { template: string, title: string })
                 else insertLayer(canvasState.layerType, { x, y }, w, h);
             }
         } else if (canvasState.mode === "pencil") {
-            if (pencilTool === "draw") insertPath();
-            else history.resume();
+            if (pencilTool === "draw") insertPath(); else history.resume();
         }
     }, [camera, canvasState, setCanvasState, history, insertPath, pencilTool, insertLayer, selection]);
 
@@ -352,7 +370,6 @@ export function Canvas({ template, title }: { template: string, title: string })
         setCanvasState({ mode: "resizing", initialBounds, initialStart: point, corner: "bottom-right" });
     }, [camera, setCanvasState, history]);
 
-    // !! FIX: Define onLayerPointerDown at the top level, outside of the loop !!
     const onLayerPointerDown = useMutation((
         { self, setMyPresence, storage },
         e: React.PointerEvent,
@@ -362,11 +379,9 @@ export function Canvas({ template, title }: { template: string, title: string })
         const point = pointerEventToCanvasPoint(e, camera);
         const layer = storage.get("layers").get(layerId);
         if (layer?.get("locked")) return;
-
         if (!self.presence.selection.includes(layerId)) {
             setMyPresence({ selection: [layerId] }, { addToHistory: true });
         }
-        
         history.pause();
         setCanvasState({ mode: "translating", current: point });
     }, [camera, history, setCanvasState]);
@@ -381,14 +396,34 @@ export function Canvas({ template, title }: { template: string, title: string })
     else if (canvasState.mode === "rotating") cursorStyle = "crosshair";
 
     return (
-        <main className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`} style={{ cursor: cursorStyle }}>
+        <main 
+            className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`} 
+            style={{ cursor: cursorStyle }}
+            onContextMenu={onContextMenu}
+        >
             <Navbar title={title} />
             <Toolbar />
             <PencilToolbar />
             <SelectionTools camera={camera} />
             <ZoomControls />
             <BrushPreview />
-            <svg className="w-[100vw] h-[100vh]" onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); const ds = 0.001; const delta = -e.deltaY * ds; setCamera({ ...camera, zoom: Math.min(Math.max(camera.zoom + delta, 0.1), 5) }); } else { setCamera({ x: camera.x - e.deltaX, y: camera.y - e.deltaY, zoom: camera.zoom }); } }} onPointerMove={onPointerMove} onPointerLeave={() => updateMyPresence({ cursor: null })} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+            
+            <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
+                <div style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`, transformOrigin: "top left", width: "100%", height: "100%" }}>
+                    {threads && threads.map((thread) => (
+                        <div key={thread.id} style={{ position: "absolute", left: thread.metadata.x, top: thread.metadata.y, transform: "translate(-50%, -50%)", pointerEvents: "auto", zIndex: 50 }}>
+                            <Thread thread={thread} />
+                        </div>
+                    ))}
+                    {creatingComment && (
+                        <div style={{ position: "absolute", left: creatingComment.x, top: creatingComment.y, pointerEvents: "auto", zIndex: 60, background: "white", padding: "8px", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}>
+                            <Composer onComposerSubmit={onComposerSubmit} />
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <svg className="w-[100vw] h-[100vh] absolute top-0 left-0" onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); const ds = 0.001; const delta = -e.deltaY * ds; setCamera({ ...camera, zoom: Math.min(Math.max(camera.zoom + delta, 0.1), 5) }); } else { setCamera({ x: camera.x - e.deltaX, y: camera.y - e.deltaY, zoom: camera.zoom }); } }} onPointerMove={onPointerMove} onPointerLeave={() => updateMyPresence({ cursor: null })} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
                 <defs>
                     <pattern id="grid-pattern" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#cbd5e1" /></pattern>
                     <pattern id="blueprint-pattern" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/></pattern>
@@ -397,15 +432,7 @@ export function Canvas({ template, title }: { template: string, title: string })
                     {template === "grid" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid-pattern)" />}
                     {template === "blueprint" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#blueprint-pattern)" />}
                     {layerIds.map((id) => (
-                        <LayerPreview 
-                            key={id} 
-                            id={id} 
-                            onLayerPointerDown={onLayerPointerDown} 
-                            onLayerResizePointerDown={onResizeHandlePointerDown} 
-                            onLayerRotatePointerDown={onLayerRotatePointerDown} 
-                            onChange={(val) => updateLayer(id, val)} 
-                            selectionColor={selection.includes(id) ? "#3b82f6" : undefined} 
-                        />
+                        <LayerPreview key={id} id={id} onLayerPointerDown={onLayerPointerDown} onLayerResizePointerDown={onResizeHandlePointerDown} onLayerRotatePointerDown={onLayerRotatePointerDown} onChange={(val) => updateLayer(id, val)} selectionColor={selection.includes(id) ? "#3b82f6" : undefined} />
                     ))}
                     {canvasState.mode === "selectionNet" && canvasState.current && (
                         <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" x={Math.min(canvasState.origin.x, canvasState.current.x)} y={Math.min(canvasState.origin.y, canvasState.current.y)} width={Math.abs(canvasState.origin.x - canvasState.current.x)} height={Math.abs(canvasState.origin.y - canvasState.current.y)} />
