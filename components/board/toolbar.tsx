@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useCanRedo, useCanUndo, useHistory } from "@/liveblocks.config";
 import { nanoid } from "nanoid";
 import { LiveObject } from "@liveblocks/client";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 export function Toolbar() {
     const { canvasState, setCanvasState, camera } = useCanvasStore();
@@ -15,6 +15,10 @@ export function Toolbar() {
     const canUndo = useCanUndo();
     const canRedo = useCanRedo();
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [showShapesMenu, setShowShapesMenu] = useState(false);
+
+    const isShapeActive = canvasState.mode === "inserting" && 
+        ["Triangle", "Arrow", "Diamond", "Star"].includes(canvasState.layerType);
 
     const insertImage = useMutation(({ storage, setMyPresence }, src: string) => {
         const liveLayers = storage.get("layers");
@@ -58,93 +62,144 @@ export function Toolbar() {
     };
 
     return (
-        <div className="absolute top-1/2 left-4 -translate-y-1/2 flex flex-col gap-2 bg-white dark:bg-neutral-800 p-2 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
-            <ToolButton 
-                isActive={canvasState.mode === "none" || canvasState.mode === "translating" || canvasState.mode === "selectionNet" || canvasState.mode === "resizing"}
-                onClick={() => setCanvasState({ mode: "none" })}
-                icon={MousePointer2}
-                title="Sélectionner"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Rectangle"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Rectangle" })}
-                icon={Square}
-                title="Rectangle"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Ellipse"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Ellipse" })}
-                icon={Circle}
-                title="Cercle"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Triangle"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Triangle" })}
-                icon={TriangleIcon}
-                title="Triangle"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Arrow"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Arrow" })}
-                icon={MoveRight}
-                title="Flèche"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Diamond"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Diamond" })}
-                icon={Diamond}
-                title="Losange"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Star"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Star" })}
-                icon={Star}
-                title="Étoile"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Note"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Note" })}
-                icon={StickyNote}
-                title="Note"
-            />
-             <ToolButton 
-                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Text"}
-                onClick={() => setCanvasState({ mode: "inserting", layerType: "Text" })}
-                icon={Type}
-                title="Texte"
-            />
-            <ToolButton 
-                isActive={canvasState.mode === "pencil"}
-                onClick={() => setCanvasState({ mode: "pencil" })}
-                icon={Pencil}
-                title="Crayon"
-            />
-            
-            {/* Image Upload Button */}
-            <Button 
-                variant="ghost"
-                size="icon"
-                onClick={() => fileInputRef.current?.click()}
-                title="Image"
-            >
-                <ImageIcon className="h-5 w-5" />
-            </Button>
-            <input 
-                ref={fileInputRef}
-                type="file" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={handleImageUpload}
-            />
-            
-            <div className="h-[1px] bg-neutral-200 dark:bg-neutral-700 my-1" />
+        <div className="absolute top-1/2 left-4 -translate-y-1/2 flex flex-col gap-2 pointer-events-none">
+            <div className="flex flex-col gap-2 bg-white dark:bg-neutral-800 p-2 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
+                <ToolButton 
+                    isActive={canvasState.mode === "none" || canvasState.mode === "translating" || canvasState.mode === "selectionNet" || canvasState.mode === "resizing"}
+                    onClick={() => {
+                        setCanvasState({ mode: "none" });
+                        setShowShapesMenu(false);
+                    }}
+                    icon={MousePointer2}
+                    title="Sélectionner"
+                />
+                <ToolButton 
+                    isActive={canvasState.mode === "inserting" && canvasState.layerType === "Rectangle"}
+                    onClick={() => {
+                        setCanvasState({ mode: "inserting", layerType: "Rectangle" });
+                        setShowShapesMenu(false);
+                    }}
+                    icon={Square}
+                    title="Rectangle"
+                />
+                <ToolButton 
+                    isActive={canvasState.mode === "inserting" && canvasState.layerType === "Ellipse"}
+                    onClick={() => {
+                        setCanvasState({ mode: "inserting", layerType: "Ellipse" });
+                        setShowShapesMenu(false);
+                    }}
+                    icon={Circle}
+                    title="Cercle"
+                />
+                
+                {/* Shapes Group Button */}
+                <div className="relative">
+                    <ToolButton 
+                        isActive={isShapeActive || showShapesMenu}
+                        onClick={() => setShowShapesMenu(!showShapesMenu)}
+                        icon={TriangleIcon}
+                        title="Formes"
+                    />
+                    
+                    {showShapesMenu && (
+                        <div className="absolute left-14 top-0 flex flex-row gap-2 bg-white dark:bg-neutral-800 p-2 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700">
+                            <ToolButton 
+                                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Triangle"}
+                                onClick={() => {
+                                    setCanvasState({ mode: "inserting", layerType: "Triangle" });
+                                    setShowShapesMenu(false);
+                                }}
+                                icon={TriangleIcon}
+                                title="Triangle"
+                            />
+                            <ToolButton 
+                                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Arrow"}
+                                onClick={() => {
+                                    setCanvasState({ mode: "inserting", layerType: "Arrow" });
+                                    setShowShapesMenu(false);
+                                }}
+                                icon={MoveRight}
+                                title="Flèche"
+                            />
+                            <ToolButton 
+                                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Diamond"}
+                                onClick={() => {
+                                    setCanvasState({ mode: "inserting", layerType: "Diamond" });
+                                    setShowShapesMenu(false);
+                                }}
+                                icon={Diamond}
+                                title="Losange"
+                            />
+                            <ToolButton 
+                                isActive={canvasState.mode === "inserting" && canvasState.layerType === "Star"}
+                                onClick={() => {
+                                    setCanvasState({ mode: "inserting", layerType: "Star" });
+                                    setShowShapesMenu(false);
+                                }}
+                                icon={Star}
+                                title="Étoile"
+                            />
+                        </div>
+                    )}
+                </div>
 
-            <Button variant="ghost" size="icon" onClick={() => history.undo()} disabled={!canUndo} title="Annuler">
-                <Undo className="h-4 w-4" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => history.redo()} disabled={!canRedo} title="Rétablir">
-                <Redo className="h-4 w-4" />
-            </Button>
+                <ToolButton 
+                    isActive={canvasState.mode === "inserting" && canvasState.layerType === "Note"}
+                    onClick={() => {
+                        setCanvasState({ mode: "inserting", layerType: "Note" });
+                        setShowShapesMenu(false);
+                    }}
+                    icon={StickyNote}
+                    title="Note"
+                />
+                <ToolButton 
+                    isActive={canvasState.mode === "inserting" && canvasState.layerType === "Text"}
+                    onClick={() => {
+                        setCanvasState({ mode: "inserting", layerType: "Text" });
+                        setShowShapesMenu(false);
+                    }}
+                    icon={Type}
+                    title="Texte"
+                />
+                <ToolButton 
+                    isActive={canvasState.mode === "pencil"}
+                    onClick={() => {
+                        setCanvasState({ mode: "pencil" });
+                        setShowShapesMenu(false);
+                    }}
+                    icon={Pencil}
+                    title="Crayon"
+                />
+                
+                {/* Image Upload Button */}
+                <Button 
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                        fileInputRef.current?.click();
+                        setShowShapesMenu(false);
+                    }}
+                    title="Image"
+                >
+                    <ImageIcon className="h-5 w-5" />
+                </Button>
+                <input 
+                    ref={fileInputRef}
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden" 
+                    onChange={handleImageUpload}
+                />
+                
+                <div className="h-[1px] bg-neutral-200 dark:bg-neutral-700 my-1" />
+
+                <Button variant="ghost" size="icon" onClick={() => history.undo()} disabled={!canUndo} title="Annuler">
+                    <Undo className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={() => history.redo()} disabled={!canRedo} title="Rétablir">
+                    <Redo className="h-4 w-4" />
+                </Button>
+            </div>
         </div>
     )
 }
