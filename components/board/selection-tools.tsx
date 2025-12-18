@@ -31,6 +31,9 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
         let hasNoteOrText = false;
         let fontSize = 16;
         let fontFamily = "font-sans";
+        let isBold = false;
+        let isItalic = false;
+        let isUnderline = false;
 
         selection?.forEach(id => {
             const layer = layers.get(id);
@@ -40,6 +43,11 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                 hasNoteOrText = true;
                 if (layer.fontSize) fontSize = layer.fontSize;
                 if (layer.fontFamily) fontFamily = layer.fontFamily;
+                
+                // Check formatting
+                if (layer.fontWeight === "bold") isBold = true;
+                if (layer.fontStyle === "italic") isItalic = true;
+                if (layer.textDecoration === "underline") isUnderline = true;
                 
                 if (layer.type === "Text") textCount++;
                 else otherCount++;
@@ -52,7 +60,10 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
             hasText: hasNoteOrText,
             onlyText: textCount > 0 && otherCount === 0,
             fontSize,
-            fontFamily
+            fontFamily,
+            isBold,
+            isItalic,
+            isUnderline
         };
     });
 
@@ -60,6 +71,9 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
     const showFill = !selectionInfo?.onlyText;
     const currentFontSize = selectionInfo?.fontSize || 16;
     const currentFontFamily = selectionInfo?.fontFamily || "font-sans";
+    const isBold = selectionInfo?.isBold || false;
+    const isItalic = selectionInfo?.isItalic || false;
+    const isUnderline = selectionInfo?.isUnderline || false;
 
     // Mutations
     const setFill = useMutation(({ storage }, fill: string) => {
@@ -227,13 +241,34 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
 
                     {/* Text Formatting */}
                     <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-md p-0.5">
-                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm hover:bg-white" onClick={() => toggleBold()} onMouseDown={preventFocusLoss} title="Gras">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className={`h-6 w-6 rounded-sm hover:bg-white ${isBold ? "bg-neutral-200 dark:bg-neutral-700" : ""}`} 
+                            onClick={() => toggleBold()} 
+                            onMouseDown={preventFocusLoss} 
+                            title="Gras"
+                        >
                             <Bold className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm hover:bg-white" onClick={() => toggleItalic()} onMouseDown={preventFocusLoss} title="Italique">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className={`h-6 w-6 rounded-sm hover:bg-white ${isItalic ? "bg-neutral-200 dark:bg-neutral-700" : ""}`} 
+                            onClick={() => toggleItalic()} 
+                            onMouseDown={preventFocusLoss} 
+                            title="Italique"
+                        >
                             <Italic className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="h-6 w-6 rounded-sm hover:bg-white" onClick={() => toggleUnderline()} onMouseDown={preventFocusLoss} title="Souligné">
+                        <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className={`h-6 w-6 rounded-sm hover:bg-white ${isUnderline ? "bg-neutral-200 dark:bg-neutral-700" : ""}`} 
+                            onClick={() => toggleUnderline()} 
+                            onMouseDown={preventFocusLoss} 
+                            title="Souligné"
+                        >
                             <Underline className="h-3 w-3" />
                         </Button>
                     </div>
