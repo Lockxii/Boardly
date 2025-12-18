@@ -177,6 +177,35 @@ export function Canvas({ template, title }: { template: string, title: string })
         setMyPresence({ selection: [] }, { addToHistory: true });
     }, [selection, self]);
 
+    const duplicateLayers = useMutation(({ storage, setMyPresence }) => {
+        const liveLayers = storage.get("layers");
+        const liveLayerIds = storage.get("layerIds");
+        const newSelection: string[] = [];
+
+        selection.forEach(id => {
+            const layer = liveLayers.get(id);
+            if (!layer) return;
+
+            const layerId = nanoid();
+            const layerData = layer.toObject();
+            
+            // Offset the duplicate slightly
+            const newLayer = new LiveObject<Layer>({
+                ...layerData,
+                x: layerData.x + 20,
+                y: layerData.y + 20,
+            });
+
+            liveLayers.set(layerId, newLayer);
+            liveLayerIds.push(layerId);
+            newSelection.push(layerId);
+            
+            addAuditEntry(storage, "created", `Copie de ${layerData.type}`);
+        });
+
+        setMyPresence({ selection: newSelection }, { addToHistory: true });
+    }, [selection, self]);
+
     useEffect(() => {
         function onKeyDown(e: KeyboardEvent) {
             switch (e.key) {
@@ -185,6 +214,12 @@ export function Canvas({ template, title }: { template: string, title: string })
                     const ae = document.activeElement as HTMLElement;
                     if (ae?.tagName === "TEXTAREA" || ae?.tagName === "INPUT" || ae?.isContentEditable) return;
                     deleteLayers();
+                    break;
+                case "d":
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        duplicateLayers();
+                    }
                     break;
                 case "z":
                     if (e.ctrlKey || e.metaKey) {
@@ -197,7 +232,7 @@ export function Canvas({ template, title }: { template: string, title: string })
         }
         window.addEventListener("keydown", onKeyDown);
         return () => window.removeEventListener("keydown", onKeyDown);
-    }, [deleteLayers, history]);
+    }, [deleteLayers, duplicateLayers, history]);
 
     const translateSelectedLayers = useMutation(({ storage, self }, point: { x: number; y: number }) => {
         if (canvasState.mode !== "translating") return;

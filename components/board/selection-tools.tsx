@@ -2,10 +2,13 @@
 
 import { useMutation, useSelf, useStorage } from "@/liveblocks.config";
 import { memo } from "react";
-import { Trash2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyCenter, AlignVerticalJustifyStart, AlignVerticalJustifyEnd, Bold, Italic, Underline, Ban } from "lucide-react";
+import { Trash2, AlignLeft, AlignCenter, AlignRight, AlignVerticalJustifyCenter, AlignVerticalJustifyStart, AlignVerticalJustifyEnd, Bold, Italic, Underline, Ban, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { nanoid } from "nanoid";
+import { LiveObject } from "@liveblocks/client";
+import { Layer } from "@/liveblocks.config";
 
 interface SelectionToolsProps {
     camera: { x: number, y: number, zoom: number };
@@ -149,6 +152,32 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
         });
     }, [selection]);
 
+    const duplicateLayers = useMutation(({ storage, setMyPresence }) => {
+        const liveLayers = storage.get("layers");
+        const liveLayerIds = storage.get("layerIds");
+        const newSelection: string[] = [];
+
+        selection?.forEach(id => {
+            const layer = liveLayers.get(id);
+            if (!layer) return;
+
+            const layerId = nanoid();
+            const layerData = layer.toObject();
+            
+            const newLayer = new LiveObject<Layer>({
+                ...layerData,
+                x: layerData.x + 20,
+                y: layerData.y + 20,
+            });
+
+            liveLayers.set(layerId, newLayer);
+            liveLayerIds.push(layerId);
+            newSelection.push(layerId);
+        });
+
+        setMyPresence({ selection: newSelection }, { addToHistory: true });
+    }, [selection]);
+
     const deleteLayers = useMutation(({ storage, setMyPresence }) => {
         const liveLayers = storage.get("layers");
         const liveLayerIds = storage.get("layerIds");
@@ -237,6 +266,11 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
             )}
 
             <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 hidden md:block mx-1" />
+            
+            <Button variant="ghost" size="icon" onClick={duplicateLayers} title="Dupliquer (Cmd+D)" className="h-8 w-8 hover:bg-neutral-100 shrink-0">
+                <Copy className="h-4 w-4" />
+            </Button>
+
             <Button variant="ghost" size="icon" onClick={deleteLayers} title="Supprimer" className="h-8 w-8 hover:bg-red-100 hover:text-red-600 shrink-0 ml-auto"><Trash2 className="h-4 w-4" /></Button>
         </div>
     );
