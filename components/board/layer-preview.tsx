@@ -154,12 +154,17 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
   }
 
   const cornerRadius = layer.cornerRadius || 0;
+  const stroke = layer.stroke || "transparent";
+  const strokeWidth = layer.strokeWidth || 0;
   
   // Helper for rounded shapes (non-rectangles)
   // CornerRadius for stroke-linejoin="round" is strokeWidth / 2
-  const shapeStrokeWidth = cornerRadius * 2;
+  // We combine the base shapeStrokeWidth (for rounding) with the user's border width
+  const baseShapeStrokeWidth = cornerRadius * 2;
+  const totalStrokeWidth = Math.max(baseShapeStrokeWidth, strokeWidth);
+  
   // Scale down to keep shape within bounds when stroke is added
-  const shapeScale = layer.width > 0 && layer.height > 0 ? (Math.min(layer.width, layer.height) / (Math.min(layer.width, layer.height) + shapeStrokeWidth)) : 1;
+  const shapeScale = layer.width > 0 && layer.height > 0 ? (Math.min(layer.width, layer.height) / (Math.min(layer.width, layer.height) + totalStrokeWidth)) : 1;
 
   return (
     <g
@@ -191,6 +196,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
                 rx={cornerRadius}
                 ry={cornerRadius}
                 fill={layer.fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
                 className="drop-shadow-sm"
              />
              <foreignObject width={layer.width} height={layer.height} style={{ overflow: 'visible', pointerEvents: 'none' }}>
@@ -211,8 +218,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
             <polygon
                 points={`0,${layer.height} ${layer.width / 2},0 ${layer.width},${layer.height}`}
                 fill={layer.fill}
-                stroke={layer.fill}
-                strokeWidth={shapeStrokeWidth}
+                stroke={strokeWidth > 0 ? stroke : layer.fill} // Use fill for rounding if no stroke
+                strokeWidth={totalStrokeWidth}
                 strokeLinejoin="round"
                 className="drop-shadow-sm"
             />
@@ -223,8 +230,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
             <polygon
                 points={`${layer.width / 2},0 ${layer.width},${layer.height / 2} ${layer.width / 2},${layer.height} 0,${layer.height / 2}`}
                 fill={layer.fill}
-                stroke={layer.fill}
-                strokeWidth={shapeStrokeWidth}
+                stroke={strokeWidth > 0 ? stroke : layer.fill}
+                strokeWidth={totalStrokeWidth}
                 strokeLinejoin="round"
                 className="drop-shadow-sm"
             />
@@ -246,8 +253,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
                     ${layer.width * 0.37},${layer.height * 0.38}
                 `}
                 fill={layer.fill}
-                stroke={layer.fill}
-                strokeWidth={shapeStrokeWidth}
+                stroke={strokeWidth > 0 ? stroke : layer.fill}
+                strokeWidth={totalStrokeWidth}
                 strokeLinejoin="round"
                 className="drop-shadow-sm"
             />
@@ -267,8 +274,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
                     Z
                 `}
                 fill={layer.fill}
-                stroke={layer.fill}
-                strokeWidth={shapeStrokeWidth}
+                stroke={strokeWidth > 0 ? stroke : layer.fill}
+                strokeWidth={totalStrokeWidth}
                 strokeLinejoin="round"
                 className="drop-shadow-sm"
             />
@@ -282,6 +289,8 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
                 rx={layer.width / 2}
                 ry={layer.height / 2}
                 fill={layer.fill}
+                stroke={stroke}
+                strokeWidth={strokeWidth}
              />
              <foreignObject width={layer.width} height={layer.height} style={{ overflow: 'visible', pointerEvents: 'none' }}>
                  <div style={{...wrapperStyle, alignItems: 'center'}}>

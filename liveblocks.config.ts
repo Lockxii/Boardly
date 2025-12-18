@@ -20,6 +20,7 @@ export type Layer = {
   height: number;
   width: number;
   fill: string;
+  stroke?: string;
   points?: number[][];
   strokeWidth?: number;
   value?: string;
