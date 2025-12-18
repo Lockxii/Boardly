@@ -24,9 +24,10 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
     // Check selection types
     const selectionInfo = useStorage((root) => {
         const layers = root.layers;
-        if (!selection || selection.length === 0) return { hasText: false, onlyText: false, fontSize: 16, fontFamily: "font-sans" };
+        if (!selection || selection.length === 0) return { hasText: false, onlyText: false, hasImage: false, allImages: false, fontSize: 16, fontFamily: "font-sans", isBold: false, isItalic: false, isUnderline: false };
 
         let textCount = 0;
+        let imageCount = 0;
         let otherCount = 0;
         let hasNoteOrText = false;
         let fontSize = 16;
@@ -41,27 +42,31 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
 
             const isShape = ["Rectangle", "Ellipse", "Triangle", "Star", "Diamond", "Arrow"].includes(layer.type);
             const isTextual = ["Text", "Note"].includes(layer.type);
+            const isImage = layer.type === "Image";
+
+            if (isImage) imageCount++;
 
             if (isShape || isTextual) {
-                hasNoteOrText = true; // This flag controls showing text/shape controls
+                hasNoteOrText = true; 
                 if (layer.fontSize) fontSize = layer.fontSize;
                 if (layer.fontFamily) fontFamily = layer.fontFamily;
                 
-                // Check formatting
                 if (layer.fontWeight === "bold") isBold = true;
                 if (layer.fontStyle === "italic") isItalic = true;
                 if (layer.textDecoration === "underline") isUnderline = true;
                 
                 if (layer.type === "Text") textCount++;
                 else otherCount++;
-            } else {
+            } else if (!isImage) {
                 otherCount++;
             }
         });
 
         return {
             hasText: hasNoteOrText,
-            onlyText: textCount > 0 && otherCount === 0,
+            onlyText: textCount > 0 && (otherCount + imageCount) === 0,
+            hasImage: imageCount > 0,
+            allImages: imageCount > 0 && (otherCount + textCount) === 0 && !hasNoteOrText,
             fontSize,
             fontFamily,
             isBold,
@@ -71,7 +76,9 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
     });
 
     const hasTextLayer = selectionInfo?.hasText;
-    const showFill = !selectionInfo?.onlyText;
+    const showFill = !selectionInfo?.onlyText && !selectionInfo?.allImages;
+    const showAngles = selectionInfo?.hasText || selectionInfo?.hasImage || !selectionInfo?.allImages; // Show if not strictly only-something-else
+    
     const currentFontSize = selectionInfo?.fontSize || 16;
     const currentFontFamily = selectionInfo?.fontFamily || "font-sans";
     const isBold = selectionInfo?.isBold || false;
@@ -209,7 +216,12 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                     </div>
                     
                     <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-1" />
-                    
+                </div>
+            )}
+
+            {/* Corner Radius Slider (Always show if something relevant is selected) */}
+            {(showFill || selectionInfo?.hasImage || selectionInfo?.hasText) && (
+                <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] uppercase font-bold text-neutral-500">Angles</span>
                     <input 
                         type="range" 

@@ -331,12 +331,25 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
         </foreignObject>
       )}
       {layer.type === "Image" && (
-        <image 
-            href={layer.src}
-            width={layer.width}
-            height={layer.height}
-            preserveAspectRatio="none"
-        />
+        <>
+            <defs>
+                <clipPath id={`clip-${id}`}>
+                    <rect 
+                        width={layer.width} 
+                        height={layer.height} 
+                        rx={cornerRadius} 
+                        ry={cornerRadius} 
+                    />
+                </clipPath>
+            </defs>
+            <image 
+                href={layer.src}
+                width={layer.width}
+                height={layer.height}
+                preserveAspectRatio="none"
+                clipPath={`url(#clip-${id})`}
+            />
+        </>
       )}
 
       {isSelected && (
