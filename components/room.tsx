@@ -1,23 +1,31 @@
 "use client";
 
+import { ReactNode } from "react";
 import { RoomProvider } from "@/liveblocks.config";
 import { ClientSideSuspense } from "@liveblocks/react";
-import { LiveMap, LiveList } from "@liveblocks/client";
 import { Canvas } from "./board/canvas";
+import { LiveMap, LiveList, LiveObject } from "@liveblocks/client";
+import { Layer } from "@/liveblocks.config";
 import { Loader2 } from "lucide-react";
 
-export function Room({ roomId, template }: { roomId: string, template: string }) {
-    return (
-        <RoomProvider 
-            id={roomId} 
-            initialPresence={{ cursor: null, selection: [] }}
-            initialStorage={{ layers: new LiveMap(), layerIds: new LiveList([]) }}
-        >
-            <ClientSideSuspense fallback={<Loading />}>
-                {() => <Canvas template={template} />}
-            </ClientSideSuspense>
-        </RoomProvider>
-    )
+interface RoomProps {
+  children?: ReactNode;
+  roomId: string;
+  template: string;
+  title: string;
+}
+
+export function Room({ children, roomId, template, title }: RoomProps) {
+  return (
+    <RoomProvider id={roomId} initialPresence={{ selection: [], cursor: null }} initialStorage={{
+      layers: new LiveMap<string, LiveObject<Layer>>(),
+      layerIds: new LiveList([]),
+    }}>
+      <ClientSideSuspense fallback={<div>Loading…</div>}>
+        <Canvas template={template} title={title} />
+      </ClientSideSuspense>
+    </RoomProvider>
+  );
 }
 
 function Loading() {

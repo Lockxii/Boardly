@@ -27,6 +27,6 @@ export default async function BoardPage({ params }: BoardPageProps) {
     }
 
     return (
-        <Room roomId={board.id} template={board.template || "blank"} />
+        <Room roomId={board.id} template={board.template || "blank"} title={board.title} />
     );
 }

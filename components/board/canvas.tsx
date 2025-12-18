@@ -14,9 +14,10 @@ import { CursorsPresence } from "./cursors-presence";
 
 import { SelectionTools } from "./selection-tools";
 import { ZoomControls } from "./zoom-controls";
+import { Navbar } from "./navbar";
 import { useEffect } from "react";
 
-export function Canvas({ template }: { template: string }) {
+export function Canvas({ template, title }: { template: string, title: string }) {
     const { camera, setCamera, canvasState, setCanvasState, lastUsedColor, pencilThickness, pencilTool } = useCanvasStore();
     const layerIds = useStorage((root) => root.layerIds);
     const [presence, updateMyPresence] = useMyPresence();
@@ -401,6 +402,7 @@ export function Canvas({ template }: { template: string }) {
 
     return (
         <main className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`} style={{ cursor: cursorStyle }}>
+            <Navbar title={title} />
             <Toolbar />
             <PencilToolbar />
             <SelectionTools camera={camera} />

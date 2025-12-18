@@ -18,7 +18,7 @@ export function PencilToolbar() {
     if (canvasState.mode !== "pencil") return null;
 
     return (
-        <div className="absolute top-4 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-2 p-2 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
+        <div className="absolute top-20 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-2 p-2 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
             
             {/* Tool Switcher */}
             <div className="flex bg-neutral-100 dark:bg-neutral-900 rounded-md p-0.5">

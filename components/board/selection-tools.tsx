@@ -165,7 +165,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
     const preventFocusLoss = (e: React.MouseEvent) => { e.preventDefault(); };
 
     return (
-        <div className="absolute top-4 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-2 p-2 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto overflow-x-auto max-w-[95vw] no-scrollbar" onMouseDown={preventFocusLoss}>
+        <div className="absolute top-20 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-2 p-2 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto overflow-x-auto max-w-[95vw] no-scrollbar" onMouseDown={preventFocusLoss}>
             {showFill && (
                 <div className="flex items-center gap-2 shrink-0">
                     <span className="text-[10px] uppercase font-bold text-neutral-500">Fond</span>
