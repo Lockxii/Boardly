@@ -131,4 +131,7 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
-@import '@liveblocks/react-comments/styles.css';
+@import '@liveblocks/react-ui/styles.css';
+
+@tailwind base;
+@tailwind components;

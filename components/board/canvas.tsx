@@ -11,7 +11,7 @@ import { PencilToolbar } from "./pencil-toolbar";
 import { BrushPreview } from "./brush-preview";
 import React, { useCallback, useMemo, useState, useEffect } from "react";
 import { CursorsPresence } from "./cursors-presence";
-import { Thread, Composer } from "@liveblocks/react-comments";
+import { Thread, Composer } from "@liveblocks/react-ui";
 
 import { SelectionTools } from "./selection-tools";
 import { ZoomControls } from "./zoom-controls";
