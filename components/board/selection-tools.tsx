@@ -39,8 +39,11 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
             const layer = layers.get(id);
             if (!layer) return;
 
-            if (layer.type === "Text" || layer.type === "Note" || layer.type === "Rectangle" || layer.type === "Ellipse") {
-                hasNoteOrText = true;
+            const isShape = ["Rectangle", "Ellipse", "Triangle", "Star", "Diamond", "Arrow"].includes(layer.type);
+            const isTextual = ["Text", "Note"].includes(layer.type);
+
+            if (isShape || isTextual) {
+                hasNoteOrText = true; // This flag controls showing text/shape controls
                 if (layer.fontSize) fontSize = layer.fontSize;
                 if (layer.fontFamily) fontFamily = layer.fontFamily;
                 
