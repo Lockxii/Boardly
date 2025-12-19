@@ -4,7 +4,7 @@ import { useCanvasStore } from "@/store/use-canvas-store";
 import { useHistory, useMutation, useStorage, useOthers, useMyPresence, useSelf, Layer, LayerType, AuditEntry, useThreads, useCreateThread } from "@/liveblocks.config";
 import { pointerEventToCanvasPoint } from "@/lib/utils";
 import { nanoid } from "nanoid";
-import { LiveObject } from "@liveblocks/client";
+import { LiveObject, LiveMap, LiveList } from "@liveblocks/client";
 import { LayerPreview } from "./layer-preview";
 import { Toolbar } from "./toolbar";
 import { PencilToolbar } from "./pencil-toolbar";
@@ -303,6 +303,10 @@ export function Canvas({ template, title }: { template: string, title: string })
         }
     }, [camera, canvasState, translateSelectedLayers, resizeSelectedLayer, rotateSelectedLayer, continueDrawing, eraser, pencilTool, setCanvasState]);
 
+    const onPointerLeave = useMutation(({ setMyPresence }) => {
+        setMyPresence({ cursor: null });
+    }, []);
+
     const onPointerDown = useCallback((e: React.PointerEvent) => {
         const point = pointerEventToCanvasPoint(e, camera);
         if (canvasState.mode === "inserting") {
@@ -349,7 +353,8 @@ export function Canvas({ template, title }: { template: string, title: string })
                 else insertLayer(canvasState.layerType, { x, y }, w, h);
             }
         } else if (canvasState.mode === "pencil") {
-            if (pencilTool === "draw") insertPath(); else history.resume();
+            if (pencilTool === "draw") insertPath();
+            else history.resume();
         }
     }, [camera, canvasState, setCanvasState, history, insertPath, pencilTool, insertLayer, selection]);
 
@@ -370,6 +375,7 @@ export function Canvas({ template, title }: { template: string, title: string })
         setCanvasState({ mode: "resizing", initialBounds, initialStart: point, corner: "bottom-right" });
     }, [camera, setCanvasState, history]);
 
+    // !! FIX: Define onLayerPointerDown at the top level, outside of the loop !!
     const onLayerPointerDown = useMutation((
         { self, setMyPresence, storage },
         e: React.PointerEvent,
@@ -379,9 +385,11 @@ export function Canvas({ template, title }: { template: string, title: string })
         const point = pointerEventToCanvasPoint(e, camera);
         const layer = storage.get("layers").get(layerId);
         if (layer?.get("locked")) return;
+
         if (!self.presence.selection.includes(layerId)) {
             setMyPresence({ selection: [layerId] }, { addToHistory: true });
         }
+        
         history.pause();
         setCanvasState({ mode: "translating", current: point });
     }, [camera, history, setCanvasState]);
@@ -410,11 +418,11 @@ export function Canvas({ template, title }: { template: string, title: string })
             
             <div className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-hidden">
                 <div style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`, transformOrigin: "top left", width: "100%", height: "100%" }}>
-                    {/* {threads && threads.map((thread) => (
+                    {threads && threads.map((thread) => (
                         <div key={thread.id} style={{ position: "absolute", left: thread.metadata.x, top: thread.metadata.y, transform: "translate(-50%, -50%)", pointerEvents: "auto", zIndex: 50 }}>
                             <Thread thread={thread} />
                         </div>
-                    ))} */}
+                    ))}
                     {creatingComment && (
                         <div style={{ position: "absolute", left: creatingComment.x, top: creatingComment.y, pointerEvents: "auto", zIndex: 60, background: "white", padding: "8px", borderRadius: "8px", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}>
                             <Composer onComposerSubmit={onComposerSubmit} />
