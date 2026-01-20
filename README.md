@@ -1,5 +1,8 @@
 # Boardly - Tableau Blanc Collaboratif Temps Réel
 
+[![Déployé sur Vercel](https://img.shields.io/badge/Vercel-Déployé-black?logo=vercel)](https://boardly-r3xr.vercel.app/)
+
+**Lien du site :** [https://boardly-r3xr.vercel.app/](https://boardly-r3xr.vercel.app/)
 
 ![Aperçu](public/logo.svg)
 
