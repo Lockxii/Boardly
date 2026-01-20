@@ -24,6 +24,7 @@ export function Room({ children, roomId, template, title }: RoomProps) {
             layers: new LiveMap<string, LiveObject<Layer>>(),
             layerIds: new LiveList([]),
             auditLog: new LiveList([]),
+            chatMessages: new LiveList([]),
         }}
     >
       <ClientSideSuspense fallback={<Loading />}>

@@ -148,3 +148,14 @@ model Presence {
 
   @@map("presence")
 }
+
+model ChatAttachment {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  size      Int
+  data      String   @db.Text 
+  createdAt DateTime @default(now())
+
+  @@map("chat_attachment")
+}

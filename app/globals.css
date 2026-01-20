@@ -135,3 +135,11 @@
 
 @tailwind base;
 @tailwind components;
+
+
+/* Hide Liveblocks Branding */
+[class*="lb-toast-footer"], 
+a[href*="liveblocks.io"] {
+    display: none !important;
+}
+

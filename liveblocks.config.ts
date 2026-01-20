@@ -34,6 +34,7 @@ export type Layer = {
   fontWeight?: string;
   fontStyle?: string;
   textDecoration?: "none" | "underline";
+  textBackground?: string;
   cornerRadius?: number;
   rotation?: number;
   locked?: boolean;
@@ -53,10 +54,25 @@ export type AuditEntry = {
   timestamp: number;
 };
 
+export type ChatMessage = {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  timestamp: number;
+  attachment?: {
+    type: "image" | "file";
+    url: string;
+    name: string;
+  };
+  linkedLayerIds?: string[];
+};
+
 export type Storage = {
   layers: LiveMap<string, LiveObject<Layer>>;
   layerIds: LiveList<string>;
   auditLog: LiveList<AuditEntry>;
+  chatMessages: LiveList<ChatMessage>;
 };
 
 export type UserMeta = {
@@ -78,13 +94,5 @@ export const {
   useCanUndo,
   useCanRedo,
   useOther,
-  useOthersConnectionIds,
-  useThreads,
-  useCreateThread
-} = createRoomContext<Presence, Storage, UserMeta, never, ThreadMetadata>(client);
-
-export type ThreadMetadata = {
-  x: number;
-  y: number;
-  resolved: boolean;
-};
+  useOthersConnectionIds
+} = createRoomContext<Presence, Storage, UserMeta>(client);

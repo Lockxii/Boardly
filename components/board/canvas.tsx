@@ -379,7 +379,7 @@ export function Canvas({ template, title }: { template: string, title: string })
             <SelectionTools camera={camera} />
             <ZoomControls />
             <BrushPreview />
-            <svg className="w-[100vw] h-[100vh]" onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); const ds = 0.001; const delta = -e.deltaY * ds; setCamera({ ...camera, zoom: Math.min(Math.max(camera.zoom + delta, 0.1), 5) }); } else { setCamera({ x: camera.x - e.deltaX, y: camera.y - e.deltaY, zoom: camera.zoom }); } }} onPointerMove={onPointerMove} onPointerLeave={() => updateMyPresence({ cursor: null })} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
+            <svg id="board-canvas" className="w-[100vw] h-[100vh]" onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); const ds = 0.001; const delta = -e.deltaY * ds; setCamera({ ...camera, zoom: Math.min(Math.max(camera.zoom + delta, 0.1), 5) }); } else { setCamera({ x: camera.x - e.deltaX, y: camera.y - e.deltaY, zoom: camera.zoom }); } }} onPointerMove={onPointerMove} onPointerLeave={() => updateMyPresence({ cursor: null })} onPointerDown={onPointerDown} onPointerUp={onPointerUp}>
                 <defs>
                     <pattern id="grid-pattern" width="20" height="20" patternUnits="userSpaceOnUse"><circle cx="1" cy="1" r="1" fill="#cbd5e1" /></pattern>
                     <pattern id="blueprint-pattern" width="40" height="40" patternUnits="userSpaceOnUse"><path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1"/></pattern>

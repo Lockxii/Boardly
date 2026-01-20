@@ -77,7 +77,7 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
   const onTextPointerDown = (e: React.PointerEvent) => { e.stopPropagation(); };
 
   const wrapperStyle: React.CSSProperties = { width: "100%", height: "100%", display: "flex", flexDirection: "column", justifyContent: justify, pointerEvents: "none" };
-  const editableStyle: React.CSSProperties = { width: "100%", outline: "none", border: "none", background: "transparent", fontFamily, fontSize, textAlign: align, fontWeight: layer.fontWeight || (layer.type === "Text" ? "bold" : "normal"), fontStyle: layer.fontStyle || "normal", textDecoration: layer.textDecoration || "none", color: layer.textColor || (layer.fill ? (parseInt(layer.fill.replace('#', ''), 16) > 0xffffff / 2 ? 'black' : 'white') : 'black'), pointerEvents: isEditing ? "auto" : "none", overflow: "hidden", whiteSpace: "pre-wrap", wordBreak: "break-word", cursor: isEditing ? "text" : "move", userSelect: isEditing ? "text" : "none" };
+  const editableStyle: React.CSSProperties = { width: "100%", outline: "none", border: "none", background: layer.textBackground || "transparent", fontFamily, fontSize, textAlign: align, fontWeight: layer.fontWeight || (layer.type === "Text" ? "bold" : "normal"), fontStyle: layer.fontStyle || "normal", textDecoration: layer.textDecoration || "none", color: layer.textColor || (layer.fill ? (parseInt(layer.fill.replace('#', ''), 16) > 0xffffff / 2 ? 'black' : 'white') : 'black'), pointerEvents: isEditing ? "auto" : "none", overflow: "hidden", whiteSpace: "pre-wrap", wordBreak: "break-word", cursor: isEditing ? "text" : "move", userSelect: isEditing ? "text" : "none" };
 
   let pathScaleX = 1, pathScaleY = 1, isDrawing = false;
   if (layer.type === "Path") {
@@ -151,7 +151,24 @@ export const LayerPreview = memo(({ id, onLayerPointerDown, onLayerResizePointer
       )}
       {layer.type === "Text" && (
         <foreignObject width={layer.width} height={layer.height} style={{ overflow: 'visible' }}>
-            <div style={wrapperStyle}><div ref={editableRef} contentEditable={isEditing} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{...editableStyle, padding: '0px', fontWeight: 'bold', color: layer.textColor || layer.fill || "#000000"}} /></div>
+            <div style={wrapperStyle}>
+                <div 
+                    ref={editableRef} 
+                    contentEditable={isEditing} 
+                    onBlur={handleBlur} 
+                    onPointerDown={onTextPointerDown} 
+                    style={{
+                        ...editableStyle, 
+                        padding: layer.textBackground ? '2px 6px' : '0px', 
+                        borderRadius: '4px', 
+                        fontWeight: 'bold', 
+                        color: layer.textColor || layer.fill || "#000000",
+                        display: 'inline-block', // This ensures highlight only wraps text width
+                        width: 'auto',
+                        maxWidth: '100%'
+                    }} 
+                />
+            </div>
         </foreignObject>
       )}
       {layer.type === "Image" && (

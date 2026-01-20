@@ -8,6 +8,7 @@ import Link from "next/link";
 import { Plus, Layout, Clock } from "lucide-react";
 import { NewBoardDialog } from "@/components/new-board-dialog";
 import { BoardDeleteButton } from "@/components/board-delete-button";
+import { SettingsDialog } from "@/components/settings-dialog";
 
 export default async function Dashboard() {
     const session = await auth.api.getSession({ headers: await headers() });
@@ -29,10 +30,11 @@ export default async function Dashboard() {
                         Mes Tableaux
                     </h1>
                 </div>
-                <div className="flex items-center gap-6">
-                     <span className="text-sm text-neutral-500 font-medium">
+                <div className="flex items-center gap-4">
+                     <span className="text-sm text-neutral-500 font-medium hidden sm:inline-block">
                         {session.user.name || session.user.email}
                      </span>
+                     <SettingsDialog user={session.user} />
                      <NewBoardDialog />
                 </div>
             </header>
