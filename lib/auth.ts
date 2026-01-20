@@ -8,5 +8,9 @@ export const auth = betterAuth({
     }),
     emailAndPassword: {
         enabled: true
-    }
+    },
+    trustedOrigins: [
+        "https://boardly-r3xr.vercel.app",
+        "*.vercel.app"
+    ]
 });
