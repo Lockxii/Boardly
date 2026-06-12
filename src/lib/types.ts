@@ -83,7 +83,7 @@ export type Layer = {
   linkTitle?: string;
   linkDescription?: string;
   linkImage?: string;
-  linkProvider?: "youtube" | "spotify" | "tiktok" | "soundcloud" | "vimeo" | "generic";
+  linkProvider?: "youtube" | "spotify" | "tiktok" | "soundcloud" | "vimeo" | "apple-music" | "deezer" | "amazon-music" | "generic";
   linkAuthor?: string;
   linkImageWidth?: number;
   linkImageHeight?: number;
@@ -176,7 +176,7 @@ export type LinkPreview = {
   title: string;
   description: string;
   image: string;
-  provider?: "youtube" | "spotify" | "tiktok" | "soundcloud" | "vimeo" | "generic";
+  provider?: "youtube" | "spotify" | "tiktok" | "soundcloud" | "vimeo" | "apple-music" | "deezer" | "amazon-music" | "generic";
   author?: string;
   imageWidth?: number;
   imageHeight?: number;

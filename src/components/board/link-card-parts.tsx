@@ -7,6 +7,8 @@ import {
   brandIconUrl,
   estimateLinkBodyHeight,
   getLinkImageHeight,
+  isColorLinkLogo,
+  resolveLinkProvider,
   type LinkProvider,
 } from "@/lib/brand-icons";
 
@@ -48,14 +50,15 @@ function BrandLogo({
   );
 }
 
-export function LinkProviderBadge({ provider }: { provider?: Layer["linkProvider"] }) {
-  if (!provider || provider === "generic") return null;
-  const meta = LINK_PROVIDER_META[provider];
+export function LinkProviderBadge({ provider, url }: { provider?: Layer["linkProvider"]; url?: string }) {
+  const resolved = resolveLinkProvider(provider, url);
+  if (resolved === "generic") return null;
+  const meta = LINK_PROVIDER_META[resolved];
   return (
     <span
-      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white ${meta.badgeClass}`}
+      className={`inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white shrink-0 ${meta.badgeClass}`}
     >
-      <BrandLogo provider={provider} className="h-3.5 w-auto max-w-[14px]" mono={meta.logoOnBadge === "mono"} />
+      <BrandLogo provider={resolved} className="h-4 w-auto max-w-[16px]" mono={meta.logoOnBadge === "mono"} />
       {meta.label}
     </span>
   );
@@ -79,11 +82,13 @@ export function LinkCardImage({
   onNaturalSize?: (width: number, height: number) => void;
 }) {
   const videoId = provider === "youtube" ? youtubeIdFromUrl(url) : null;
-  const imageHeightPx = getLinkImageHeight(provider, width, imageWidth, imageHeight);
+  const resolved = resolveLinkProvider(provider, url);
+  const imageHeightPx = getLinkImageHeight(resolved, width, imageWidth, imageHeight);
+  const isMusic = resolved === "spotify" || resolved === "apple-music" || resolved === "deezer" || resolved === "amazon-music" || resolved === "soundcloud";
 
   return (
     <div
-      className="relative w-full shrink-0 overflow-hidden bg-neutral-100 dark:bg-neutral-950"
+      className={`relative w-full shrink-0 overflow-hidden ${isMusic ? "bg-neutral-100 dark:bg-neutral-900" : "bg-neutral-100 dark:bg-neutral-950"}`}
       style={{ height: imageHeightPx }}
     >
       <img
@@ -103,9 +108,9 @@ export function LinkCardImage({
           }
         }}
       />
-      {provider && provider !== "generic" && (
+      {resolved !== "generic" && (
         <div className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 shadow-sm backdrop-blur-sm">
-          <BrandLogo provider={provider} className="h-4 w-4" mono={provider !== "tiktok"} />
+          <BrandLogo provider={resolved} className="h-4 w-4" mono={!isColorLinkLogo(resolved)} />
         </div>
       )}
     </div>
@@ -127,7 +132,7 @@ export function LinkCardBody({ layer }: { layer: Layer }) {
         <p className="flex-1 text-sm font-semibold leading-snug text-neutral-900 line-clamp-3 dark:text-white">
           {layer.linkTitle || layer.url}
         </p>
-        <LinkProviderBadge provider={layer.linkProvider} />
+        <LinkProviderBadge provider={layer.linkProvider} url={layer.url} />
       </div>
       {(layer.linkAuthor || layer.linkDescription) && (
         <p className="text-xs text-neutral-500 line-clamp-2">{layer.linkAuthor || layer.linkDescription}</p>

@@ -1,11 +1,15 @@
-type LinkProvider = "youtube" | "spotify" | "tiktok" | "soundcloud" | "vimeo" | "generic";
+import {
+  cleanMusicLinkTitle,
+  detectLinkProviderFromUrl,
+  type LinkProviderId,
+} from "../src/lib/link-providers.js";
 
 export type LinkPreviewResult = {
   url: string;
   title: string;
   description: string;
   image: string;
-  provider: LinkProvider;
+  provider: LinkProviderId;
   author?: string;
   imageWidth?: number;
   imageHeight?: number;
@@ -46,14 +50,8 @@ function normalizeHost(hostname: string) {
   return hostname.replace(/^www\./, "").replace(/^m\./, "");
 }
 
-function detectProvider(url: URL): LinkProvider {
-  const host = normalizeHost(url.hostname);
-  if (host === "youtube.com" || host === "youtu.be") return "youtube";
-  if (host === "open.spotify.com") return "spotify";
-  if (host === "tiktok.com" || host === "vm.tiktok.com") return "tiktok";
-  if (host === "soundcloud.com" || host === "on.soundcloud.com") return "soundcloud";
-  if (host === "vimeo.com" || host === "player.vimeo.com") return "vimeo";
-  return "generic";
+function detectProvider(url: URL): LinkProviderId {
+  return detectLinkProviderFromUrl(url.toString());
 }
 
 function youtubeVideoId(url: URL): string | null {
@@ -93,7 +91,7 @@ async function fetchOEmbed(endpoint: string, targetUrl: string): Promise<OEmbedP
   }
 }
 
-const OEMBED_ENDPOINTS: Record<Exclude<LinkProvider, "generic">, string> = {
+const OEMBED_ENDPOINTS: Partial<Record<Exclude<LinkProviderId, "generic">, string>> = {
   youtube: "https://www.youtube.com/oembed",
   spotify: "https://open.spotify.com/oembed",
   tiktok: "https://www.tiktok.com/oembed",
@@ -101,8 +99,10 @@ const OEMBED_ENDPOINTS: Record<Exclude<LinkProvider, "generic">, string> = {
   vimeo: "https://vimeo.com/api/oembed.json",
 };
 
-async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProvider, "generic">): Promise<LinkPreviewResult | null> {
-  const data = await fetchOEmbed(OEMBED_ENDPOINTS[provider], url.toString());
+async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "generic">): Promise<LinkPreviewResult | null> {
+  const endpoint = OEMBED_ENDPOINTS[provider];
+  if (!endpoint) return null;
+  const data = await fetchOEmbed(endpoint, url.toString());
   if (!data?.title && !data?.thumbnail_url) return null;
 
   let image = data.thumbnail_url || "";
@@ -118,7 +118,8 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProvider, "gen
   }
 
   const author = data.author_name?.trim();
-  const title = data.title?.trim() || url.hostname;
+  let title = data.title?.trim() || url.hostname;
+  title = cleanMusicLinkTitle(title, provider);
   let description = "";
 
   if (provider === "spotify" && author) {
@@ -152,7 +153,9 @@ async function fetchOpenGraphPreview(url: URL): Promise<LinkPreviewResult> {
   if (!res.ok) throw new Error("Impossible de récupérer la page");
 
   const html = (await res.text()).slice(0, 500_000);
-  const title = pickTitle(html) || url.hostname;
+  const provider = detectProvider(url);
+  let title = pickTitle(html) || url.hostname;
+  title = cleanMusicLinkTitle(title, provider);
   const description = pickMeta(html, "description");
   let image = pickMeta(html, "image");
   if (image && image.startsWith("/")) {
@@ -166,7 +169,7 @@ async function fetchOpenGraphPreview(url: URL): Promise<LinkPreviewResult> {
     title,
     description,
     image,
-    provider: "generic",
+    provider,
     imageWidth: imageWidth || undefined,
     imageHeight: imageHeight || undefined,
   };

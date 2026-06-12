@@ -28,6 +28,7 @@ import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
 import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
 import { extractPlainTextFromClipboard, extractUrlFromClipboard } from "@/lib/clipboard-utils";
 import { getLinkLayerDimensions } from "@/lib/brand-icons";
+import { detectLinkProviderFromUrl } from "@/lib/link-providers";
 
 export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
@@ -222,7 +223,8 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
           insertLinkLayer(preview, centerX - width / 2, centerY - height / 2);
           toast.success("Lien collé");
         } catch {
-          const fallback = { url, title: new URL(url).hostname, description: url, image: "", provider: "generic" as const };
+          const fallbackProvider = detectLinkProviderFromUrl(url);
+          const fallback = { url, title: new URL(url).hostname, description: url, image: "", provider: fallbackProvider };
           const { width, height } = getLinkLayerDimensions(fallback);
           insertLinkLayer(fallback, centerX - width / 2, centerY - height / 2);
           toast.success("Lien collé");
