@@ -1,11 +1,10 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Play, Volume2, VolumeX } from "lucide-react";
+import { Loader2, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import {
   LINK_PROVIDER_ACCENT,
   fakeTrackDurationSeconds,
   formatTrackTime,
   generateWaveformBars,
-  getMusicEmbedUrl,
   getVideoEmbedUrl,
   isVideoLinkProvider,
   resolveVideoId,
@@ -15,7 +14,7 @@ import {
 import { unmuteEmbedPlayer, setEmbedPlayerMuted } from "@/lib/embed-player";
 import { isMusicLinkProvider, type LinkProviderId } from "@/lib/link-providers";
 import { apiFetch } from "@/lib/utils";
-import type { LinkPreview } from "@/lib/types";
+import type { LinkPreview, MusicPreview } from "@/lib/types";
 
 const HOVER_DELAY_MS = 250;
 const PREVIEW_PROGRESS_STEP = 0.004;
@@ -24,6 +23,7 @@ type LinkMediaPreviewProps = {
   src: string;
   provider: LinkProviderId;
   url?: string;
+  title?: string;
   videoId?: string;
   height: number;
   readOnly?: boolean;
@@ -36,6 +36,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   src,
   provider,
   url,
+  title,
   videoId,
   height,
   readOnly,
@@ -50,14 +51,18 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   const [hovering, setHovering] = useState(false);
   const [showVideoEmbed, setShowVideoEmbed] = useState(false);
   const [musicPlaying, setMusicPlaying] = useState(false);
+  const [musicLoading, setMusicLoading] = useState(false);
   const [soundOn, setSoundOn] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [trackDuration, setTrackDuration] = useState<number | null>(null);
+  const [audioSrc, setAudioSrc] = useState<string | null>(null);
+  const [musicEmbedUrl, setMusicEmbedUrl] = useState<string | null>(null);
   const [resolvedVideoId, setResolvedVideoId] = useState<string | null>(() =>
     resolveVideoId(provider, url, videoId),
   );
 
   const videoIframeRef = useRef<HTMLIFrameElement>(null);
-  const musicIframeRef = useRef<HTMLIFrameElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const rafRef = useRef<number | null>(null);
   const resolveRef = useRef<Promise<void> | null>(null);
   const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -71,20 +76,14 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
     [isVideo, provider, url, resolvedVideoId, origin],
   );
 
-  const musicEmbedUrl = useMemo(
-    () => (canPlayMusic && musicPlaying ? getMusicEmbedUrl(provider, url, { autoplay: true }) : null),
-    [canPlayMusic, musicPlaying, provider, url],
-  );
-
   const stopProgress = useCallback(() => {
     if (rafRef.current !== null) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
     }
-    setProgress(0);
   }, []);
 
-  const startProgress = useCallback(() => {
+  const startFakeProgress = useCallback(() => {
     stopProgress();
     const tick = () => {
       setProgress((p) => {
@@ -113,13 +112,26 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
     return resolveRef.current;
   }, [url, provider, resolvedVideoId]);
 
-  const stopAllAudio = useCallback(() => {
-    setSoundOn(false);
+  const stopMusic = useCallback(() => {
     setMusicPlaying(false);
+    setSoundOn(false);
+    setMusicLoading(false);
+    stopProgress();
+    setProgress(0);
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  }, [stopProgress]);
+
+  const stopAllAudio = useCallback(() => {
+    stopMusic();
+    setMusicEmbedUrl(null);
+    setAudioSrc(null);
     if (videoIframeRef.current && isVideo) {
       setEmbedPlayerMuted(videoIframeRef.current, provider, true);
     }
-  }, [provider, isVideo]);
+  }, [stopMusic, provider, isVideo]);
 
   const handleEnter = useCallback(() => {
     if (readOnly) return;
@@ -127,15 +139,14 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
     if (isVideo && provider === "tiktok" && !resolvedVideoId) {
       void resolveTikTokId();
     }
-    if (isMusic) startProgress();
-  }, [readOnly, isVideo, provider, resolvedVideoId, resolveTikTokId, isMusic, startProgress]);
+    if (isMusic && !musicPlaying) startFakeProgress();
+  }, [readOnly, isVideo, provider, resolvedVideoId, resolveTikTokId, isMusic, musicPlaying, startFakeProgress]);
 
   const handleLeave = useCallback(() => {
     setHovering(false);
     setShowVideoEmbed(false);
     stopAllAudio();
-    stopProgress();
-  }, [stopAllAudio, stopProgress]);
+  }, [stopAllAudio]);
 
   useEffect(() => {
     if (!hovering || readOnly || !videoEmbedUrl) {
@@ -155,27 +166,91 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
     unmuteEmbedPlayer(videoIframeRef.current, provider);
   }, [soundOn, provider, isVideo]);
 
+  const playAudioPreview = useCallback(async (previewUrl: string, duration?: number) => {
+    setMusicEmbedUrl(null);
+    if (duration) setTrackDuration(duration);
+    setMusicPlaying(true);
+    setSoundOn(true);
+    stopProgress();
+    setAudioSrc(previewUrl);
+  }, [stopProgress]);
+
+  useEffect(() => {
+    if (!audioSrc || !musicPlaying) return;
+    const audio = audioRef.current;
+    if (!audio) return;
+    audio.src = audioSrc;
+    void audio.play().catch(() => {
+      setMusicPlaying(false);
+      setSoundOn(false);
+      setAudioSrc(null);
+    });
+  }, [audioSrc, musicPlaying]);
+
+  const startMusic = useCallback(
+    async (e: React.PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      if (readOnly || !canPlayMusic || !url) return;
+
+      if (musicPlaying) {
+        stopMusic();
+        startFakeProgress();
+        return;
+      }
+
+      setMusicLoading(true);
+      try {
+        const params = new URLSearchParams({ url });
+        if (title) params.set("title", title);
+        const preview = await apiFetch<MusicPreview>(`/api/music-preview?${params}`);
+
+        if (preview.previewUrl) {
+          await playAudioPreview(preview.previewUrl, preview.duration);
+          return;
+        }
+
+        if (preview.embedUrl) {
+          const embed = preview.embedUrl.includes("autoplay")
+            ? preview.embedUrl
+            : `${preview.embedUrl}${preview.embedUrl.includes("?") ? "&" : "?"}autoplay=1`;
+          setMusicEmbedUrl(embed);
+          setAudioSrc(null);
+          setMusicPlaying(true);
+          setSoundOn(true);
+          stopProgress();
+        }
+      } catch {
+        /* ignore */
+      } finally {
+        setMusicLoading(false);
+      }
+    },
+    [readOnly, canPlayMusic, url, title, musicPlaying, stopMusic, startFakeProgress, playAudioPreview, stopProgress],
+  );
+
   const toggleSound = useCallback(
     (e: React.PointerEvent) => {
       e.stopPropagation();
       e.preventDefault();
-
       if (readOnly) return;
 
-      const nextSoundOn = !soundOn;
-
       if (isMusic) {
-        if (nextSoundOn && canPlayMusic) {
-          setMusicPlaying(true);
-          setSoundOn(true);
-        } else {
+        if (musicPlaying) {
+          if (audioRef.current) {
+            audioRef.current.pause();
+          }
           setMusicPlaying(false);
           setSoundOn(false);
+          startFakeProgress();
+        } else {
+          void startMusic(e);
         }
         return;
       }
 
       if (isVideo) {
+        const nextSoundOn = !soundOn;
         setSoundOn(nextSoundOn);
         if (nextSoundOn && videoIframeRef.current) {
           unmuteEmbedPlayer(videoIframeRef.current, provider);
@@ -184,18 +259,14 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         }
       }
     },
-    [readOnly, soundOn, isMusic, canPlayMusic, isVideo, provider],
+    [readOnly, isMusic, musicPlaying, startFakeProgress, startMusic, isVideo, soundOn, provider],
   );
 
   const bars = isMusic ? generateWaveformBars(url || src) : [];
   const accent = provider !== "generic" ? LINK_PROVIDER_ACCENT[provider] : "#2563EB";
-  const duration = isMusic ? fakeTrackDurationSeconds(url || src) : 0;
+  const duration = trackDuration ?? (isMusic ? fakeTrackDurationSeconds(url || src) : 0);
   const currentTime = Math.floor(duration * progress);
   const isResolvingTikTok = isVideo && provider === "tiktok" && hovering && !resolvedVideoId;
-  const showSoundToggle =
-    !readOnly &&
-    hovering &&
-    ((isVideo && showVideoEmbed && !!videoEmbedUrl) || (isMusic && canPlayMusic));
 
   return (
     <div
@@ -211,14 +282,14 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         alt=""
         className={`h-full w-full transition-transform duration-300 ${
           isMusic ? "object-cover scale-105" : "object-contain"
-        } ${hovering && isMusic ? "scale-110 blur-[2px]" : ""} ${showVideoEmbed && videoEmbedUrl ? "opacity-0" : "opacity-100"}`}
+        } ${hovering && isMusic && !musicPlaying ? "scale-110 blur-[2px]" : ""} ${showVideoEmbed && videoEmbedUrl ? "opacity-0" : "opacity-100"}`}
         onLoad={onImageLoad}
         onError={onImageError}
       />
 
       {isMusic && (
         <>
-          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10" />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10 pointer-events-none" />
           <div className="absolute inset-x-3 bottom-3 top-3 flex flex-col justify-end gap-2 pointer-events-none">
             <div className="flex h-[52%] min-h-[36px] items-end justify-center gap-[2px]">
               {bars.map((barHeight, i) => {
@@ -241,26 +312,58 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
               <span className="rounded bg-black/45 px-1 py-0.5">{formatTrackTime(duration)}</span>
             </div>
           </div>
-          {!hovering && (
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none">
-              <div className="rounded-full bg-black/45 p-2.5 backdrop-blur-sm">
-                <Play className="h-4 w-4 fill-white text-white" />
+
+          {canPlayMusic && !readOnly && (
+            <button
+              type="button"
+              className="absolute inset-0 z-10 flex items-center justify-center bg-black/0 transition-colors hover:bg-black/10"
+              onPointerDown={startMusic}
+              title={musicPlaying ? "Pause" : "Écouter un extrait"}
+            >
+              <div className={`rounded-full p-3 backdrop-blur-sm transition-all ${
+                musicPlaying ? "bg-blue-600/80 opacity-100" : "bg-black/50 opacity-0 group-hover:opacity-100"
+              }`}>
+                {musicLoading ? (
+                  <Loader2 className="h-5 w-5 animate-spin text-white" />
+                ) : musicPlaying ? (
+                  <Pause className="h-5 w-5 text-white" />
+                ) : (
+                  <Play className="h-5 w-5 fill-white text-white" />
+                )}
               </div>
-            </div>
+            </button>
           )}
         </>
       )}
 
-      {musicEmbedUrl && (
-        <iframe
-          ref={musicIframeRef}
-          key={musicEmbedUrl}
-          src={musicEmbedUrl}
-          title="Lecture musique"
-          className="absolute inset-0 z-0 h-full w-full opacity-0 pointer-events-none"
-          allow="autoplay; encrypted-media"
-          loading="eager"
+      {audioSrc && (
+        <audio
+          ref={audioRef}
+          src={audioSrc}
+          preload="auto"
+          className="hidden"
+          onTimeUpdate={() => {
+            const audio = audioRef.current;
+            if (!audio || !duration) return;
+            setProgress(Math.min(1, audio.currentTime / duration));
+          }}
+          onEnded={() => {
+            stopMusic();
+            startFakeProgress();
+          }}
         />
+      )}
+
+      {musicEmbedUrl && musicPlaying && (
+        <div className="absolute inset-x-0 bottom-0 z-20 h-[152px] border-t border-white/10 bg-black/80">
+          <iframe
+            src={musicEmbedUrl}
+            title="Lecture musique"
+            className="h-full w-full border-0"
+            allow="autoplay; encrypted-media"
+            loading="eager"
+          />
+        </div>
       )}
 
       {videoEmbedUrl && showVideoEmbed && (
@@ -277,7 +380,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         />
       )}
 
-      {showSoundToggle && (
+      {isVideo && showVideoEmbed && !!videoEmbedUrl && !readOnly && (
         <button
           type="button"
           className={`absolute top-2 right-2 z-10 rounded-md p-1.5 backdrop-blur-sm pointer-events-auto transition-colors ${

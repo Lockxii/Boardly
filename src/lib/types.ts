@@ -183,3 +183,9 @@ export type LinkPreview = {
   imageHeight?: number;
   videoId?: string;
 };
+
+export type MusicPreview = {
+  previewUrl?: string;
+  embedUrl?: string;
+  duration?: number;
+};

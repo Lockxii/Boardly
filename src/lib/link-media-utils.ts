@@ -177,7 +177,7 @@ export function getMusicEmbedUrl(
     try {
       const parsed = new URL(url);
       if (parsed.hostname.includes("music.apple.com")) {
-        return url.replace("music.apple.com", "embed.music.apple.com");
+        return `https://embed.music.apple.com${parsed.pathname}${parsed.search}`;
       }
     } catch {
       return null;

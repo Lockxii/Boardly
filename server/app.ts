@@ -5,6 +5,7 @@ import { auth } from "./auth.js";
 import { prisma } from "./prisma.js";
 import { ensureBoardSchema } from "./schema-sync.js";
 import { fetchLinkPreview } from "./link-preview.js";
+import { fetchMusicPreviewHandler } from "./music-preview.js";
 import { buildTemplateCanvas } from "./board-seeds.js";
 
 function getAppOrigin() {
@@ -183,6 +184,18 @@ export function createApp() {
     if (!url) return res.status(400).json({ error: "URL requise" });
     try {
       const preview = await fetchLinkPreview(url);
+      res.json(preview);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Preview impossible" });
+    }
+  }));
+
+  app.get("/api/music-preview", requireAuth(async (req, res) => {
+    const url = String(req.query.url || "");
+    const title = String(req.query.title || "");
+    if (!url) return res.status(400).json({ error: "URL requise" });
+    try {
+      const preview = await fetchMusicPreviewHandler(url, title || undefined);
       res.json(preview);
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Preview impossible" });
