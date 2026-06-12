@@ -22,6 +22,7 @@ import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion"
 import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCurrentUser } from "@/lib/auth-client";
+import { LandingNavbar } from "@/components/landing-navbar";
 import type { User } from "@/lib/types";
 
 const FAQ_ITEMS = [
@@ -168,38 +169,10 @@ export function LandingPage() {
 
   return (
     <div ref={containerRef} className="min-h-screen bg-[#FDFCF8] dark:bg-[#0A0A0A] text-neutral-900 dark:text-white overflow-hidden font-sans selection:bg-yellow-200 selection:text-black">
-      {/* Navbar */}
-      <nav className="fixed top-0 w-full z-50 px-6 py-6 flex items-center justify-between pointer-events-none">
-        <Link to="/" className="flex items-center gap-2 font-bold text-xl tracking-tight pointer-events-auto">
-          <div className="h-8 w-8 bg-black dark:bg-white rounded-lg flex items-center justify-center text-white dark:text-black shadow-xl">
-            <Layout className="h-5 w-5" />
-          </div>
-          Boardly
-        </Link>
-        <div className="flex items-center gap-4 pointer-events-auto">
-          {isLoggedIn ? (
-            <Link to="/dashboard">
-              <Button className="rounded-full px-6 bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black font-semibold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5">
-                Tableau de bord
-              </Button>
-            </Link>
-          ) : (
-            <>
-              <Link to="/auth/sign-in" className="text-sm font-semibold hover:opacity-70 transition hidden sm:block">
-                Se connecter
-              </Link>
-              <Link to="/auth/sign-in">
-                <Button className="rounded-full px-6 bg-black text-white hover:bg-neutral-800 dark:bg-white dark:text-black font-semibold shadow-lg hover:shadow-xl transition-all hover:-translate-y-0.5">
-                  Essayer gratuitement
-                </Button>
-              </Link>
-            </>
-          )}
-        </div>
-      </nav>
+      <LandingNavbar isLoggedIn={isLoggedIn} ctaTo={ctaTo} />
 
       {/* Hero */}
-      <section className="relative isolate min-h-[90vh] flex flex-col items-center justify-center pt-20">
+      <section className="relative isolate min-h-[90vh] flex flex-col items-center justify-center pt-24">
         <div className="absolute inset-0 z-0 opacity-40 dark:opacity-20 pointer-events-none">
           <div className="absolute inset-0 bg-[radial-gradient(#a3a3a3_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_100%)]" />
         </div>
@@ -327,7 +300,7 @@ export function LandingPage() {
       </section>
 
       {/* Tools */}
-      <section className="py-32 px-6 bg-white dark:bg-neutral-950 border-y border-neutral-200 dark:border-neutral-800">
+      <section id="features" className="py-32 px-6 bg-white dark:bg-neutral-950 border-y border-neutral-200 dark:border-neutral-800 scroll-mt-24">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Tout ce qu'il faut, rien de superflu</h2>
@@ -518,7 +491,7 @@ export function LandingPage() {
       </section>
 
       {/* FAQ */}
-      <section className="py-32 px-6 bg-white dark:bg-neutral-950 border-y border-neutral-200 dark:border-neutral-800">
+      <section id="faq" className="py-32 px-6 bg-white dark:bg-neutral-950 border-y border-neutral-200 dark:border-neutral-800 scroll-mt-24">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
             <h2 className="text-4xl font-bold mb-4">Questions fréquentes</h2>
