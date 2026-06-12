@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Layout, Search, ArrowUpDown, Sparkles } from "lucide-react";
+import { Layout, Search, ArrowUpDown, LayoutGrid } from "lucide-react";
 import { apiFetch } from "@/lib/utils";
 import { authClient, fetchCurrentUser } from "@/lib/auth-client";
 import { AppShell } from "@/components/app-shell";
@@ -153,7 +153,7 @@ export function DashboardPage() {
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div className="min-w-0">
               <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
-                <Sparkles className="h-3 w-3" />
+                <LayoutGrid className="h-3 w-3" />
                 Espace de travail
               </p>
               <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-[2.75rem] lg:leading-tight">
