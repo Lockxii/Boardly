@@ -15,6 +15,7 @@ import { StatusBar } from "./status-bar";
 import { ShortcutsHelp } from "./shortcuts-help";
 import { toast } from "sonner";
 import type { Layer, LayerType } from "@/lib/types";
+import { BLUEPRINT } from "@/lib/template-styles";
 
 export function Canvas({ template, title, boardId }: { template: string; title: string; boardId?: string }) {
   const {
@@ -440,7 +441,10 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
     };
   }, [setCamera]);
 
-  const bgClass = template === "blueprint" ? "bg-[#1e40af]" : "bg-neutral-100 dark:bg-neutral-900";
+  const bgClass =
+    template === "blueprint"
+      ? BLUEPRINT.canvasClass
+      : "bg-neutral-100 dark:bg-neutral-900";
   let cursorStyle = "default";
   if (canvasState.mode === "pencil") cursorStyle = "none";
   else if (canvasState.mode === "inserting") cursorStyle = "crosshair";
@@ -482,13 +486,21 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
           <pattern id="grid-pattern" width="20" height="20" patternUnits="userSpaceOnUse">
             <circle cx="1" cy="1" r="1" fill="#cbd5e1" />
           </pattern>
-          <pattern id="blueprint-pattern" width="40" height="40" patternUnits="userSpaceOnUse">
-            <path d="M 40 0 L 0 0 0 40" fill="none" stroke="rgba(255,255,255,0.1)" strokeWidth="1" />
+          <pattern id="blueprint-pattern" width="20" height="20" patternUnits="userSpaceOnUse">
+            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#C7DCF0" strokeWidth="0.75" className="dark:stroke-slate-600" />
+          </pattern>
+          <pattern id="blueprint-pattern-major" width="80" height="80" patternUnits="userSpaceOnUse">
+            <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#A8C8E8" strokeWidth="1" className="dark:stroke-slate-500" />
           </pattern>
         </defs>
         <g className="canvas-g" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
           {showGrid && template === "grid" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid-pattern)" />}
-          {showGrid && template === "blueprint" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#blueprint-pattern)" />}
+          {showGrid && template === "blueprint" && (
+            <>
+              <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#blueprint-pattern)" />
+              <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#blueprint-pattern-major)" />
+            </>
+          )}
           {layerIds.map((id: string) => (
             <LayerPreview
               key={id}
