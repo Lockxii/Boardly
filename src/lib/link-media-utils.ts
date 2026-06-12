@@ -119,30 +119,82 @@ export function resolveVideoId(
 export function getVideoEmbedUrl(
   provider: LinkProvider | "generic" | undefined,
   url?: string,
-  options?: { muted?: boolean; videoId?: string | null },
+  options?: { videoId?: string | null; origin?: string },
 ) {
   if (!url || !provider || provider === "generic") return null;
 
-  const muted = options?.muted !== false;
-  const muteParam = muted ? "1" : "0";
+  const origin = options?.origin ? `&origin=${encodeURIComponent(options.origin)}` : "";
 
   if (provider === "youtube") {
     const id = options?.videoId || youtubeIdFromUrl(url);
     if (!id) return null;
-    return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=${muteParam}&controls=0&modestbranding=1&playsinline=1&rel=0&loop=1&playlist=${id}`;
+    return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&enablejsapi=1${origin}&controls=0&modestbranding=1&playsinline=1&rel=0&loop=1&playlist=${id}`;
   }
 
   if (provider === "tiktok") {
     const id = options?.videoId || tiktokIdFromUrl(url);
     if (!id) return null;
-    return `https://www.tiktok.com/player/v1/${id}?autoplay=1&mute=${muteParam}&loop=1&controls=0&progress_bar=0&play_button=0&volume_control=0&timestamp=0&music_info=0&description=0&rel=0`;
+    return `https://www.tiktok.com/player/v1/${id}?autoplay=1&mute=1&loop=1&controls=0&progress_bar=0&play_button=0&volume_control=0&timestamp=0&music_info=0&description=0&rel=0`;
   }
 
   if (provider === "vimeo") {
     const id = options?.videoId || vimeoIdFromUrl(url);
     if (!id) return null;
-    return `https://player.vimeo.com/video/${id}?autoplay=1&muted=${muted ? "1" : "0"}&background=1&loop=1`;
+    return `https://player.vimeo.com/video/${id}?autoplay=1&muted=1&background=1&loop=1&api=1`;
   }
 
   return null;
+}
+
+export function getMusicEmbedUrl(
+  provider: LinkProvider | "generic" | undefined,
+  url?: string,
+  options?: { autoplay?: boolean },
+) {
+  if (!url || !provider || provider === "generic") return null;
+  const autoplay = options?.autoplay === true;
+
+  if (provider === "spotify") {
+    try {
+      const parsed = new URL(url);
+      const parts = parsed.pathname.split("/").filter(Boolean);
+      const type = parts[0];
+      const id = parts[1];
+      if (type && id && ["track", "album", "playlist", "episode", "artist", "show"].includes(type)) {
+        return `https://open.spotify.com/embed/${type}/${id}?utm_source=generator${autoplay ? "&autoplay=1" : ""}`;
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  if (provider === "soundcloud") {
+    return `https://w.soundcloud.com/player/?url=${encodeURIComponent(url)}&auto_play=${autoplay ? "true" : "false"}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&visual=false`;
+  }
+
+  if (provider === "apple-music") {
+    try {
+      const parsed = new URL(url);
+      if (parsed.hostname.includes("music.apple.com")) {
+        return url.replace("music.apple.com", "embed.music.apple.com");
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }
+
+  if (provider === "deezer") {
+    const match = url.match(/deezer\.com\/(?:[a-z]{2}\/)?(track|album|playlist)\/(\d+)/i);
+    if (match) {
+      return `https://widget.deezer.com/widget/dark/${match[1]}/${match[2]}${autoplay ? "?autoplay=true" : ""}`;
+    }
+  }
+
+  return null;
+}
+
+export function supportsMusicPlayback(provider: LinkProvider | "generic" | undefined) {
+  return provider === "spotify" || provider === "soundcloud" || provider === "apple-music" || provider === "deezer";
 }

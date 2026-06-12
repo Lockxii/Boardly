@@ -5,11 +5,14 @@ import {
   fakeTrackDurationSeconds,
   formatTrackTime,
   generateWaveformBars,
+  getMusicEmbedUrl,
   getVideoEmbedUrl,
   isVideoLinkProvider,
   resolveVideoId,
+  supportsMusicPlayback,
   tiktokIdFromUrl,
 } from "@/lib/link-media-utils";
+import { unmuteEmbedPlayer, setEmbedPlayerMuted } from "@/lib/embed-player";
 import { isMusicLinkProvider, type LinkProviderId } from "@/lib/link-providers";
 import { apiFetch } from "@/lib/utils";
 import type { LinkPreview } from "@/lib/types";
@@ -42,25 +45,35 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
 }: LinkMediaPreviewProps) {
   const isMusic = isMusicLinkProvider(provider);
   const isVideo = isVideoLinkProvider(provider);
+  const canPlayMusic = isMusic && supportsMusicPlayback(provider);
 
   const [hovering, setHovering] = useState(false);
-  const [showEmbed, setShowEmbed] = useState(false);
-  const [muted, setMuted] = useState(true);
+  const [showVideoEmbed, setShowVideoEmbed] = useState(false);
+  const [musicPlaying, setMusicPlaying] = useState(false);
+  const [soundOn, setSoundOn] = useState(false);
   const [progress, setProgress] = useState(0);
   const [resolvedVideoId, setResolvedVideoId] = useState<string | null>(() =>
     resolveVideoId(provider, url, videoId),
   );
+
+  const videoIframeRef = useRef<HTMLIFrameElement>(null);
+  const musicIframeRef = useRef<HTMLIFrameElement>(null);
   const rafRef = useRef<number | null>(null);
   const resolveRef = useRef<Promise<void> | null>(null);
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
 
   useEffect(() => {
     setResolvedVideoId(resolveVideoId(provider, url, videoId));
   }, [provider, url, videoId]);
 
-  const effectiveVideoId = resolvedVideoId;
-  const embedUrl = useMemo(
-    () => (isVideo ? getVideoEmbedUrl(provider, url, { muted, videoId: effectiveVideoId }) : null),
-    [isVideo, provider, url, muted, effectiveVideoId],
+  const videoEmbedUrl = useMemo(
+    () => (isVideo ? getVideoEmbedUrl(provider, url, { videoId: resolvedVideoId, origin }) : null),
+    [isVideo, provider, url, resolvedVideoId, origin],
+  );
+
+  const musicEmbedUrl = useMemo(
+    () => (canPlayMusic && musicPlaying ? getMusicEmbedUrl(provider, url, { autoplay: true }) : null),
+    [canPlayMusic, musicPlaying, provider, url],
   );
 
   const stopProgress = useCallback(() => {
@@ -84,7 +97,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   }, [stopProgress]);
 
   const resolveTikTokId = useCallback(async () => {
-    if (!url || provider !== "tiktok" || effectiveVideoId) return;
+    if (!url || provider !== "tiktok" || resolvedVideoId) return;
     if (resolveRef.current) return resolveRef.current;
 
     resolveRef.current = apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(url)}`)
@@ -98,43 +111,91 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
       });
 
     return resolveRef.current;
-  }, [url, provider, effectiveVideoId]);
+  }, [url, provider, resolvedVideoId]);
+
+  const stopAllAudio = useCallback(() => {
+    setSoundOn(false);
+    setMusicPlaying(false);
+    if (videoIframeRef.current && isVideo) {
+      setEmbedPlayerMuted(videoIframeRef.current, provider, true);
+    }
+  }, [provider, isVideo]);
 
   const handleEnter = useCallback(() => {
     if (readOnly) return;
     setHovering(true);
-    if (isVideo && provider === "tiktok" && !effectiveVideoId) {
+    if (isVideo && provider === "tiktok" && !resolvedVideoId) {
       void resolveTikTokId();
     }
     if (isMusic) startProgress();
-  }, [readOnly, isVideo, provider, effectiveVideoId, resolveTikTokId, isMusic, startProgress]);
+  }, [readOnly, isVideo, provider, resolvedVideoId, resolveTikTokId, isMusic, startProgress]);
 
   const handleLeave = useCallback(() => {
     setHovering(false);
-    setShowEmbed(false);
-    setMuted(true);
+    setShowVideoEmbed(false);
+    stopAllAudio();
     stopProgress();
-  }, [stopProgress]);
+  }, [stopAllAudio, stopProgress]);
 
   useEffect(() => {
-    if (!hovering || readOnly || !embedUrl) {
-      if (!hovering) setShowEmbed(false);
+    if (!hovering || readOnly || !videoEmbedUrl) {
+      if (!hovering) setShowVideoEmbed(false);
       return;
     }
-    const timer = setTimeout(() => setShowEmbed(true), HOVER_DELAY_MS);
+    const timer = setTimeout(() => setShowVideoEmbed(true), HOVER_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [hovering, readOnly, embedUrl]);
+  }, [hovering, readOnly, videoEmbedUrl]);
 
   useEffect(() => () => {
     stopProgress();
   }, [stopProgress]);
 
+  const handleVideoIframeLoad = useCallback(() => {
+    if (!soundOn || !videoIframeRef.current || !isVideo) return;
+    unmuteEmbedPlayer(videoIframeRef.current, provider);
+  }, [soundOn, provider, isVideo]);
+
+  const toggleSound = useCallback(
+    (e: React.PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+
+      if (readOnly) return;
+
+      const nextSoundOn = !soundOn;
+
+      if (isMusic) {
+        if (nextSoundOn && canPlayMusic) {
+          setMusicPlaying(true);
+          setSoundOn(true);
+        } else {
+          setMusicPlaying(false);
+          setSoundOn(false);
+        }
+        return;
+      }
+
+      if (isVideo) {
+        setSoundOn(nextSoundOn);
+        if (nextSoundOn && videoIframeRef.current) {
+          unmuteEmbedPlayer(videoIframeRef.current, provider);
+        } else if (!nextSoundOn && videoIframeRef.current) {
+          setEmbedPlayerMuted(videoIframeRef.current, provider, true);
+        }
+      }
+    },
+    [readOnly, soundOn, isMusic, canPlayMusic, isVideo, provider],
+  );
+
   const bars = isMusic ? generateWaveformBars(url || src) : [];
   const accent = provider !== "generic" ? LINK_PROVIDER_ACCENT[provider] : "#2563EB";
   const duration = isMusic ? fakeTrackDurationSeconds(url || src) : 0;
   const currentTime = Math.floor(duration * progress);
-  const canPreviewVideo = isVideo && !!embedUrl;
-  const isResolvingTikTok = isVideo && provider === "tiktok" && hovering && !effectiveVideoId;
+  const isResolvingTikTok = isVideo && provider === "tiktok" && hovering && !resolvedVideoId;
+  const showSoundToggle =
+    !readOnly &&
+    hovering &&
+    ((isVideo && showVideoEmbed && !!videoEmbedUrl) || (isMusic && canPlayMusic));
 
   return (
     <div
@@ -150,7 +211,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         alt=""
         className={`h-full w-full transition-transform duration-300 ${
           isMusic ? "object-cover scale-105" : "object-contain"
-        } ${hovering && isMusic ? "scale-110 blur-[2px]" : ""} ${showEmbed && canPreviewVideo ? "opacity-0" : "opacity-100"}`}
+        } ${hovering && isMusic ? "scale-110 blur-[2px]" : ""} ${showVideoEmbed && videoEmbedUrl ? "opacity-0" : "opacity-100"}`}
         onLoad={onImageLoad}
         onError={onImageError}
       />
@@ -158,7 +219,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
       {isMusic && (
         <>
           <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/35 to-black/10" />
-          <div className="absolute inset-x-3 bottom-3 top-3 flex flex-col justify-end gap-2">
+          <div className="absolute inset-x-3 bottom-3 top-3 flex flex-col justify-end gap-2 pointer-events-none">
             <div className="flex h-[52%] min-h-[36px] items-end justify-center gap-[2px]">
               {bars.map((barHeight, i) => {
                 const played = i / bars.length < progress;
@@ -181,7 +242,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
             </div>
           </div>
           {!hovering && (
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100">
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 transition-opacity duration-200 group-hover:opacity-100 pointer-events-none">
               <div className="rounded-full bg-black/45 p-2.5 backdrop-blur-sm">
                 <Play className="h-4 w-4 fill-white text-white" />
               </div>
@@ -190,35 +251,55 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         </>
       )}
 
-      {canPreviewVideo && showEmbed && (
+      {musicEmbedUrl && (
         <iframe
-          key={embedUrl}
-          src={embedUrl}
+          ref={musicIframeRef}
+          key={musicEmbedUrl}
+          src={musicEmbedUrl}
+          title="Lecture musique"
+          className="absolute inset-0 z-0 h-full w-full opacity-0 pointer-events-none"
+          allow="autoplay; encrypted-media"
+          loading="eager"
+        />
+      )}
+
+      {videoEmbedUrl && showVideoEmbed && (
+        <iframe
+          ref={videoIframeRef}
+          key={videoEmbedUrl}
+          src={videoEmbedUrl}
           title="Aperçu vidéo"
           className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-black"
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
           referrerPolicy="strict-origin-when-cross-origin"
           loading="eager"
+          onLoad={handleVideoIframeLoad}
         />
       )}
 
-      {canPreviewVideo && showEmbed && (
+      {showSoundToggle && (
         <button
           type="button"
-          className="absolute top-2 right-2 z-10 rounded-md bg-black/55 p-1.5 text-white backdrop-blur-sm pointer-events-auto transition-colors hover:bg-black/75"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation();
-            setMuted((value) => !value);
-          }}
-          title={muted ? "Activer le son" : "Couper le son"}
+          className={`absolute top-2 right-2 z-10 rounded-md p-1.5 backdrop-blur-sm pointer-events-auto transition-colors ${
+            soundOn
+              ? "bg-blue-600/90 text-white hover:bg-blue-700/90"
+              : "bg-black/55 text-white hover:bg-black/75"
+          }`}
+          onPointerDown={toggleSound}
+          title={soundOn ? "Couper le son" : "Activer le son"}
         >
-          {muted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+          {soundOn ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
         </button>
       )}
 
-      {isVideo && !showEmbed && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/15">
+      {isMusic && hovering && !canPlayMusic && (
+        <div className="absolute top-2 right-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[10px] text-white/80 backdrop-blur-sm pointer-events-none">
+          Aperçu visuel
+        </div>
+      )}
+
+      {isVideo && !showVideoEmbed && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/15 pointer-events-none">
           {isResolvingTikTok ? (
             <div className="rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-medium text-white opacity-100 backdrop-blur-sm">
               Chargement…
