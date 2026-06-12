@@ -1,5 +1,6 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { Lock, ExternalLink } from "lucide-react";
+import { LinkCardBody, LinkCardImage } from "./link-card-parts";
 import type { Layer, LayerReaction } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 
@@ -155,19 +156,16 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
             className="w-full h-full overflow-hidden shadow-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex flex-col"
             style={{ borderRadius: cornerRadius || 10 }}
           >
-            {layer.linkImage && (
-              <img src={layer.linkImage} alt="" className="w-full h-24 object-cover" />
-            )}
-            <div className="p-3 flex-1 flex flex-col gap-1 pointer-events-none">
-              <div className="flex items-start gap-1.5">
-                <ExternalLink className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />
-                <p className="text-sm font-semibold text-neutral-900 dark:text-white line-clamp-2">{layer.linkTitle || layer.url}</p>
+            {layer.linkImage ? (
+              <div className="relative shrink-0">
+                <LinkCardImage src={layer.linkImage} provider={layer.linkProvider} url={layer.url} />
               </div>
-              {layer.linkDescription && (
-                <p className="text-xs text-neutral-500 line-clamp-2">{layer.linkDescription}</p>
-              )}
-              <p className="text-[10px] text-blue-600 truncate mt-auto">{layer.url}</p>
-            </div>
+            ) : (
+              <div className="flex items-center gap-2 px-3 pt-3">
+                <ExternalLink className="h-4 w-4 text-blue-600 shrink-0" />
+              </div>
+            )}
+            <LinkCardBody layer={layer} />
           </div>
         </foreignObject>
       )}

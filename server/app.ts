@@ -4,7 +4,7 @@ import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth.js";
 import { prisma } from "./prisma.js";
 import { ensureBoardSchema } from "./schema-sync.js";
-import { fetchLinkPreview } from "./og-preview.js";
+import { fetchLinkPreview } from "./link-preview.js";
 import { buildTemplateCanvas } from "./board-seeds.js";
 
 function getAppOrigin() {
