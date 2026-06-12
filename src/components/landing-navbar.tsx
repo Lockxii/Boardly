@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { Layout, Menu, X } from "lucide-react";
+import { Menu, X } from "lucide-react";
+import { Logo } from "@/components/ui/logo";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -48,9 +49,7 @@ export function LandingNavbar({ isLoggedIn, ctaTo }: LandingNavbarProps) {
           className="flex items-center gap-2.5 font-bold text-lg tracking-tight shrink-0"
           onClick={() => setMobileOpen(false)}
         >
-          <div className="h-8 w-8 bg-neutral-900 dark:bg-white rounded-lg flex items-center justify-center text-white dark:text-neutral-900">
-            <Layout className="h-4 w-4" />
-          </div>
+          <Logo size={32} />
           <span>Boardly</span>
         </Link>
 
