@@ -3,6 +3,7 @@ import cors from "cors";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth.js";
 import { prisma } from "./prisma.js";
+import { ensureBoardSchema } from "./schema-sync.js";
 
 function getAppOrigin() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
@@ -22,9 +23,17 @@ async function getSessionUser(req: express.Request) {
 
 function requireAuth(handler: (req: express.Request, res: express.Response, user: NonNullable<Awaited<ReturnType<typeof getSessionUser>>>) => Promise<unknown>) {
   return async (req: express.Request, res: express.Response) => {
-    const user = await getSessionUser(req);
-    if (!user) return res.status(401).json({ error: "Non autorisé" });
-    return handler(req, res, user);
+    try {
+      const user = await getSessionUser(req);
+      if (!user) return res.status(401).json({ error: "Non autorisé" });
+      return await handler(req, res, user);
+    } catch (error) {
+      console.error(`API ${req.method} ${req.path}:`, error);
+      if (res.headersSent) return;
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Erreur serveur",
+      });
+    }
   };
 }
 
@@ -91,6 +100,15 @@ export function createApp() {
 
   app.use(express.json({ limit: "50mb" }));
 
+  app.use("/api/boards", async (_req, _res, next) => {
+    try {
+      await ensureBoardSchema();
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
+
   app.get("/api/health", async (_req, res) => {
     const checks: Record<string, boolean | string> = {
       databaseUrl: !!process.env.DATABASE_URL,
@@ -101,18 +119,28 @@ export function createApp() {
     try {
       await prisma.$queryRaw`SELECT 1`;
       checks.database = true;
+      await ensureBoardSchema();
+      await prisma.board.findFirst({ select: { id: true } });
+      checks.boardSchema = true;
     } catch (error) {
       checks.database = false;
       checks.databaseError = error instanceof Error ? error.message : "unknown";
     }
 
-    const ok = checks.database === true && checks.databaseUrl === true && checks.authSecret === true;
+    const ok =
+      checks.database === true &&
+      checks.boardSchema === true &&
+      checks.databaseUrl === true &&
+      checks.authSecret === true;
     res.status(ok ? 200 : 503).json({ ok, checks });
   });
 
   // --- BOARD ROUTES ---
 
   app.get("/api/boards", requireAuth(async (req, res, user) => {
+    const email = user.email;
+    if (!email) return res.status(400).json({ error: "Email utilisateur manquant" });
+
     const [ownedBoards, sharedBoards] = await Promise.all([
       prisma.board.findMany({
         where: { authorId: user.id },
@@ -121,7 +149,7 @@ export function createApp() {
       prisma.board.findMany({
         where: {
           authorId: { not: user.id },
-          members: { some: { email: user.email as string } },
+          members: { some: { email } },
         },
         include: { author: { select: { name: true } } },
         orderBy: { updatedAt: "desc" },
