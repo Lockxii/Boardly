@@ -81,6 +81,8 @@ model Board {
   title     String
   authorId  String
   template  String   @default("blank")
+  canvasData Json?
+  thumbnail  String?  @db.Text
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

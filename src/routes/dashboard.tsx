@@ -12,6 +12,34 @@ import { DeleteBoardDialog } from "@/components/delete-board-dialog";
 import { Input } from "@/components/ui/input";
 import type { Board, User as UserType } from "@/lib/types";
 
+function BoardSection({
+  title,
+  description,
+  boards,
+  onDelete,
+}: {
+  title: string;
+  description?: string;
+  boards: Board[];
+  onDelete?: (board: Board) => void;
+}) {
+  if (boards.length === 0) return null;
+
+  return (
+    <section className="space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
+        {description && <p className="text-sm text-neutral-500 mt-1">{description}</p>}
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+        {boards.map((board) => (
+          <BoardCard key={board.id} board={board} onDelete={onDelete} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 export function DashboardPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
@@ -49,9 +77,12 @@ export function DashboardPage() {
     onError: () => toast.error("Impossible de supprimer le tableau"),
   });
 
-  const filteredBoards = boards.filter((b) =>
-    b.title.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const normalizedQuery = searchQuery.toLowerCase();
+  const filterBoard = (board: Board) => board.title.toLowerCase().includes(normalizedQuery);
+
+  const ownedBoards = boards.filter((b) => b.isOwner !== false).filter(filterBoard);
+  const sharedBoards = boards.filter((b) => b.isOwner === false).filter(filterBoard);
+  const hasResults = ownedBoards.length > 0 || sharedBoards.length > 0;
 
   const firstName = user?.name?.split(" ")[0];
 
@@ -79,7 +110,7 @@ export function DashboardPage() {
             {firstName ? `Bon retour, ${firstName}` : "Bon retour"}
           </h1>
           <p className="mt-2 text-neutral-500 max-w-xl">
-            Retrouvez vos tableaux, reprenez là où vous vous étiez arrêté, ou lancez un nouveau projet.
+            Vos tableaux sont sauvegardés dans le cloud. Reprenez un projet ou créez-en un nouveau.
           </p>
         </section>
 
@@ -108,7 +139,7 @@ export function DashboardPage() {
             </div>
             <h2 className="text-xl font-semibold">Votre premier tableau vous attend</h2>
             <p className="mt-2 max-w-md text-neutral-500">
-              Brainstormez, dessinez et organisez vos idées sur un canvas infini.
+              Brainstormez, dessinez et organisez vos idées sur un canvas infini — sauvegardé automatiquement.
             </p>
             <div className="mt-6">
               <NewBoardDialog
@@ -118,19 +149,22 @@ export function DashboardPage() {
               />
             </div>
           </div>
+        ) : !hasResults ? (
+          <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/50 py-12 text-center">
+            <p className="text-neutral-500">Aucun tableau ne correspond à « {searchQuery} »</p>
+          </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-            {filteredBoards.map((board) => (
-              <BoardCard key={board.id} board={board} onDelete={setBoardToDelete} />
-            ))}
-
-            {filteredBoards.length === 0 && (
-              <div className="col-span-full rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/50 py-12 text-center">
-                <p className="text-neutral-500">
-                  Aucun tableau ne correspond à « {searchQuery} »
-                </p>
-              </div>
-            )}
+          <div className="space-y-10">
+            <BoardSection
+              title="Mes tableaux"
+              boards={ownedBoards}
+              onDelete={setBoardToDelete}
+            />
+            <BoardSection
+              title="Partagés avec moi"
+              description="Tableaux auxquels vous avez été invité."
+              boards={sharedBoards}
+            />
           </div>
         )}
       </div>

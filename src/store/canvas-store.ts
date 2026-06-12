@@ -1,6 +1,8 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
-import type { Layer, LayerType, AuditEntry, ChatMessage } from "@/lib/types";
+import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData } from "@/lib/types";
+import { apiFetch } from "@/lib/utils";
+import { generateBoardThumbnail } from "@/lib/board-thumbnail";
 
 export interface HistorySnapshot {
   layers: Record<string, Layer>;
@@ -77,8 +79,9 @@ interface CanvasStore {
   sendMessage: (text: string, attachment?: ChatMessage["attachment"], linkedLayerIds?: string[]) => void;
 
   // Init
-  loadBoard: (boardId: string) => void;
-  saveBoard: (boardId: string) => void;
+  loadBoard: (boardId: string) => Promise<void>;
+  saveBoard: (boardId: string) => Promise<void>;
+  resetBoard: () => void;
 }
 
 export type CanvasMode =
@@ -363,38 +366,103 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
 
   // Persistence
-  loadBoard: (boardId) => {
+  resetBoard: () =>
+    set({
+      layers: {},
+      layerIds: [],
+      auditLog: [],
+      chatMessages: [],
+      undoStack: [],
+      redoStack: [],
+      canUndo: false,
+      canRedo: false,
+      selection: [],
+    }),
+
+  loadBoard: async (boardId) => {
+    const applyCanvasData = (data: Partial<BoardCanvasData>) => {
+      set({
+        layers: data.layers || {},
+        layerIds: data.layerIds || [],
+        auditLog: data.auditLog || [],
+        chatMessages: data.chatMessages || [],
+        undoStack: [],
+        redoStack: [],
+        canUndo: false,
+        canRedo: false,
+        selection: [],
+      });
+    };
+
+    const readLocalCanvas = (): BoardCanvasData | null => {
+      try {
+        const saved = localStorage.getItem(`boardly-${boardId}`);
+        if (!saved) return null;
+        return JSON.parse(saved) as BoardCanvasData;
+      } catch {
+        return null;
+      }
+    };
+
+    const writeLocalCanvas = (data: BoardCanvasData) => {
+      try {
+        localStorage.setItem(`boardly-${boardId}`, JSON.stringify(data));
+      } catch {}
+    };
+
+    const uploadCanvas = async (data: BoardCanvasData) => {
+      const thumbnail = await generateBoardThumbnail(data.layers, data.layerIds);
+      await apiFetch(`/api/boards/${boardId}/content`, {
+        method: "PUT",
+        body: JSON.stringify({ canvasData: data, thumbnail }),
+      });
+    };
+
     try {
-      const saved = localStorage.getItem(`boardly-${boardId}`);
-      if (saved) {
-        const data = JSON.parse(saved);
-        set({
-          layers: data.layers || {},
-          layerIds: data.layerIds || [],
-          auditLog: data.auditLog || [],
-          chatMessages: data.chatMessages || [],
-          undoStack: [],
-          redoStack: [],
-          canUndo: false,
-          canRedo: false,
-          selection: [],
-        });
+      const remote = await apiFetch<{ canvasData: BoardCanvasData | null }>(`/api/boards/${boardId}/content`);
+      if (remote.canvasData?.layerIds?.length) {
+        applyCanvasData(remote.canvasData);
+        writeLocalCanvas(remote.canvasData);
+        return;
       }
     } catch {}
+
+    const local = readLocalCanvas();
+    if (local?.layerIds?.length) {
+      applyCanvasData(local);
+      try {
+        await uploadCanvas(local);
+      } catch {}
+      return;
+    }
+
+    if (local) {
+      applyCanvasData(local);
+      return;
+    }
+
+    get().resetBoard();
   },
 
-  saveBoard: (boardId) => {
+  saveBoard: async (boardId) => {
     const state = get();
+    const canvasData: BoardCanvasData = {
+      layers: state.layers,
+      layerIds: state.layerIds,
+      auditLog: state.auditLog,
+      chatMessages: state.chatMessages,
+    };
+
     try {
-      localStorage.setItem(
-        `boardly-${boardId}`,
-        JSON.stringify({
-          layers: state.layers,
-          layerIds: state.layerIds,
-          auditLog: state.auditLog,
-          chatMessages: state.chatMessages,
-        })
-      );
+      localStorage.setItem(`boardly-${boardId}`, JSON.stringify(canvasData));
+    } catch {}
+
+    try {
+      const thumbnail = await generateBoardThumbnail(canvasData.layers, canvasData.layerIds);
+      await apiFetch(`/api/boards/${boardId}/content`, {
+        method: "PUT",
+        body: JSON.stringify({ canvasData, thumbnail }),
+      });
     } catch {}
   },
 }));

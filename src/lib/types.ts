@@ -71,6 +71,13 @@ export type User = {
   image?: string | null;
 };
 
+export type BoardCanvasData = {
+  layers: Record<string, Layer>;
+  layerIds: string[];
+  auditLog: AuditEntry[];
+  chatMessages: ChatMessage[];
+};
+
 export type Board = {
   id: string;
   title: string;
@@ -78,6 +85,10 @@ export type Board = {
   authorId: string;
   createdAt: string;
   updatedAt: string;
+  thumbnail?: string | null;
+  role?: "owner" | "editor";
+  isOwner?: boolean;
+  authorName?: string | null;
 };
 
 export type BoardMember = {

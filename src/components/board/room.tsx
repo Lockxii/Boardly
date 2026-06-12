@@ -1,5 +1,6 @@
-import { Canvas } from "./canvas";
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Canvas } from "./canvas";
 import { useCanvasStore } from "@/store/canvas-store";
 import { RouteLoading } from "@/components/route-loading";
 
@@ -12,23 +13,45 @@ interface RoomProps {
 
 export function Room({ roomId, template, title, boardId }: RoomProps) {
   const [ready, setReady] = useState(false);
+  const queryClient = useQueryClient();
   const loadBoard = useCanvasStore((s) => s.loadBoard);
+  const saveBoard = useCanvasStore((s) => s.saveBoard);
+  const resetBoard = useCanvasStore((s) => s.resetBoard);
 
   useEffect(() => {
-    loadBoard(roomId);
-    const isDark = document.documentElement.classList.contains("dark");
-    useCanvasStore.setState({ darkMode: isDark });
-    setReady(true);
-  }, [roomId, loadBoard]);
+    let cancelled = false;
 
-  // Auto-save every 5 seconds
+    (async () => {
+      setReady(false);
+      resetBoard();
+      await loadBoard(roomId);
+      if (cancelled) return;
+      const isDark = document.documentElement.classList.contains("dark");
+      useCanvasStore.setState({ darkMode: isDark });
+      setReady(true);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [roomId, loadBoard, resetBoard]);
+
   useEffect(() => {
     if (!ready) return;
     const interval = setInterval(() => {
-      useCanvasStore.getState().saveBoard(roomId);
+      void saveBoard(roomId);
     }, 5000);
     return () => clearInterval(interval);
-  }, [ready, roomId]);
+  }, [ready, roomId, saveBoard]);
+
+  useEffect(() => {
+    if (!ready) return;
+    return () => {
+      void saveBoard(roomId).then(() => {
+        queryClient.invalidateQueries({ queryKey: ["boards"] });
+      });
+    };
+  }, [ready, roomId, saveBoard, queryClient]);
 
   if (!ready) {
     return <RouteLoading label="Chargement du canvas..." />;

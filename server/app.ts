@@ -25,6 +25,52 @@ function requireAuth(handler: (req: express.Request, res: express.Response, user
   };
 }
 
+type BoardAccess = {
+  board: NonNullable<Awaited<ReturnType<typeof prisma.board.findUnique>>>;
+  role: "owner" | "editor";
+  isOwner: boolean;
+};
+
+async function getBoardAccess(boardId: string, user: { id: string; email: string }): Promise<BoardAccess | null> {
+  const board = await prisma.board.findUnique({ where: { id: boardId } });
+  if (!board) return null;
+  if (board.authorId === user.id) {
+    return { board, role: "owner", isOwner: true };
+  }
+  const member = await prisma.boardMember.findFirst({
+    where: { boardId, email: user.email },
+  });
+  if (!member) return null;
+  return { board, role: "editor", isOwner: false };
+}
+
+function serializeBoard(
+  board: {
+    id: string;
+    title: string;
+    authorId: string;
+    template: string;
+    thumbnail: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    author?: { name: string } | null;
+  },
+  meta: { role: "owner" | "editor"; isOwner: boolean }
+) {
+  return {
+    id: board.id,
+    title: board.title,
+    authorId: board.authorId,
+    template: board.template,
+    thumbnail: board.thumbnail,
+    createdAt: board.createdAt,
+    updatedAt: board.updatedAt,
+    role: meta.role,
+    isOwner: meta.isOwner,
+    authorName: board.author?.name ?? null,
+  };
+}
+
 export function createApp() {
   const app = express();
   const origin = getAppOrigin();
@@ -39,11 +85,25 @@ export function createApp() {
   // --- BOARD ROUTES ---
 
   app.get("/api/boards", requireAuth(async (req, res, user) => {
-    const boards = await prisma.board.findMany({
-      where: { authorId: user.id },
-      orderBy: { updatedAt: "desc" },
-    });
-    res.json(boards);
+    const [ownedBoards, sharedBoards] = await Promise.all([
+      prisma.board.findMany({
+        where: { authorId: user.id },
+        orderBy: { updatedAt: "desc" },
+      }),
+      prisma.board.findMany({
+        where: {
+          authorId: { not: user.id },
+          members: { some: { email: user.email as string } },
+        },
+        include: { author: { select: { name: true } } },
+        orderBy: { updatedAt: "desc" },
+      }),
+    ]);
+
+    res.json([
+      ...ownedBoards.map((board) => serializeBoard(board, { role: "owner", isOwner: true })),
+      ...sharedBoards.map((board) => serializeBoard(board, { role: "editor", isOwner: false })),
+    ]);
   }));
 
   app.post("/api/boards", requireAuth(async (req, res, user) => {
@@ -51,52 +111,85 @@ export function createApp() {
     const board = await prisma.board.create({
       data: { title, template, authorId: user.id },
     });
-    res.json(board);
+    res.json(serializeBoard(board, { role: "owner", isOwner: true }));
   }));
 
   app.delete("/api/boards/:id", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
-    const board = await prisma.board.findUnique({ where: { id: boardId } });
-    if (!board || board.authorId !== user.id) return res.status(403).json({ error: "Non autorisé" });
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut supprimer ce tableau" });
     await prisma.board.delete({ where: { id: boardId } });
     res.json({ success: true });
   }));
 
   app.get("/api/boards/:id", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
-    const board = await prisma.board.findUnique({ where: { id: boardId } });
-    if (!board) return res.status(404).json({ error: "Tableau introuvable" });
-    const isAuthor = board.authorId === user.id;
-    let isMember = false;
-    try {
-      const member = await prisma.boardMember.findFirst({
-        where: { boardId, email: user.email as string },
-      });
-      isMember = !!member;
-    } catch {}
-    if (!isAuthor && !isMember) return res.status(403).json({ error: "Accès refusé" });
-    res.json(board);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "Accès refusé" });
+    res.json(serializeBoard(access.board, { role: access.role, isOwner: access.isOwner }));
   }));
 
   app.put("/api/boards/:id/title", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
     const { title } = req.body;
-    const board = await prisma.board.findUnique({ where: { id: boardId } });
-    if (!board || board.authorId !== user.id) return res.status(403).json({ error: "Non autorisé" });
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut renommer ce tableau" });
     const updated = await prisma.board.update({ where: { id: boardId }, data: { title } });
-    res.json(updated);
+    res.json(serializeBoard(updated, { role: access.role, isOwner: access.isOwner }));
+  }));
+
+  app.get("/api/boards/:id/content", requireAuth(async (req, res, user) => {
+    const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "Accès refusé" });
+
+    const canvasData = access.board.canvasData;
+    res.json({
+      canvasData: canvasData ?? null,
+      thumbnail: access.board.thumbnail,
+      updatedAt: access.board.updatedAt,
+    });
+  }));
+
+  app.put("/api/boards/:id/content", requireAuth(async (req, res, user) => {
+    const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "Accès refusé" });
+
+    const { canvasData, thumbnail } = req.body;
+    if (!canvasData || typeof canvasData !== "object") {
+      return res.status(400).json({ error: "canvasData requis" });
+    }
+
+    const updated = await prisma.board.update({
+      where: { id: boardId },
+      data: {
+        canvasData,
+        thumbnail: typeof thumbnail === "string" ? thumbnail : access.board.thumbnail,
+      },
+    });
+
+    res.json({
+      success: true,
+      updatedAt: updated.updatedAt,
+      thumbnail: updated.thumbnail,
+    });
   }));
 
   // --- MEMBERS ROUTES ---
 
-  app.get("/api/boards/:id/members", requireAuth(async (req, res) => {
+  app.get("/api/boards/:id/members", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "Accès refusé" });
     const members = await prisma.boardMember.findMany({ where: { boardId } });
     res.json(members);
   }));
 
-  app.post("/api/boards/:id/invite", requireAuth(async (req, res) => {
+  app.post("/api/boards/:id/invite", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut inviter" });
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: "Email requis" });
     try {
@@ -114,9 +207,9 @@ export function createApp() {
 
   app.delete("/api/boards/:id/members/:email", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
-    const email = String(req.params.email);
-    const board = await prisma.board.findUnique({ where: { id: boardId } });
-    if (!board || board.authorId !== user.id) return res.status(403).json({ error: "Seul le créateur peut retirer des membres" });
+    const email = decodeURIComponent(String(req.params.email));
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut retirer des membres" });
     await prisma.boardMember.delete({
       where: { boardId_email: { boardId, email } },
     });
