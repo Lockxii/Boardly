@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData, BoardConnection, CanvasVersion, LayerComment, LayerReaction, TrashEntry, LinkPreview } from "@/lib/types";
-import { getLinkLayerDimensions } from "@/lib/brand-icons";
+import { getLinkLayerDimensions, getLinkLayerHeightFromLayer } from "@/lib/brand-icons";
 import { apiFetch } from "@/lib/utils";
 import { generateBoardThumbnail } from "@/lib/board-thumbnail";
 import {
@@ -116,6 +116,7 @@ interface CanvasStore {
   // Layer mutations
   insertLayer: (type: LayerType, x: number, y: number, width?: number, height?: number) => string | null;
   insertLinkLayer: (preview: LinkPreview, x: number, y: number) => string | null;
+  fitLinkLayerToImage: (id: string, naturalWidth: number, naturalHeight: number) => void;
   deleteLayers: (ids?: string[]) => void;
   restoreTrashEntry: (entryId: string) => void;
   purgeTrash: () => void;
@@ -427,6 +428,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       linkImage: preview.image,
       linkProvider: preview.provider || "generic",
       linkAuthor: preview.author,
+      linkImageWidth: preview.imageWidth,
+      linkImageHeight: preview.imageHeight,
       cornerRadius: 10,
       stroke: "#E2E8F0",
       strokeWidth: 1,
@@ -439,6 +442,29 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }));
     get().addAuditEntry("created", "Link");
     return id;
+  },
+
+  fitLinkLayerToImage: (id, naturalWidth, naturalHeight) => {
+    const layer = get().layers[id];
+    if (!layer || layer.type !== "Link" || !naturalWidth || !naturalHeight) return;
+    const nextHeight = getLinkLayerHeightFromLayer({
+      ...layer,
+      linkImageWidth: naturalWidth,
+      linkImageHeight: naturalHeight,
+    });
+    const sameSize = layer.linkImageWidth === naturalWidth && layer.linkImageHeight === naturalHeight;
+    if (sameSize && Math.abs(layer.height - nextHeight) <= 2) return;
+    set((s) => ({
+      layers: {
+        ...s.layers,
+        [id]: {
+          ...s.layers[id],
+          linkImageWidth: naturalWidth,
+          linkImageHeight: naturalHeight,
+          height: nextHeight,
+        },
+      },
+    }));
   },
 
   groupSelection: () => {

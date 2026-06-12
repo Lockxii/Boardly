@@ -20,40 +20,71 @@ export function brandIconUrl(slug: string, variant = "default") {
 }
 
 export const LINK_URL_STRIP_HEIGHT = 28;
+export const LINK_CARD_GAP = 4;
+
+function defaultCardWidth(provider?: Layer["linkProvider"]) {
+  if (provider === "tiktok") return 220;
+  if (provider === "spotify") return 240;
+  return 280;
+}
+
+function fallbackImageAspect(provider?: Layer["linkProvider"]) {
+  if (provider === "tiktok") return 9 / 16;
+  if (provider === "spotify") return 1;
+  if (provider === "youtube" || provider === "vimeo") return 16 / 9;
+  return 16 / 10;
+}
+
+export function estimateLinkBodyHeight(title: string, hasSubtitle: boolean) {
+  const titleLines = Math.min(3, Math.max(1, Math.ceil(title.length / 30)));
+  const titleHeight = titleLines * 19;
+  const subtitleHeight = hasSubtitle ? 18 : 0;
+  return Math.max(52, titleHeight + subtitleHeight + 26);
+}
+
+export function getLinkImageHeight(
+  provider: Layer["linkProvider"] | undefined,
+  cardWidth: number,
+  imageWidth?: number,
+  imageHeight?: number,
+) {
+  if (imageWidth && imageHeight && imageWidth > 0 && imageHeight > 0) {
+    return Math.round(cardWidth * (imageHeight / imageWidth));
+  }
+  const aspect = fallbackImageAspect(provider);
+  return Math.round(cardWidth / aspect);
+}
 
 export function getLinkLayerDimensions(preview: {
   image?: string;
+  title?: string;
+  description?: string;
+  author?: string;
   provider?: Layer["linkProvider"];
+  imageWidth?: number;
+  imageHeight?: number;
 }) {
   const hasImage = !!preview.image;
   const provider = preview.provider;
+  const width = defaultCardWidth(provider);
+  const hasSubtitle = !!(preview.author || preview.description);
+  const bodyHeight = estimateLinkBodyHeight(preview.title || preview.image ? "Link" : "", hasSubtitle);
+  const chrome = bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;
 
-  if (provider === "tiktok" && hasImage) {
-    const width = 200;
-    const imageHeight = Math.round((width * 16) / 9);
-    return { width, height: imageHeight + 64 + LINK_URL_STRIP_HEIGHT };
+  if (!hasImage) {
+    return { width, height: bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP };
   }
 
-  if (provider === "spotify" && hasImage) {
-    const width = 240;
-    return { width, height: width + 64 + LINK_URL_STRIP_HEIGHT };
-  }
-
-  const width = 280;
-  if (!hasImage) return { width, height: 92 + LINK_URL_STRIP_HEIGHT };
-
-  const imageHeight =
-    provider === "youtube" || provider === "vimeo"
-      ? Math.round((width * 9) / 16)
-      : 128;
-
-  const bodyHeight = provider && provider !== "generic" ? 64 : 56;
-  return { width, height: imageHeight + bodyHeight + LINK_URL_STRIP_HEIGHT };
+  const imageHeight = getLinkImageHeight(provider, width, preview.imageWidth, preview.imageHeight);
+  return { width, height: imageHeight + chrome };
 }
 
-export function getLinkImageHeight(provider: Layer["linkProvider"] | undefined, width: number) {
-  if (provider === "tiktok") return Math.round((width * 16) / 9);
-  if (provider === "spotify") return width;
-  if (provider === "youtube" || provider === "vimeo") return Math.round((width * 9) / 16);
-  return 128;
+export function getLinkLayerHeightFromLayer(layer: Pick<Layer, "type" | "width" | "linkProvider" | "linkTitle" | "linkAuthor" | "linkDescription" | "linkImageWidth" | "linkImageHeight" | "linkImage">) {
+  if (layer.type !== "Link") return layer.width;
+  const hasSubtitle = !!(layer.linkAuthor || layer.linkDescription);
+  const bodyHeight = estimateLinkBodyHeight(layer.linkTitle || "", hasSubtitle);
+  const chrome = bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;
+  if (!layer.linkImage) return bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;
+  const imageHeight = getLinkImageHeight(layer.linkProvider, layer.width, layer.linkImageWidth, layer.linkImageHeight);
+  return imageHeight + chrome;
 }

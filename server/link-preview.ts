@@ -7,12 +7,16 @@ export type LinkPreviewResult = {
   image: string;
   provider: LinkProvider;
   author?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 };
 
 type OEmbedPayload = {
   title?: string;
   author_name?: string;
   thumbnail_url?: string;
+  thumbnail_width?: number;
+  thumbnail_height?: number;
   html?: string;
   provider_name?: string;
 };
@@ -106,6 +110,13 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProvider, "gen
     image = bestYoutubeThumbnail(url, image);
   }
 
+  let imageWidth = data.thumbnail_width || undefined;
+  let imageHeight = data.thumbnail_height || undefined;
+  if (provider === "youtube" && image.includes("maxresdefault")) {
+    imageWidth = imageWidth || 1280;
+    imageHeight = imageHeight || 720;
+  }
+
   const author = data.author_name?.trim();
   const title = data.title?.trim() || url.hostname;
   let description = "";
@@ -127,6 +138,8 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProvider, "gen
     image,
     provider,
     author: author || undefined,
+    imageWidth,
+    imageHeight,
   };
 }
 
@@ -145,6 +158,8 @@ async function fetchOpenGraphPreview(url: URL): Promise<LinkPreviewResult> {
   if (image && image.startsWith("/")) {
     image = `${url.origin}${image}`;
   }
+  const imageWidth = Number(pickMeta(html, "image:width")) || undefined;
+  const imageHeight = Number(pickMeta(html, "image:height")) || undefined;
 
   return {
     url: url.toString(),
@@ -152,6 +167,8 @@ async function fetchOpenGraphPreview(url: URL): Promise<LinkPreviewResult> {
     description,
     image,
     provider: "generic",
+    imageWidth: imageWidth || undefined,
+    imageHeight: imageHeight || undefined,
   };
 }
 

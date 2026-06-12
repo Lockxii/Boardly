@@ -77,6 +77,8 @@ export type Layer = {
   linkImage?: string;
   linkProvider?: "youtube" | "spotify" | "tiktok" | "soundcloud" | "vimeo" | "generic";
   linkAuthor?: string;
+  linkImageWidth?: number;
+  linkImageHeight?: number;
   checklist?: ChecklistItem[];
   groupId?: string;
   textColor?: string;
@@ -168,4 +170,6 @@ export type LinkPreview = {
   image: string;
   provider?: "youtube" | "spotify" | "tiktok" | "soundcloud" | "vimeo" | "generic";
   author?: string;
+  imageWidth?: number;
+  imageHeight?: number;
 };

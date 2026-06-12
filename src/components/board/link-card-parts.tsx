@@ -5,6 +5,7 @@ import {
   LINK_PROVIDER_META,
   LINK_URL_STRIP_HEIGHT,
   brandIconUrl,
+  estimateLinkBodyHeight,
   getLinkImageHeight,
   type LinkProvider,
 } from "@/lib/brand-icons";
@@ -65,21 +66,36 @@ export function LinkCardImage({
   provider,
   url,
   width,
+  imageWidth,
+  imageHeight,
+  onNaturalSize,
 }: {
   src: string;
   provider?: Layer["linkProvider"];
   url?: string;
   width: number;
+  imageWidth?: number;
+  imageHeight?: number;
+  onNaturalSize?: (width: number, height: number) => void;
 }) {
   const videoId = provider === "youtube" ? youtubeIdFromUrl(url) : null;
-  const imageHeight = getLinkImageHeight(provider, width);
+  const imageHeightPx = getLinkImageHeight(provider, width, imageWidth, imageHeight);
 
   return (
-    <div className="relative w-full shrink-0 overflow-hidden" style={{ height: imageHeight }}>
+    <div
+      className="relative w-full shrink-0 overflow-hidden bg-neutral-100 dark:bg-neutral-950"
+      style={{ height: imageHeightPx }}
+    >
       <img
         src={src}
         alt=""
-        className={`w-full h-full ${provider === "tiktok" ? "object-cover object-center" : "object-cover"}`}
+        className="h-full w-full object-contain"
+        onLoad={(e) => {
+          const img = e.currentTarget;
+          if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+            onNaturalSize?.(img.naturalWidth, img.naturalHeight);
+          }
+        }}
         onError={(e) => {
           if (provider === "youtube" && videoId && !e.currentTarget.dataset.fallback) {
             e.currentTarget.dataset.fallback = "1";
@@ -88,7 +104,7 @@ export function LinkCardImage({
         }}
       />
       {provider && provider !== "generic" && (
-        <div className="absolute bottom-2 left-2 rounded-md bg-black/55 backdrop-blur-sm p-1.5 shadow-sm">
+        <div className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 shadow-sm backdrop-blur-sm">
           <BrandLogo provider={provider} className="h-4 w-4" mono={provider !== "tiktok"} />
         </div>
       )}
@@ -97,10 +113,18 @@ export function LinkCardImage({
 }
 
 export function LinkCardBody({ layer }: { layer: Layer }) {
+  const bodyHeight = estimateLinkBodyHeight(
+    layer.linkTitle || layer.url || "",
+    !!(layer.linkAuthor || layer.linkDescription),
+  );
+
   return (
-    <div className="p-3 flex-1 flex flex-col gap-1.5 pointer-events-none min-h-0">
+    <div
+      className="flex shrink-0 flex-col gap-1.5 pointer-events-none p-3"
+      style={{ minHeight: bodyHeight }}
+    >
       <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-semibold text-neutral-900 dark:text-white line-clamp-2 flex-1 leading-snug">
+        <p className="flex-1 text-sm font-semibold leading-snug text-neutral-900 line-clamp-3 dark:text-white">
           {layer.linkTitle || layer.url}
         </p>
         <LinkProviderBadge provider={layer.linkProvider} />
