@@ -81,7 +81,7 @@ export function ShareDialog({ boardId, isPublic = false }: { boardId: string; is
         <Button
           variant="outline"
           size="sm"
-          className="h-9 gap-2 bg-white/10 text-blue-600 border-blue-200/50 dark:border-blue-800/50 dark:text-blue-400 transition-all duration-150 active:scale-[0.97]"
+          className="h-9 gap-2 bg-white/10 text-blue-600 border-blue-200/50 dark:border-blue-800/50 dark:text-blue-400 transition-colors duration-150 active:bg-blue-50 dark:active:bg-blue-950/30"
         >
           <Globe className="h-4 w-4" />
           <span className="hidden sm:inline">Partager</span>
