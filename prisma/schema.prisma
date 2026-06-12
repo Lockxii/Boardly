@@ -83,6 +83,9 @@ model Board {
   template  String   @default("blank")
   canvasData Json?
   thumbnail  String?  @db.Text
+  folder     String?
+  tags       String[] @default([])
+  isPublic   Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

@@ -3,13 +3,15 @@ import {
   Trash2, AlignLeft, AlignCenter, AlignRight,
   AlignVerticalJustifyCenter, AlignVerticalJustifyStart, AlignVerticalJustifyEnd,
   Bold, Italic, Underline, Ban, Copy, Lock, Unlock,
-  Highlighter, Palette, Type, GripVertical
+  Highlighter, Palette, Type, GripVertical,
+  AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { useCanvasStore } from "@/store/canvas-store";
+import { NOTE_COLORS } from "@/lib/canvas-utils";
 
 interface SelectionToolsProps {
   camera: { x: number; y: number; zoom: number };
@@ -28,12 +30,15 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const updateLayer = useCanvasStore((s) => s.updateLayer);
   const duplicateLayers = useCanvasStore((s) => s.duplicateLayers);
   const deleteLayers = useCanvasStore((s) => s.deleteLayers);
+  const alignSelection = useCanvasStore((s) => s.alignSelection);
+  const distributeSelection = useCanvasStore((s) => s.distributeSelection);
 
   const selectionInfo = useMemo(() => {
     if (!selection || selection.length === 0) return null;
 
     let textCount = 0, imageCount = 0, otherCount = 0;
     let hasNoteOrText = false;
+    let hasNote = false;
     let fontSize = 16, fontFamily = "font-sans";
     let isBold = false, isItalic = false, isUnderline = false;
     let isLocked = true;
@@ -58,12 +63,14 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
         if (layer.cornerRadius !== undefined) cornerRadius = layer.cornerRadius;
         if (layer.fill) fill = layer.fill;
         if (layer.type === "Text") textCount++;
+        else if (layer.type === "Note") { otherCount++; hasNote = true; }
         else otherCount++;
       } else if (layer.type !== "Image") otherCount++;
     });
 
     return {
       hasText: hasNoteOrText,
+      hasNote,
       onlyText: textCount > 0 && (otherCount + imageCount) === 0,
       allImages: imageCount > 0 && (otherCount + textCount) === 0 && !hasNoteOrText,
       fontSize, fontFamily, isBold, isItalic, isUnderline, isLocked,
@@ -73,6 +80,9 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
 
   const isLocked = selectionInfo?.isLocked || false;
   const hasTextLayer = selectionInfo?.hasText;
+  const hasNoteLayer = selectionInfo?.hasNote;
+  const multiSelect = selection.length >= 2;
+  const canDistribute = selection.length >= 3;
   const showFill = !selectionInfo?.onlyText && !selectionInfo?.allImages;
   const currentFontSize = selectionInfo?.fontSize || 16;
   const currentFontFamily = selectionInfo?.fontFamily || "font-sans";
@@ -289,6 +299,41 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+
+          {hasNoteLayer && (
+            <div className="flex items-center gap-0.5 px-1">
+              {NOTE_COLORS.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className="h-5 w-5 rounded-full border border-neutral-200 dark:border-neutral-600 hover:scale-110 transition-transform"
+                  style={{ backgroundColor: color }}
+                  title="Couleur de note"
+                  onClick={() => applyToSelection({ fill: color })}
+                />
+              ))}
+            </div>
+          )}
+
+          {multiSelect && (
+            <>
+              <div className="flex items-center gap-0.5">
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Aligner à gauche" onClick={() => alignSelection("left")}><AlignLeft className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Centrer horizontalement" onClick={() => alignSelection("center")}><AlignCenter className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Aligner à droite" onClick={() => alignSelection("right")}><AlignRight className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Aligner en haut" onClick={() => alignSelection("top")}><AlignVerticalJustifyStart className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Centrer verticalement" onClick={() => alignSelection("middle")}><AlignVerticalJustifyCenter className="h-4 w-4" /></Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8" title="Aligner en bas" onClick={() => alignSelection("bottom")}><AlignVerticalJustifyEnd className="h-4 w-4" /></Button>
+              </div>
+              {canDistribute && (
+                <div className="flex items-center gap-0.5">
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Distribuer horizontalement" onClick={() => distributeSelection("horizontal")}><AlignHorizontalDistributeCenter className="h-4 w-4" /></Button>
+                  <Button variant="ghost" size="icon" className="h-8 w-8" title="Distribuer verticalement" onClick={() => distributeSelection("vertical")}><AlignVerticalDistributeCenter className="h-4 w-4" /></Button>
+                </div>
+              )}
+              <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-1" />
+            </>
           )}
 
           <div className="w-[1px] h-6 bg-neutral-200 dark:bg-neutral-700 mx-1" />

@@ -54,6 +54,9 @@ function serializeBoard(
     authorId: string;
     template: string;
     thumbnail: string | null;
+    folder?: string | null;
+    tags?: string[];
+    isPublic?: boolean;
     createdAt: Date;
     updatedAt: Date;
     author?: { name: string } | null;
@@ -66,6 +69,9 @@ function serializeBoard(
     authorId: board.authorId,
     template: board.template,
     thumbnail: board.thumbnail,
+    folder: board.folder ?? null,
+    tags: board.tags ?? [],
+    isPublic: board.isPublic ?? false,
     createdAt: board.createdAt,
     updatedAt: board.updatedAt,
     role: meta.role,
@@ -160,6 +166,37 @@ export function createApp() {
     res.json(serializeBoard(updated, { role: access.role, isOwner: access.isOwner }));
   }));
 
+  app.patch("/api/boards/:id", requireAuth(async (req, res, user) => {
+    const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut modifier ce tableau" });
+    const { folder, tags, isPublic } = req.body as { folder?: string | null; tags?: string[]; isPublic?: boolean };
+    const data: { folder?: string | null; tags?: string[]; isPublic?: boolean } = {};
+    if (folder !== undefined) data.folder = folder || null;
+    if (Array.isArray(tags)) data.tags = tags;
+    if (typeof isPublic === "boolean") data.isPublic = isPublic;
+    const updated = await prisma.board.update({ where: { id: boardId }, data });
+    res.json(serializeBoard(updated, { role: access.role, isOwner: access.isOwner }));
+  }));
+
+  app.post("/api/boards/:id/duplicate", requireAuth(async (req, res, user) => {
+    const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "Accès refusé" });
+    const copy = await prisma.board.create({
+      data: {
+        title: `${access.board.title} (copie)`,
+        template: access.board.template,
+        authorId: user.id,
+        canvasData: access.board.canvasData ?? undefined,
+        thumbnail: access.board.thumbnail,
+        folder: access.board.folder,
+        tags: access.board.tags,
+      },
+    });
+    res.json(serializeBoard(copy, { role: "owner", isOwner: true }));
+  }));
+
   app.get("/api/boards/:id/content", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
     const access = await getBoardAccess(boardId, user as { id: string; email: string });
@@ -196,6 +233,58 @@ export function createApp() {
       updatedAt: updated.updatedAt,
       thumbnail: updated.thumbnail,
     });
+  }));
+
+  app.get("/api/boards/:id/presence", requireAuth(async (req, res, user) => {
+    const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "Accès refusé" });
+
+    const cutoff = new Date(Date.now() - 30_000);
+    await prisma.presence.deleteMany({ where: { lastSeen: { lt: cutoff } } });
+
+    const presences = await prisma.presence.findMany({
+      where: { boardId, lastSeen: { gte: cutoff }, userId: { not: user.id } },
+      include: { user: { select: { id: true, name: true } } },
+    });
+
+    res.json(
+      presences.map((p) => ({
+        userId: p.userId,
+        userName: p.user.name,
+        cursorX: p.cursorX,
+        cursorY: p.cursorY,
+      }))
+    );
+  }));
+
+  app.post("/api/boards/:id/presence", requireAuth(async (req, res, user) => {
+    const boardId = String(req.params.id);
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "Accès refusé" });
+
+    const { cursorX, cursorY } = req.body as { cursorX?: number | null; cursorY?: number | null };
+    const existing = await prisma.presence.findFirst({ where: { boardId, userId: user.id } });
+    if (existing) {
+      await prisma.presence.update({
+        where: { id: existing.id },
+        data: {
+          cursorX: typeof cursorX === "number" ? cursorX : null,
+          cursorY: typeof cursorY === "number" ? cursorY : null,
+          lastSeen: new Date(),
+        },
+      });
+    } else {
+      await prisma.presence.create({
+        data: {
+          boardId,
+          userId: user.id,
+          cursorX: typeof cursorX === "number" ? cursorX : null,
+          cursorY: typeof cursorY === "number" ? cursorY : null,
+        },
+      });
+    }
+    res.json({ success: true });
   }));
 
   // --- MEMBERS ROUTES ---

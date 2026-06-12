@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useCanvasStore } from "@/store/use-canvas-store";
+import { useCanvasStore } from "@/store/canvas-store";
 import { useNavigate } from "@tanstack/react-router";
 import {
   MousePointer2, Square, Circle, Type, StickyNote, Pencil, Eraser,
-  Layers, Grid3X3, Map, Keyboard, Home,
+  Layers, Grid3X3, Map, Keyboard, Home, Hand, Minus, Frame, Link2, Camera,
   Plus, MoveRight, Diamond, Star, Triangle as TriangleIcon, Search
 } from "lucide-react";
 
@@ -21,12 +21,17 @@ export function CommandPalette() {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const { setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setCamera, camera } = useCanvasStore();
+  const { setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setCamera, createVersion, setConnectFromId } = useCanvasStore();
   const navigate = useNavigate();
 
   const commands: Command[] = useMemo(() => [
     // Tools
-    { id: "select", label: "Outil Sélection", shortcut: "V", icon: MousePointer2, action: () => { setCanvasState({ mode: "none" }); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "select", label: "Outil Sélection", shortcut: "V", icon: MousePointer2, action: () => { setCanvasState({ mode: "none" }); setConnectFromId(null); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "hand", label: "Main (pan)", shortcut: "H", icon: Hand, action: () => { setCanvasState({ mode: "panning" }); setConnectFromId(null); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "line", label: "Ligne", shortcut: "L", icon: Minus, action: () => { setCanvasState({ mode: "inserting", layerType: "Line" }); setConnectFromId(null); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "frame", label: "Cadre", shortcut: "Shift+F", icon: Frame, action: () => { setCanvasState({ mode: "inserting", layerType: "Frame" }); setConnectFromId(null); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "connect", label: "Connecteur", icon: Link2, action: () => { const sel = useCanvasStore.getState().selection; setConnectFromId(sel[0] ?? null); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "snapshot", label: "Créer un instantané", icon: Camera, action: () => { createVersion(); setShowCommandPalette(false); }, category: "Outils" },
     { id: "rect", label: "Rectangle", shortcut: "R", icon: Square, action: () => { setCanvasState({ mode: "inserting", layerType: "Rectangle" }); setShowCommandPalette(false); }, category: "Outils" },
     { id: "ellipse", label: "Ellipse", shortcut: "E", icon: Circle, action: () => { setCanvasState({ mode: "inserting", layerType: "Ellipse" }); setShowCommandPalette(false); }, category: "Outils" },
     { id: "text", label: "Texte", shortcut: "T", icon: Type, action: () => { setCanvasState({ mode: "inserting", layerType: "Text" }); setShowCommandPalette(false); }, category: "Outils" },
@@ -45,7 +50,7 @@ export function CommandPalette() {
     { id: "home", label: "Accueil", icon: Home, action: () => { navigate({ to: "/" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "dashboard", label: "Dashboard", icon: Home, action: () => { navigate({ to: "/dashboard" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "shortcuts", label: "Voir les raccourcis", icon: Keyboard, action: () => { setShowCommandPalette(false); alert(HELP_TEXT); }, category: "Aide" },
-  ], [setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setCamera, navigate]);
+  ], [setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setCamera, navigate, createVersion, setConnectFromId]);
 
   const filtered = useMemo(() => {
     if (!query) return commands;
@@ -136,6 +141,9 @@ export function CommandPalette() {
 const HELP_TEXT = `Raccourcis clavier Boardly:
 
 V — Sélection
+H — Main (pan)
+L — Ligne
+Shift+F — Cadre
 R — Rectangle
 E — Ellipse
 T — Texte

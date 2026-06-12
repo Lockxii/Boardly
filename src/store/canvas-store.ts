@@ -1,8 +1,14 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
-import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData } from "@/lib/types";
+import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData, BoardConnection, CanvasVersion } from "@/lib/types";
 import { apiFetch } from "@/lib/utils";
 import { generateBoardThumbnail } from "@/lib/board-thumbnail";
+import {
+  computeAlignedPositions,
+  computeDistributedPositions,
+  type AlignKind,
+  type DistributeKind,
+} from "@/lib/canvas-utils";
 
 export interface HistorySnapshot {
   layers: Record<string, Layer>;
@@ -14,8 +20,29 @@ interface CanvasStore {
   // Data
   layers: Record<string, Layer>;
   layerIds: string[];
+  connections: BoardConnection[];
+  versions: CanvasVersion[];
   auditLog: AuditEntry[];
   chatMessages: ChatMessage[];
+
+  // Save state
+  saveStatus: "idle" | "saving" | "saved" | "error";
+  lastSavedAt: number | null;
+  setSaveStatus: (status: "idle" | "saving" | "saved" | "error", at?: number) => void;
+
+  // Connector tool
+  connectFromId: string | null;
+  setConnectFromId: (id: string | null) => void;
+  addConnection: (fromId: string, toId: string) => void;
+  removeConnection: (id: string) => void;
+
+  // Layout
+  alignSelection: (align: AlignKind) => void;
+  distributeSelection: (axis: DistributeKind) => void;
+
+  // Versions
+  createVersion: (label?: string) => void;
+  restoreVersion: (versionId: string) => void;
 
   // Presence
   selection: string[];
@@ -91,7 +118,8 @@ export type CanvasMode =
   | { mode: "inserting"; layerType: LayerType; origin?: { x: number; y: number }; current?: { x: number; y: number } }
   | { mode: "resizing"; initialBounds: { x: number; y: number; width: number; height: number }; initialStart: { x: number; y: number }; corner: "bottom-right" }
   | { mode: "rotating"; initialAngle: number; centerX: number; centerY: number }
-  | { mode: "pencil" };
+  | { mode: "pencil" }
+  | { mode: "panning"; start?: { x: number; y: number }; camStart?: { x: number; y: number } };
 
 function takeSnapshot(state: { layers: Record<string, Layer>; layerIds: string[]; selection: string[] }): HistorySnapshot {
   return {
@@ -113,8 +141,21 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Data
   layers: {},
   layerIds: [],
+  connections: [],
+  versions: [],
   auditLog: [],
   chatMessages: [],
+
+  saveStatus: "idle",
+  lastSavedAt: null,
+  setSaveStatus: (saveStatus, at) =>
+    set({
+      saveStatus,
+      lastSavedAt: at ?? (saveStatus === "saved" ? Date.now() : get().lastSavedAt),
+    }),
+
+  connectFromId: null,
+  setConnectFromId: (connectFromId) => set({ connectFromId }),
 
   // Presence
   selection: [],
@@ -224,13 +265,22 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       y,
       width,
       height,
-      fill: state.lastUsedColor,
+      fill:
+        type === "Note"
+          ? "#FEF3C7"
+          : type === "Frame"
+            ? "transparent"
+            : state.lastUsedColor,
+      stroke: type === "Frame" ? "#94A3B8" : undefined,
+      strokeWidth: type === "Frame" ? 2 : undefined,
+      cornerRadius: type === "Frame" ? 12 : type === "Note" ? 8 : undefined,
+      value: type === "Frame" ? "Section" : undefined,
     };
     // Save pre-mutation state BEFORE the insert
     get().pushHistory();
     set((s) => ({
       layers: { ...s.layers, [id]: layer },
-      layerIds: [...s.layerIds, id],
+      layerIds: type === "Frame" ? [id, ...s.layerIds] : [...s.layerIds, id],
       selection: [id],
       canvasState: { mode: "none" },
     }));
@@ -254,6 +304,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return {
         layers: newLayers,
         layerIds: s.layerIds.filter((id) => !toDelete.includes(id)),
+        connections: s.connections.filter((c) => !toDelete.includes(c.fromId) && !toDelete.includes(c.toId)),
         selection: [],
       };
     });
@@ -329,6 +380,91 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     return state.selection.map((id) => state.layers[id]).filter(Boolean);
   },
 
+  addConnection: (fromId, toId) => {
+    if (fromId === toId) return;
+    const state = get();
+    if (state.connections.some((c) => (c.fromId === fromId && c.toId === toId) || (c.fromId === toId && c.toId === fromId))) {
+      return;
+    }
+    get().pushHistory();
+    set((s) => ({
+      connections: [
+        ...s.connections,
+        { id: nanoid(), fromId, toId, stroke: "#64748B", strokeWidth: 2 },
+      ],
+      connectFromId: null,
+      canvasState: { mode: "none" },
+    }));
+    get().addAuditEntry("created", "Connecteur");
+  },
+
+  removeConnection: (id) => {
+    get().pushHistory();
+    set((s) => ({ connections: s.connections.filter((c) => c.id !== id) }));
+  },
+
+  alignSelection: (align) => {
+    const state = get();
+    if (state.selection.length < 2) return;
+    const updates = computeAlignedPositions(state.layers, state.selection, align);
+    if (Object.keys(updates).length === 0) return;
+    get().pushHistory();
+    set((s) => {
+      const newLayers = { ...s.layers };
+      for (const [id, patch] of Object.entries(updates)) {
+        newLayers[id] = { ...newLayers[id], ...patch };
+      }
+      return { layers: newLayers };
+    });
+    get().addAuditEntry("modified", "Alignement");
+  },
+
+  distributeSelection: (axis) => {
+    const state = get();
+    if (state.selection.length < 3) return;
+    const updates = computeDistributedPositions(state.layers, state.selection, axis);
+    if (Object.keys(updates).length === 0) return;
+    get().pushHistory();
+    set((s) => {
+      const newLayers = { ...s.layers };
+      for (const [id, patch] of Object.entries(updates)) {
+        newLayers[id] = { ...newLayers[id], ...patch };
+      }
+      return { layers: newLayers };
+    });
+    get().addAuditEntry("modified", "Distribution");
+  },
+
+  createVersion: (label) => {
+    const state = get();
+    const version: CanvasVersion = {
+      id: nanoid(),
+      label: label || `Version ${new Date().toLocaleString("fr-FR")}`,
+      createdAt: Date.now(),
+      layers: JSON.parse(JSON.stringify(state.layers)),
+      layerIds: [...state.layerIds],
+      connections: JSON.parse(JSON.stringify(state.connections)),
+    };
+    set((s) => ({
+      versions: [version, ...s.versions].slice(0, 20),
+    }));
+  },
+
+  restoreVersion: (versionId) => {
+    const state = get();
+    const version = state.versions.find((v) => v.id === versionId);
+    if (!version) return;
+    get().pushHistory();
+    set({
+      layers: JSON.parse(JSON.stringify(version.layers)),
+      layerIds: [...version.layerIds],
+      connections: JSON.parse(JSON.stringify(version.connections)),
+      selection: [],
+      canvasState: { mode: "none" },
+    });
+    get().addAuditEntry("modified", "Restauration");
+  },
+
   // Audit
   addAuditEntry: (action, layerType) => {
     set((s) => {
@@ -370,6 +506,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     set({
       layers: {},
       layerIds: [],
+      connections: [],
+      versions: [],
       auditLog: [],
       chatMessages: [],
       undoStack: [],
@@ -377,6 +515,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       canUndo: false,
       canRedo: false,
       selection: [],
+      connectFromId: null,
+      saveStatus: "idle",
+      lastSavedAt: null,
     }),
 
   loadBoard: async (boardId) => {
@@ -384,6 +525,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       set({
         layers: data.layers || {},
         layerIds: data.layerIds || [],
+        connections: data.connections || [],
+        versions: data.versions || [],
         auditLog: data.auditLog || [],
         chatMessages: data.chatMessages || [],
         undoStack: [],
@@ -391,6 +534,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         canUndo: false,
         canRedo: false,
         selection: [],
+        connectFromId: null,
       });
     };
 
@@ -446,9 +590,12 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   saveBoard: async (boardId) => {
     const state = get();
+    get().setSaveStatus("saving");
     const canvasData: BoardCanvasData = {
       layers: state.layers,
       layerIds: state.layerIds,
+      connections: state.connections,
+      versions: state.versions,
       auditLog: state.auditLog,
       chatMessages: state.chatMessages,
     };
@@ -463,7 +610,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         method: "PUT",
         body: JSON.stringify({ canvasData, thumbnail }),
       });
-    } catch {}
+      get().setSaveStatus("saved", Date.now());
+    } catch {
+      get().setSaveStatus("error");
+    }
   },
 }));
 

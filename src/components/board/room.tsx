@@ -3,6 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Canvas } from "./canvas";
 import { useCanvasStore } from "@/store/canvas-store";
 import { RouteLoading } from "@/components/route-loading";
+import { apiFetch } from "@/lib/utils";
+import type { BoardCanvasData } from "@/lib/types";
 
 interface RoomProps {
   roomId: string;
@@ -52,6 +54,38 @@ export function Room({ roomId, template, title, boardId }: RoomProps) {
       });
     };
   }, [ready, roomId, saveBoard, queryClient]);
+
+  useEffect(() => {
+    if (!ready) return;
+    let remoteUpdatedAt = 0;
+
+    const pollRemote = async () => {
+      try {
+        const remote = await apiFetch<{ canvasData: BoardCanvasData | null; updatedAt: string }>(
+          `/api/boards/${roomId}/content`
+        );
+        const updatedAt = new Date(remote.updatedAt).getTime();
+        if (updatedAt <= remoteUpdatedAt) return;
+        remoteUpdatedAt = updatedAt;
+
+        const state = useCanvasStore.getState();
+        if (state.saveStatus === "saving") return;
+        if (!remote.canvasData?.layerIds?.length) return;
+        if (state.lastSavedAt && updatedAt <= state.lastSavedAt + 2000) return;
+
+        useCanvasStore.setState({
+          layers: remote.canvasData.layers,
+          layerIds: remote.canvasData.layerIds,
+          connections: remote.canvasData.connections || [],
+          versions: remote.canvasData.versions || [],
+          selection: [],
+        });
+      } catch {}
+    };
+
+    const interval = setInterval(pollRemote, 12000);
+    return () => clearInterval(interval);
+  }, [ready, roomId]);
 
   if (!ready) {
     return <RouteLoading label="Chargement du canvas..." />;

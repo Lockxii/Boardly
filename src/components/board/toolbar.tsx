@@ -1,11 +1,12 @@
 import { useCanvasStore } from "@/store/canvas-store";
-import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil, Triangle as TriangleIcon, MoveRight, Diamond, Star, Layers, Eraser, GripHorizontal, ChevronLeft, Shapes, PenTool, Plus } from "lucide-react";
+import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil, Triangle as TriangleIcon, MoveRight, Diamond, Star, Layers, Eraser, GripHorizontal, ChevronLeft, Shapes, PenTool, Plus, Hand, Minus, Frame, Link2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { nanoid } from "nanoid";
 import { useRef, useState } from "react";
 import { LayersPanel } from "./layers-panel";
 import { motion } from "framer-motion";
 import type { Layer, LayerType } from "@/lib/types";
+import { compressImageFile } from "@/lib/canvas-utils";
 
 export function Toolbar() {
   const canvasState = useCanvasStore((s) => s.canvasState);
@@ -17,7 +18,8 @@ export function Toolbar() {
   const redo = useCanvasStore((s) => s.redo);
   const canUndo = useCanvasStore((s) => s.canUndo);
   const canRedo = useCanvasStore((s) => s.canRedo);
-  const lastUsedColor = useCanvasStore((s) => s.lastUsedColor);
+  const setConnectFromId = useCanvasStore((s) => s.setConnectFromId);
+  const connectFromId = useCanvasStore((s) => s.connectFromId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -40,12 +42,17 @@ export function Toolbar() {
     }));
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => { const src = event.target?.result as string; if (src) insertImage(src); };
-    reader.readAsDataURL(file);
+    try {
+      const src = await compressImageFile(file);
+      insertImage(src);
+    } catch {
+      const reader = new FileReader();
+      reader.onload = (event) => { const src = event.target?.result as string; if (src) insertImage(src); };
+      reader.readAsDataURL(file);
+    }
     e.target.value = "";
   };
 
@@ -58,7 +65,11 @@ export function Toolbar() {
 
         {!isCollapsed && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="flex flex-col gap-1 items-center">
-            <ToolButton isActive={canvasState.mode === "none" || canvasState.mode === "translating" || canvasState.mode === "selectionNet" || canvasState.mode === "resizing"} onClick={() => { setCanvasState({ mode: "none" }); setOpenMenu(null); }} icon={MousePointer2} title="Sélectionner (V)" />
+            <ToolButton isActive={canvasState.mode === "none" || canvasState.mode === "translating" || canvasState.mode === "selectionNet" || canvasState.mode === "resizing"} onClick={() => { setCanvasState({ mode: "none" }); setConnectFromId(null); setOpenMenu(null); }} icon={MousePointer2} title="Sélectionner (V)" />
+            <ToolButton isActive={canvasState.mode === "panning"} onClick={() => { setCanvasState({ mode: "panning" }); setConnectFromId(null); setOpenMenu(null); }} icon={Hand} title="Main (H)" />
+            <ToolButton isActive={canvasState.mode === "inserting" && canvasState.layerType === "Line"} onClick={() => { setCanvasState({ mode: "inserting", layerType: "Line" }); setConnectFromId(null); setOpenMenu(null); }} icon={Minus} title="Ligne (L)" />
+            <ToolButton isActive={canvasState.mode === "inserting" && canvasState.layerType === "Frame"} onClick={() => { setCanvasState({ mode: "inserting", layerType: "Frame" }); setConnectFromId(null); setOpenMenu(null); }} icon={Frame} title="Cadre (Shift+F)" />
+            <ToolButton isActive={!!connectFromId} onClick={() => { const sel = useCanvasStore.getState().selection; setConnectFromId(sel[0] ?? null); setOpenMenu(null); }} icon={Link2} title="Connecteur (Ctrl+C sur 2 éléments)" />
 
             <div className="h-[1px] bg-neutral-100 dark:bg-neutral-700 w-full my-0.5" />
 

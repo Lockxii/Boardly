@@ -116,6 +116,19 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
       {layer.type === "Path" && (
         <path d={getSvgPathFromPoints(layer.points || [])} stroke={isDrawing ? "#9ca3af" : layer.fill || "#000"} strokeWidth={layer.strokeWidth || 2} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeOpacity={isDrawing ? 0.3 : 1} transform={`scale(${pathScaleX}, ${pathScaleY})`} style={{ transformOrigin: "top left" }} />
       )}
+      {layer.type === "Line" && (
+        <line x1={0} y1={0} x2={layer.width} y2={layer.height} stroke={layer.fill || "#111827"} strokeWidth={layer.strokeWidth || 3} strokeLinecap="round" />
+      )}
+      {layer.type === "Frame" && (
+        <>
+          <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill="rgba(148,163,184,0.06)" stroke={stroke || "#94A3B8"} strokeWidth={strokeWidth || 2} strokeDasharray="8 6" />
+          <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible", pointerEvents: "none" }}>
+            <div style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
+              <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 600, fontSize: "13px", color: "#64748B" }} />
+            </div>
+          </foreignObject>
+        </>
+      )}
       {layer.type === "Rectangle" && (
         <>
           <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill={layer.fill} stroke={stroke} strokeWidth={strokeWidth} className="drop-shadow-sm" />

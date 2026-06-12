@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, Trash2, Users } from "lucide-react";
+import { Clock, Trash2, Users, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TemplatePreview, getTemplateLabel } from "@/components/template-preview";
 import type { Board } from "@/lib/types";
@@ -7,9 +7,10 @@ import type { Board } from "@/lib/types";
 type BoardCardProps = {
   board: Board;
   onDelete?: (board: Board) => void;
+  onDuplicate?: (board: Board) => void;
 };
 
-export function BoardCard({ board, onDelete }: BoardCardProps) {
+export function BoardCard({ board, onDelete, onDuplicate }: BoardCardProps) {
   const isOwner = board.isOwner !== false;
 
   return (
@@ -40,6 +41,7 @@ export function BoardCard({ board, onDelete }: BoardCardProps) {
             </h3>
             <p className="mt-1 text-xs text-neutral-500">
               Modèle {getTemplateLabel(board.template)}
+              {board.folder ? ` · ${board.folder}` : ""}
               {!isOwner && board.authorName ? ` · par ${board.authorName}` : ""}
             </p>
           </div>
@@ -50,20 +52,39 @@ export function BoardCard({ board, onDelete }: BoardCardProps) {
         </div>
       </article>
 
-      {isOwner && onDelete && (
-        <Button
-          variant="destructive"
-          size="icon"
-          className="absolute top-3 right-3 h-8 w-8 rounded-full opacity-0 shadow-md transition-opacity group-hover:opacity-100"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDelete(board);
-          }}
-          title="Supprimer"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
+      {(isOwner && (onDelete || onDuplicate)) && (
+        <div className="absolute top-3 right-3 flex gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          {onDuplicate && (
+            <Button
+              variant="secondary"
+              size="icon"
+              className="h-8 w-8 rounded-full shadow-md"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDuplicate(board);
+              }}
+              title="Dupliquer"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+          )}
+          {onDelete && (
+            <Button
+              variant="destructive"
+              size="icon"
+              className="h-8 w-8 rounded-full shadow-md"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onDelete(board);
+              }}
+              title="Supprimer"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       )}
     </Link>
   );

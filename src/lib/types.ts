@@ -8,7 +8,26 @@ export type LayerType =
   | "Triangle"
   | "Arrow"
   | "Diamond"
-  | "Star";
+  | "Star"
+  | "Line"
+  | "Frame";
+
+export type BoardConnection = {
+  id: string;
+  fromId: string;
+  toId: string;
+  stroke?: string;
+  strokeWidth?: number;
+};
+
+export type CanvasVersion = {
+  id: string;
+  label: string;
+  createdAt: number;
+  layers: Record<string, Layer>;
+  layerIds: string[];
+  connections: BoardConnection[];
+};
 
 export type Color = { r: number; g: number; b: number };
 
@@ -76,6 +95,8 @@ export type BoardCanvasData = {
   layerIds: string[];
   auditLog: AuditEntry[];
   chatMessages: ChatMessage[];
+  connections?: BoardConnection[];
+  versions?: CanvasVersion[];
 };
 
 export type Board = {
@@ -86,6 +107,9 @@ export type Board = {
   createdAt: string;
   updatedAt: string;
   thumbnail?: string | null;
+  folder?: string | null;
+  tags?: string[];
+  isPublic?: boolean;
   role?: "owner" | "editor";
   isOwner?: boolean;
   authorName?: string | null;

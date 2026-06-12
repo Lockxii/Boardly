@@ -13,9 +13,12 @@ import { Minimap } from "./minimap";
 import { CommandPalette } from "./command-palette";
 import { StatusBar } from "./status-bar";
 import { ShortcutsHelp } from "./shortcuts-help";
+import { ConnectionsLayer } from "./connections-layer";
+import { CursorsPresence } from "./cursors-presence";
 import { toast } from "sonner";
 import type { Layer, LayerType } from "@/lib/types";
 import { BLUEPRINT } from "@/lib/template-styles";
+import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
 
 export function Canvas({ template, title, boardId }: { template: string; title: string; boardId?: string }) {
   const {
@@ -56,10 +59,29 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
     if (copied.length > 0) toast.success(`${copied.length} élément${copied.length > 1 ? "s" : ""} copié${copied.length > 1 ? "s" : ""}`);
   }, [selection, layers]);
 
-  // Paste
+  const insertImageAt = useCallback(async (file: File, point?: { x: number; y: number }) => {
+    try {
+      const src = await compressImageFile(file);
+      const centerX = point?.x ?? (window.innerWidth / 2 - camera.x) / camera.zoom;
+      const centerY = point?.y ?? (window.innerHeight / 2 - camera.y) / camera.zoom;
+      const id = nanoid();
+      useCanvasStore.getState().pushHistory();
+      useCanvasStore.setState((s) => ({
+        layers: {
+          ...s.layers,
+          [id]: { type: "Image" as LayerType, x: centerX - 100, y: centerY - 100, height: 200, width: 200, fill: "", src } as Layer,
+        },
+        layerIds: [...s.layerIds, id],
+        selection: [id],
+      }));
+      toast.success("Image ajoutée");
+    } catch {
+      toast.error("Impossible d'ajouter l'image");
+    }
+  }, [camera]);
+
   const pasteLayers = useCallback(() => {
     if (clipboardRef.current.length === 0) return;
-    // Save pre-mutation state BEFORE paste
     useCanvasStore.getState().pushHistory();
     const newSelection: string[] = [];
     for (const layerData of clipboardRef.current) {
@@ -72,7 +94,26 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
     }
     setSelection(newSelection);
     toast.success(`${clipboardRef.current.length} élément${clipboardRef.current.length > 1 ? "s" : ""} collé${clipboardRef.current.length > 1 ? "s" : ""}`);
-  }, [setSelection]);
+  }, [camera, setSelection]);
+
+  useEffect(() => {
+    const onPaste = async (e: ClipboardEvent) => {
+      const ae = document.activeElement as HTMLElement;
+      if (ae?.tagName === "TEXTAREA" || ae?.tagName === "INPUT" || ae?.isContentEditable) return;
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) await insertImageAt(file);
+          return;
+        }
+      }
+    };
+    window.addEventListener("paste", onPaste);
+    return () => window.removeEventListener("paste", onPaste);
+  }, [insertImageAt]);
 
   // Drawing
   const startDrawing = useCallback((point: { x: number; y: number }, pressure: number) => {
@@ -240,6 +281,10 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
     if (state.canvasState.mode === "translating") translateSelectedLayers(current);
     else if (state.canvasState.mode === "resizing") resizeSelectedLayer(current, e.shiftKey);
     else if (state.canvasState.mode === "rotating") rotateSelectedLayer(current);
+    else if (state.canvasState.mode === "panning" && state.canvasState.start && state.canvasState.camStart) {
+      const { start, camStart } = state.canvasState;
+      setCamera({ x: camStart.x + (e.clientX - start.x), y: camStart.y + (e.clientY - start.y), zoom: camera.zoom });
+    }
     else if (state.canvasState.mode === "selectionNet") setCanvasState({ mode: "selectionNet", origin: state.canvasState.origin, current });
     else if (state.canvasState.mode === "inserting" && state.canvasState.origin) setCanvasState({ ...state.canvasState, current });
     else if (state.canvasState.mode === "pencil") {
@@ -251,6 +296,14 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const point = pointerEventToCanvasPoint(e, camera);
     const state = useCanvasStore.getState();
+    if (state.canvasState.mode === "panning") {
+      setCanvasState({
+        mode: "panning",
+        start: { x: e.clientX, y: e.clientY },
+        camStart: { x: camera.x, y: camera.y },
+      });
+      return;
+    }
     if (state.canvasState.mode === "inserting") {
       setCanvasState({ ...state.canvasState, origin: point, current: point });
       return;
@@ -272,6 +325,8 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
         if (layer) addAuditEntry("modified", layer.type);
       }
       setCanvasState({ mode: "none" });
+    } else if (state.canvasState.mode === "panning") {
+      setCanvasState({ mode: "panning" });
     } else if (state.canvasState.mode === "selectionNet") {
       const ids: string[] = [];
       const left = Math.min(state.canvasState.origin.x, point.x);
@@ -290,8 +345,10 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
         const h = Math.abs(point.y - origin.y);
         const x = Math.min(point.x, origin.x);
         const y = Math.min(point.y, origin.y);
-        if (w < 5 && h < 5) insertLayer(state.canvasState.layerType, point.x, point.y);
-        else insertLayer(state.canvasState.layerType, x, y, w, h);
+        if (w < 5 && h < 5) {
+          if (state.canvasState.layerType === "Line") insertLayer("Line", point.x - 50, point.y, 100, 0);
+          else insertLayer(state.canvasState.layerType, point.x, point.y);
+        } else insertLayer(state.canvasState.layerType, x, y, Math.max(w, state.canvasState.layerType === "Line" ? 20 : 5), Math.max(h, state.canvasState.layerType === "Line" ? 0 : 5));
       }
     } else if (state.canvasState.mode === "pencil") {
       if (pencilTool === "draw") insertPath();
@@ -304,6 +361,12 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
     const state = useCanvasStore.getState();
     const layer = state.layers[layerId];
     if (layer?.locked) return;
+
+    if (state.connectFromId) {
+      state.addConnection(state.connectFromId, layerId);
+      return;
+    }
+
     if (!state.selection.includes(layerId)) {
       setSelection([layerId]);
     }
@@ -346,10 +409,13 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
       if (e.key === "Escape") {
         if (useCanvasStore.getState().showCommandPalette) { useCanvasStore.getState().setShowCommandPalette(false); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
+        useCanvasStore.getState().setConnectFromId(null);
         setCanvasState({ mode: "none" });
         setSelection([]);
         return;
       }
+
+      const store = useCanvasStore.getState();
 
       if (e.key === "?" && !isInput) {
         e.preventDefault();
@@ -357,13 +423,24 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
         return;
       }
 
+      if ((e.ctrlKey || e.metaKey) && e.key === "c") {
+        e.preventDefault();
+        if (store.selection.length === 2) store.addConnection(store.selection[0], store.selection[1]);
+        else copyLayers();
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "v") {
+        e.preventDefault();
+        pasteLayers();
+        return;
+      }
+
       if (isInput) return;
 
-      if ((e.ctrlKey || e.metaKey) && e.key === "c") { e.preventDefault(); copyLayers(); return; }
-      if ((e.ctrlKey || e.metaKey) && e.key === "v") { e.preventDefault(); pasteLayers(); return; }
-
-      const store = useCanvasStore.getState();
       switch (e.key) {
+        case "h": setCanvasState({ mode: "panning" }); break;
+        case "l": setCanvasState({ mode: "inserting", layerType: "Line" }); break;
+        case "F": if (e.shiftKey) setCanvasState({ mode: "inserting", layerType: "Frame" }); break;
         case "Delete": case "Backspace": store.deleteLayers(); break;
         case "d": if (e.ctrlKey || e.metaKey) { e.preventDefault(); store.duplicateLayers(); } break;
         case "z": if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); } break;
@@ -450,7 +527,7 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
   else if (canvasState.mode === "inserting") cursorStyle = "crosshair";
   else if (canvasState.mode === "translating") cursorStyle = "grabbing";
   else if (canvasState.mode === "resizing") cursorStyle = "nwse-resize";
-  else if (canvasState.mode === "rotating") cursorStyle = "crosshair";
+  else if (canvasState.mode === "panning") cursorStyle = "grab";
 
   return (
     <main className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`} style={{ cursor: cursorStyle }}>
@@ -464,6 +541,7 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
       {showCommandPalette && <CommandPalette />}
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <StatusBar />
+      {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
       <svg
         id="board-canvas"
         className="w-[100vw] h-[100vh]"
@@ -513,6 +591,7 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
               selectionColor={selection.includes(id) ? "#3b82f6" : undefined}
             />
           ))}
+          <ConnectionsLayer />
           {canvasState.mode === "selectionNet" && canvasState.current && (
             <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" x={Math.min(canvasState.origin.x, canvasState.current.x)} y={Math.min(canvasState.origin.y, canvasState.current.y)} width={Math.abs(canvasState.origin.x - canvasState.current.x)} height={Math.abs(canvasState.origin.y - canvasState.current.y)} />
           )}
@@ -521,6 +600,8 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
             const y = Math.min(canvasState.origin.y, canvasState.current.y);
             const w = Math.abs(canvasState.origin.x - canvasState.current.x);
             const h = Math.abs(canvasState.origin.y - canvasState.current.y);
+            if (canvasState.layerType === "Line") return <line className="stroke-blue-500 stroke-1" x1={canvasState.origin.x} y1={canvasState.origin.y} x2={canvasState.current.x} y2={canvasState.current.y} strokeWidth={3} strokeLinecap="round" />;
+            if (canvasState.layerType === "Frame") return <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" strokeDasharray="8 4" x={x} y={y} width={w} height={h} rx={12} />;
             if (canvasState.layerType === "Ellipse") return <ellipse className="fill-blue-500/5 stroke-blue-500 stroke-1" cx={(canvasState.origin.x + canvasState.current.x) / 2} cy={(canvasState.origin.y + canvasState.current.y) / 2} rx={w / 2} ry={h / 2} />;
             if (canvasState.layerType === "Triangle") return <polygon className="fill-blue-500/5 stroke-blue-500 stroke-1" points={`${x + w / 2},${y} ${x + w},${y + h} ${x},${y + h}`} />;
             if (canvasState.layerType === "Diamond") return <polygon className="fill-blue-500/5 stroke-blue-500 stroke-1" points={`${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}`} />;
