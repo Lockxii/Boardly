@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
+import { ExternalLink } from "lucide-react";
 import type { Layer } from "@/lib/types";
 import {
   LINK_PROVIDER_META,
+  LINK_URL_STRIP_HEIGHT,
   brandIconUrl,
   getLinkImageHeight,
   type LinkProvider,
@@ -94,9 +97,8 @@ export function LinkCardImage({
 }
 
 export function LinkCardBody({ layer }: { layer: Layer }) {
-  const isMedia = layer.linkProvider && layer.linkProvider !== "generic";
   return (
-    <div className={`p-3 flex-1 flex flex-col gap-1.5 pointer-events-none min-h-0 ${isMedia ? "min-h-[72px]" : ""}`}>
+    <div className="p-3 flex-1 flex flex-col gap-1.5 pointer-events-none min-h-0">
       <div className="flex items-start justify-between gap-2">
         <p className="text-sm font-semibold text-neutral-900 dark:text-white line-clamp-2 flex-1 leading-snug">
           {layer.linkTitle || layer.url}
@@ -106,7 +108,92 @@ export function LinkCardBody({ layer }: { layer: Layer }) {
       {(layer.linkAuthor || layer.linkDescription) && (
         <p className="text-xs text-neutral-500 line-clamp-2">{layer.linkAuthor || layer.linkDescription}</p>
       )}
-      <p className="text-[10px] text-blue-600 truncate mt-auto">{layer.url}</p>
+    </div>
+  );
+}
+
+function formatDisplayUrl(url: string) {
+  try {
+    const parsed = new URL(url);
+    const path = parsed.pathname === "/" ? "" : parsed.pathname;
+    return `${parsed.hostname.replace(/^www\./, "")}${path}`.slice(0, 48);
+  } catch {
+    return url.slice(0, 48);
+  }
+}
+
+export function LinkUrlEdge({
+  url = "",
+  selected,
+  readOnly,
+  onChange,
+}: {
+  url?: string;
+  selected: boolean;
+  readOnly: boolean;
+  onChange: (url: string) => void;
+}) {
+  const [draft, setDraft] = useState(url);
+
+  useEffect(() => {
+    setDraft(url);
+  }, [url]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== url) onChange(trimmed);
+    else setDraft(url);
+  };
+
+  const editable = selected && !readOnly;
+
+  return (
+    <div
+      className="shrink-0 pointer-events-auto"
+      style={{ height: LINK_URL_STRIP_HEIGHT }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <div
+        className={`flex h-full items-center gap-1.5 rounded-md border px-2 text-[10px] shadow-sm backdrop-blur-sm ${
+          editable
+            ? "border-blue-300 bg-blue-50/95 ring-1 ring-blue-200 dark:border-blue-700 dark:bg-blue-950/80"
+            : "border-neutral-200 bg-white/95 dark:border-neutral-700 dark:bg-neutral-900/95"
+        }`}
+      >
+        <ExternalLink className="h-3 w-3 shrink-0 text-blue-500" />
+        {editable ? (
+          <input
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commit();
+                (e.target as HTMLInputElement).blur();
+              }
+              if (e.key === "Escape") {
+                setDraft(url);
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
+            className="min-w-0 flex-1 bg-transparent text-blue-600 outline-none dark:text-blue-400"
+            placeholder="https://..."
+            spellCheck={false}
+          />
+        ) : (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 flex-1 truncate text-blue-600 hover:underline dark:text-blue-400"
+            title={url}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {formatDisplayUrl(url)}
+          </a>
+        )}
+      </div>
     </div>
   );
 }

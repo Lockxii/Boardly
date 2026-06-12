@@ -1,6 +1,6 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { Lock, ExternalLink } from "lucide-react";
-import { LinkCardBody, LinkCardImage } from "./link-card-parts";
+import { LinkCardBody, LinkCardImage, LinkUrlEdge } from "./link-card-parts";
 import type { Layer, LayerReaction } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
 
@@ -43,6 +43,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
   const layerComments = useCanvasStore((s) => s.layerComments[id]?.length ?? 0);
   const reactions = useCanvasStore((s) => s.reactions[id] ?? EMPTY_REACTIONS);
   const toggleChecklistItem = useCanvasStore((s) => s.toggleChecklistItem);
+  const updateLayer = useCanvasStore((s) => s.updateLayer);
   const readOnly = useCanvasStore((s) => s.readOnly);
 
   useEffect(() => {
@@ -152,20 +153,28 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
       )}
       {layer.type === "Link" && (
         <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible" }}>
-          <div
-            className="w-full h-full overflow-hidden shadow-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex flex-col"
-            style={{ borderRadius: cornerRadius || 10 }}
-          >
-            {layer.linkImage ? (
-              <div className="relative shrink-0">
-                <LinkCardImage src={layer.linkImage} provider={layer.linkProvider} url={layer.url} width={layer.width} />
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 px-3 pt-3">
-                <ExternalLink className="h-4 w-4 text-blue-600 shrink-0" />
-              </div>
-            )}
-            <LinkCardBody layer={layer} />
+          <div className="flex h-full w-full flex-col gap-1">
+            <div
+              className="flex min-h-0 flex-1 flex-col overflow-hidden border border-neutral-200 bg-white shadow-md dark:border-neutral-700 dark:bg-neutral-900"
+              style={{ borderRadius: cornerRadius || 10 }}
+            >
+              {layer.linkImage ? (
+                <div className="relative shrink-0">
+                  <LinkCardImage src={layer.linkImage} provider={layer.linkProvider} url={layer.url} width={layer.width} />
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 px-3 pt-3">
+                  <ExternalLink className="h-4 w-4 shrink-0 text-blue-600" />
+                </div>
+              )}
+              <LinkCardBody layer={layer} />
+            </div>
+            <LinkUrlEdge
+              url={layer.url}
+              selected={isSelected}
+              readOnly={readOnly || isLocked}
+              onChange={(nextUrl) => updateLayer(id, { url: nextUrl })}
+            />
           </div>
         </foreignObject>
       )}

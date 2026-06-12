@@ -6,7 +6,7 @@ import {
   Bold, Italic, Underline, Ban, Copy, Lock, Unlock,
   Highlighter, Palette, Type, GripVertical,
   AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
-  Group, Ungroup, ListChecks, MessageSquare,
+  Group, Ungroup, ListChecks, MessageSquare, Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -96,6 +96,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const hasNoteLayer = selectionInfo?.hasNote;
   const multiSelect = selection.length >= 2;
   const canDistribute = selection.length >= 3;
+  const selectedLinkLayer = selection.length === 1 && layers[selection[0]]?.type === "Link" ? layers[selection[0]] : null;
   const REACTIONS = ["👍", "❤️", "🔥", "✅"];
   const showFill = !selectionInfo?.onlyText && !selectionInfo?.allImages;
   const currentFontSize = selectionInfo?.fontSize || 16;
@@ -374,6 +375,19 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                 <span className="sr-only">{layerComments[selection[0]]?.length} commentaires</span>
               )}
             </Button>
+          )}
+
+          {!readOnly && selectedLinkLayer && (
+            <div className="flex items-center gap-1.5 pl-1" onPointerDown={(e) => e.stopPropagation()}>
+              <Link2 className="h-3.5 w-3.5 shrink-0 text-blue-500" />
+              <Input
+                value={selectedLinkLayer.url || ""}
+                onChange={(e) => updateLayer(selection[0], { url: e.target.value })}
+                className="h-8 w-44 sm:w-56 text-xs font-mono"
+                placeholder="https://..."
+                spellCheck={false}
+              />
+            </div>
           )}
 
           {!readOnly && selection.length === 1 && (
