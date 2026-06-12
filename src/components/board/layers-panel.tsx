@@ -1,18 +1,34 @@
 import { useState } from "react";
 import { Reorder } from "framer-motion";
-import { Square, Circle, Type, StickyNote, Image as ImageIcon, Triangle, MoveRight, Diamond, Star, Pencil, GripVertical } from "lucide-react";
+import {
+  Square, Circle, Type, StickyNote, Image as ImageIcon, Triangle, MoveRight,
+  Diamond, Star, Pencil, GripVertical, Trash2, Link2, Frame, Minus, Columns3,
+} from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 
 const ICON_MAP: Record<string, typeof Square> = {
-  Rectangle: Square, Ellipse: Circle, Text: Type, Note: StickyNote,
-  Image: ImageIcon, Path: Pencil, Triangle: Triangle, Arrow: MoveRight,
-  Diamond: Diamond, Star: Star,
+  Rectangle: Square,
+  Ellipse: Circle,
+  Text: Type,
+  Note: StickyNote,
+  Image: ImageIcon,
+  Path: Pencil,
+  Triangle: Triangle,
+  Arrow: MoveRight,
+  Diamond: Diamond,
+  Star: Star,
+  Line: Minus,
+  Frame: Frame,
+  Link: Link2,
+  Column: Columns3,
 };
 
 export function LayersPanel() {
   const layerIds = useCanvasStore((s) => s.layerIds);
   const layers = useCanvasStore((s) => s.layers);
+  const readOnly = useCanvasStore((s) => s.readOnly);
   const reorderLayers = useCanvasStore((s) => s.reorderLayers);
+  const deleteLayers = useCanvasStore((s) => s.deleteLayers);
   const setSelection = useCanvasStore((s) => s.setSelection);
   const setCamera = useCanvasStore((s) => s.setCamera);
   const camera = useCanvasStore((s) => s.camera);
@@ -42,6 +58,13 @@ export function LayersPanel() {
     });
   };
 
+  const layerLabel = (layer: (typeof layers)[string]) => {
+    const text = layer.value?.replace(/<[^>]*>/g, "").trim();
+    if (text) return `${layer.type} · ${text.slice(0, 28)}`;
+    if (layer.linkTitle) return `${layer.type} · ${layer.linkTitle.slice(0, 28)}`;
+    return layer.type;
+  };
+
   return (
     <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-white dark:bg-neutral-800 p-2 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 w-64 max-h-[70vh] flex flex-col pointer-events-auto">
       <div className="px-2 py-1 border-b border-neutral-100 dark:border-neutral-700 mb-2">
@@ -54,8 +77,7 @@ export function LayersPanel() {
             style={{ backgroundColor: layers[hoverId].fill || "#fff" }}
           />
           <p className="mt-1 text-[10px] text-neutral-500 truncate">
-            {layers[hoverId].type}
-            {layers[hoverId].value ? ` · ${layers[hoverId].value?.replace(/<[^>]*>/g, "").slice(0, 40)}` : ""}
+            {layerLabel(layers[hoverId])}
           </p>
         </div>
       )}
@@ -73,13 +95,24 @@ export function LayersPanel() {
               onClick={() => focusLayer(id)}
               className="flex items-center gap-2 p-2 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 group cursor-pointer"
             >
-              <GripVertical className="h-4 w-4 text-neutral-400 group-hover:text-neutral-600 shrink-0" />
+              <GripVertical className="h-4 w-4 text-neutral-400 group-hover:text-neutral-600 shrink-0 cursor-grab active:cursor-grabbing" />
               <div className="h-6 w-6 rounded border border-neutral-200 dark:border-neutral-600 flex items-center justify-center shrink-0" style={{ backgroundColor: layer.fill || "#fff" }}>
                 <Icon className="h-3 w-3 text-neutral-600 mix-blend-difference invert" />
               </div>
-              <span className="text-sm truncate flex-1 dark:text-neutral-200">
-                {layer.type} {layer.value ? `- ${layer.value.replace(/<[^>]*>/g, "")}` : ""}
-              </span>
+              <span className="text-sm truncate flex-1 dark:text-neutral-200">{layerLabel(layer)}</span>
+              {!readOnly && (
+                <button
+                  type="button"
+                  title="Supprimer le calque"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deleteLayers([id]);
+                  }}
+                  className="h-7 w-7 shrink-0 rounded-md flex items-center justify-center text-neutral-400 opacity-0 group-hover:opacity-100 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/40 transition-all duration-150"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
             </Reorder.Item>
           );
         })}

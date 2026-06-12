@@ -25,6 +25,7 @@ import type { Layer, LayerType, LinkPreview } from "@/lib/types";
 import { BLUEPRINT } from "@/lib/template-styles";
 import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
 import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
+import { extractPlainTextFromClipboard, extractUrlFromClipboard } from "@/lib/clipboard-utils";
 
 export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
@@ -146,7 +147,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   }, [camera]);
 
   const pasteLayers = useCallback(() => {
-    if (clipboardRef.current.length === 0) return;
+    if (clipboardRef.current.length === 0) return false;
     useCanvasStore.getState().pushHistory();
     const newSelection: string[] = [];
     for (const layerData of clipboardRef.current) {
@@ -160,13 +161,42 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     setSelection(newSelection);
     setPasteGhostKind(null);
     toast.success(`${clipboardRef.current.length} élément${clipboardRef.current.length > 1 ? "s" : ""} collé${clipboardRef.current.length > 1 ? "s" : ""}`);
-  }, [camera, setSelection]);
+    return true;
+  }, [setSelection]);
+
+  const insertTextAt = useCallback((text: string, point?: { x: number; y: number }) => {
+    const centerX = point?.x ?? (window.innerWidth / 2 - camera.x) / camera.zoom;
+    const centerY = point?.y ?? (window.innerHeight / 2 - camera.y) / camera.zoom;
+    const id = nanoid();
+    useCanvasStore.getState().pushHistory();
+    const width = Math.min(420, Math.max(160, text.length * 7));
+    useCanvasStore.setState((s) => ({
+      layers: {
+        ...s.layers,
+        [id]: {
+          type: "Text" as LayerType,
+          x: centerX - width / 2,
+          y: centerY - 20,
+          width,
+          height: 48,
+          fill: "transparent",
+          value: text,
+        } as Layer,
+      },
+      layerIds: [...s.layerIds, id],
+      selection: [id],
+      canvasState: { mode: "none" },
+    }));
+    useCanvasStore.getState().addAuditEntry("created", "Text");
+    toast.success("Texte collé");
+  }, [camera]);
 
   useEffect(() => {
     const onPaste = async (e: ClipboardEvent) => {
       if (readOnly) return;
       const ae = document.activeElement as HTMLElement;
       if (ae?.tagName === "TEXTAREA" || ae?.tagName === "INPUT" || ae?.isContentEditable) return;
+
       const items = e.clipboardData?.items;
       if (items) {
         for (const item of items) {
@@ -178,23 +208,32 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
           }
         }
       }
-      const text = e.clipboardData?.getData("text/plain")?.trim();
-      if (text && /^https?:\/\//i.test(text)) {
+
+      const url = extractUrlFromClipboard(e.clipboardData);
+      if (url) {
         e.preventDefault();
+        const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom - 140;
+        const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom - 80;
         try {
-          const preview = await apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(text)}`);
-          const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom - 140;
-          const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom - 80;
+          const preview = await apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(url)}`);
           insertLinkLayer(preview, centerX, centerY);
           toast.success("Lien collé");
         } catch {
-          toast.error("Impossible de coller ce lien");
+          insertLinkLayer({ url, title: new URL(url).hostname, description: url, image: "", provider: "generic" }, centerX, centerY);
+          toast.success("Lien collé");
         }
+        return;
+      }
+
+      const plainText = extractPlainTextFromClipboard(e.clipboardData);
+      if (plainText) {
+        e.preventDefault();
+        insertTextAt(plainText);
       }
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [insertImageAt, insertLinkLayer, camera, readOnly]);
+  }, [insertImageAt, insertLinkLayer, insertTextAt, camera, readOnly]);
 
   // Drawing
   const startDrawing = useCallback((point: { x: number; y: number }, pressure: number) => {
@@ -568,8 +607,10 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "v") {
-        e.preventDefault();
-        pasteLayers();
+        if (clipboardRef.current.length > 0) {
+          e.preventDefault();
+          pasteLayers();
+        }
         return;
       }
 
