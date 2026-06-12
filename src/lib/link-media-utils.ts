@@ -64,8 +64,14 @@ export function tiktokIdFromUrl(url?: string) {
   if (!url) return null;
   try {
     const parsed = new URL(url);
-    const match = parsed.pathname.match(/\/video\/(\d+)/);
-    return match?.[1] || null;
+    const path = parsed.pathname;
+    const videoMatch = path.match(/\/video\/(\d+)/);
+    if (videoMatch) return videoMatch[1];
+    const embedMatch = path.match(/\/embed\/(?:v2\/)?(\d+)/);
+    if (embedMatch) return embedMatch[1];
+    const playerMatch = path.match(/\/player\/v1\/(\d+)/);
+    if (playerMatch) return playerMatch[1];
+    return null;
   } catch {
     return null;
   }
@@ -83,25 +89,59 @@ export function vimeoIdFromUrl(url?: string) {
   }
 }
 
-export function getVideoEmbedUrl(provider: LinkProvider | "generic" | undefined, url?: string) {
+export function extractVideoIdFromOEmbedHtml(html: string) {
+  const patterns = [
+    /\/video\/(\d+)/,
+    /\/embed\/v2\/(\d+)/,
+    /\/player\/v1\/(\d+)/,
+    /data-video-id=["'](\d+)["']/,
+  ];
+  for (const re of patterns) {
+    const match = html.match(re);
+    if (match?.[1]) return match[1];
+  }
+  return null;
+}
+
+export function resolveVideoId(
+  provider: LinkProvider | "generic" | undefined,
+  url?: string,
+  storedId?: string,
+) {
+  if (storedId) return storedId;
+  if (!provider || provider === "generic" || !url) return null;
+  if (provider === "youtube") return youtubeIdFromUrl(url);
+  if (provider === "tiktok") return tiktokIdFromUrl(url);
+  if (provider === "vimeo") return vimeoIdFromUrl(url);
+  return null;
+}
+
+export function getVideoEmbedUrl(
+  provider: LinkProvider | "generic" | undefined,
+  url?: string,
+  options?: { muted?: boolean; videoId?: string | null },
+) {
   if (!url || !provider || provider === "generic") return null;
 
+  const muted = options?.muted !== false;
+  const muteParam = muted ? "1" : "0";
+
   if (provider === "youtube") {
-    const id = youtubeIdFromUrl(url);
+    const id = options?.videoId || youtubeIdFromUrl(url);
     if (!id) return null;
-    return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=1&controls=0&modestbranding=1&playsinline=1&rel=0&loop=1&playlist=${id}`;
+    return `https://www.youtube-nocookie.com/embed/${id}?autoplay=1&mute=${muteParam}&controls=0&modestbranding=1&playsinline=1&rel=0&loop=1&playlist=${id}`;
   }
 
   if (provider === "tiktok") {
-    const id = tiktokIdFromUrl(url);
+    const id = options?.videoId || tiktokIdFromUrl(url);
     if (!id) return null;
-    return `https://www.tiktok.com/embed/v2/${id}?autoplay=1&mute=1`;
+    return `https://www.tiktok.com/player/v1/${id}?autoplay=1&mute=${muteParam}&loop=1&controls=0&progress_bar=0&play_button=0&volume_control=0&timestamp=0&music_info=0&description=0&rel=0`;
   }
 
   if (provider === "vimeo") {
-    const id = vimeoIdFromUrl(url);
+    const id = options?.videoId || vimeoIdFromUrl(url);
     if (!id) return null;
-    return `https://player.vimeo.com/video/${id}?autoplay=1&muted=1&background=1&loop=1`;
+    return `https://player.vimeo.com/video/${id}?autoplay=1&muted=${muted ? "1" : "0"}&background=1&loop=1`;
   }
 
   return null;

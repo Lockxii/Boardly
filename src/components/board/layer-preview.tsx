@@ -167,6 +167,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
                   width={layer.width}
                   imageWidth={layer.linkImageWidth}
                   imageHeight={layer.linkImageHeight}
+                  linkVideoId={layer.linkVideoId}
                   readOnly={readOnly || isLocked}
                   onNaturalSize={(w, h) => fitLinkLayerToImage(id, w, h)}
                 />

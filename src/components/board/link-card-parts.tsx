@@ -59,6 +59,7 @@ export function LinkCardImage({
   width,
   imageWidth,
   imageHeight,
+  linkVideoId,
   readOnly,
   onNaturalSize,
 }: {
@@ -68,6 +69,7 @@ export function LinkCardImage({
   width: number;
   imageWidth?: number;
   imageHeight?: number;
+  linkVideoId?: string;
   readOnly?: boolean;
   onNaturalSize?: (width: number, height: number) => void;
 }) {
@@ -88,6 +90,7 @@ export function LinkCardImage({
       src={src}
       provider={resolved}
       url={url}
+      videoId={linkVideoId}
       height={imageHeightPx}
       readOnly={readOnly}
       brandBadge={brandBadge}

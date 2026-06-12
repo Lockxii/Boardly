@@ -440,6 +440,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       linkAuthor: preview.author,
       linkImageWidth: preview.imageWidth,
       linkImageHeight: preview.imageHeight,
+      linkVideoId: preview.videoId,
       cornerRadius: 10,
       stroke: "#E2E8F0",
       strokeWidth: 1,

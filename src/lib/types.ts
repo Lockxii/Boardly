@@ -87,6 +87,7 @@ export type Layer = {
   linkAuthor?: string;
   linkImageWidth?: number;
   linkImageHeight?: number;
+  linkVideoId?: string;
   checklist?: ChecklistItem[];
   groupId?: string;
   textColor?: string;
@@ -180,4 +181,5 @@ export type LinkPreview = {
   author?: string;
   imageWidth?: number;
   imageHeight?: number;
+  videoId?: string;
 };

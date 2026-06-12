@@ -3,6 +3,12 @@ import {
   detectLinkProviderFromUrl,
   type LinkProviderId,
 } from "../src/lib/link-providers.js";
+import {
+  extractVideoIdFromOEmbedHtml,
+  tiktokIdFromUrl,
+  vimeoIdFromUrl,
+  youtubeIdFromUrl,
+} from "../src/lib/link-media-utils.js";
 
 export type LinkPreviewResult = {
   url: string;
@@ -13,6 +19,7 @@ export type LinkPreviewResult = {
   author?: string;
   imageWidth?: number;
   imageHeight?: number;
+  videoId?: string;
 };
 
 type OEmbedPayload = {
@@ -55,16 +62,7 @@ function detectProvider(url: URL): LinkProviderId {
 }
 
 function youtubeVideoId(url: URL): string | null {
-  const host = normalizeHost(url.hostname);
-  if (host === "youtu.be") {
-    const id = url.pathname.slice(1).split("/")[0];
-    return id || null;
-  }
-  const parts = url.pathname.split("/").filter(Boolean);
-  if (parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") {
-    return parts[1] || null;
-  }
-  return url.searchParams.get("v");
+  return youtubeIdFromUrl(url.toString());
 }
 
 function bestYoutubeThumbnail(url: URL, fallback?: string) {
@@ -132,6 +130,15 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "g
     description = author;
   }
 
+  let videoId: string | undefined;
+  if (provider === "youtube") {
+    videoId = youtubeVideoId(url) || undefined;
+  } else if (provider === "tiktok") {
+    videoId = tiktokIdFromUrl(url.toString()) || extractVideoIdFromOEmbedHtml(data.html || "") || undefined;
+  } else if (provider === "vimeo") {
+    videoId = vimeoIdFromUrl(url.toString()) || undefined;
+  }
+
   return {
     url: url.toString(),
     title,
@@ -141,6 +148,7 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "g
     author: author || undefined,
     imageWidth,
     imageHeight,
+    videoId,
   };
 }
 
