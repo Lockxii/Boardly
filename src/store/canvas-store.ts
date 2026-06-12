@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData, BoardConnection, CanvasVersion, LayerComment, LayerReaction, TrashEntry, LinkPreview } from "@/lib/types";
+import { getLinkLayerDimensions } from "@/lib/brand-icons";
 import { apiFetch } from "@/lib/utils";
 import { generateBoardThumbnail } from "@/lib/board-thumbnail";
 import {
@@ -412,12 +413,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   insertLinkLayer: (preview, x, y) => {
     const id = nanoid();
     get().pushHistory();
+    const { width, height } = getLinkLayerDimensions(preview);
     const layer: Layer = {
       type: "Link",
       x,
       y,
-      width: 280,
-      height: preview.image ? (preview.provider && preview.provider !== "generic" ? 220 : 200) : 120,
+      width,
+      height,
       fill: "#ffffff",
       url: preview.url,
       linkTitle: preview.title,

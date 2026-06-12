@@ -158,7 +158,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           >
             {layer.linkImage ? (
               <div className="relative shrink-0">
-                <LinkCardImage src={layer.linkImage} provider={layer.linkProvider} url={layer.url} />
+                <LinkCardImage src={layer.linkImage} provider={layer.linkProvider} url={layer.url} width={layer.width} />
               </div>
             ) : (
               <div className="flex items-center gap-2 px-3 pt-3">

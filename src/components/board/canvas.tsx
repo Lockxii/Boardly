@@ -26,6 +26,7 @@ import { BLUEPRINT } from "@/lib/template-styles";
 import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
 import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
 import { extractPlainTextFromClipboard, extractUrlFromClipboard } from "@/lib/clipboard-utils";
+import { getLinkLayerDimensions } from "@/lib/brand-icons";
 
 export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
@@ -212,14 +213,17 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       const url = extractUrlFromClipboard(e.clipboardData);
       if (url) {
         e.preventDefault();
-        const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom - 140;
-        const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom - 80;
+        const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom;
+        const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom;
         try {
           const preview = await apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(url)}`);
-          insertLinkLayer(preview, centerX, centerY);
+          const { width, height } = getLinkLayerDimensions(preview);
+          insertLinkLayer(preview, centerX - width / 2, centerY - height / 2);
           toast.success("Lien collé");
         } catch {
-          insertLinkLayer({ url, title: new URL(url).hostname, description: url, image: "", provider: "generic" }, centerX, centerY);
+          const fallback = { url, title: new URL(url).hostname, description: url, image: "", provider: "generic" as const };
+          const { width, height } = getLinkLayerDimensions(fallback);
+          insertLinkLayer(fallback, centerX - width / 2, centerY - height / 2);
           toast.success("Lien collé");
         }
         return;

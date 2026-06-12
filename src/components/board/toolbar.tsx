@@ -10,6 +10,7 @@ import { compressImageFile } from "@/lib/canvas-utils";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/utils";
 import type { LinkPreview } from "@/lib/types";
+import { getLinkLayerDimensions } from "@/lib/brand-icons";
 
 export function Toolbar() {
   const canvasState = useCanvasStore((s) => s.canvasState);
@@ -88,9 +89,10 @@ export function Toolbar() {
       toast.loading("Récupération de l'aperçu…");
       const preview = await apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(url.trim())}`);
       toast.dismiss();
-      const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom - 140;
-      const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom - 80;
-      insertLinkLayer(preview, centerX, centerY);
+      const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom;
+      const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom;
+      const { width, height } = getLinkLayerDimensions(preview);
+      insertLinkLayer(preview, centerX - width / 2, centerY - height / 2);
       toast.success("Lien ajouté");
       setOpenMenu(null);
     } catch {
