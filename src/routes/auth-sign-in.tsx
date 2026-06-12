@@ -6,8 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Layout, MousePointer2, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
-import { apiFetch } from "@/lib/utils";
-import type { User } from "@/lib/types";
+import { authClient, fetchCurrentUser } from "@/lib/auth-client";
 
 export function SignInPage() {
   const [isSignUp, setIsSignUp] = useState(false);
@@ -20,9 +19,9 @@ export function SignInPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: user, isLoading: authLoading } = useQuery<User | null>({
+  const { data: user, isLoading: authLoading } = useQuery({
     queryKey: ["auth", "me"],
-    queryFn: () => apiFetch<User>("/api/auth/me"),
+    queryFn: fetchCurrentUser,
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -37,25 +36,24 @@ export function SignInPage() {
     setError("");
 
     try {
-      const endpoint = isSignUp ? "/api/auth/sign-up" : "/api/auth/sign-in";
-      const body = isSignUp ? { email, password, name } : { email, password };
-
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(body),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setError(data.error || "Une erreur est survenue");
-        setLoading(false);
-        return;
+      if (isSignUp) {
+        const { error: signUpError } = await authClient.signUp.email({ email, password, name });
+        if (signUpError) {
+          setError(signUpError.message || "Une erreur est survenue");
+          setLoading(false);
+          return;
+        }
+      } else {
+        const { error: signInError } = await authClient.signIn.email({ email, password });
+        if (signInError) {
+          setError(signInError.message || "Email ou mot de passe incorrect");
+          setLoading(false);
+          return;
+        }
       }
 
-      queryClient.setQueryData(["auth", "me"], data);
+      const currentUser = await fetchCurrentUser();
+      queryClient.setQueryData(["auth", "me"], currentUser);
       navigate({ to: "/dashboard" });
     } catch {
       setError("Erreur de connexion au serveur");
@@ -79,14 +77,17 @@ export function SignInPage() {
   return (
     <div className="min-h-screen bg-[#FDFCF8] dark:bg-[#0A0A0A] text-neutral-900 dark:text-white font-sans selection:bg-yellow-200 selection:text-black flex">
       {/* Left panel — hero vibes */}
-      <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden items-center justify-center p-12">
-        <div className="absolute inset-0 opacity-40 dark:opacity-20 pointer-events-none">
+      <div className="hidden lg:flex lg:w-1/2 relative isolate overflow-hidden items-center justify-center p-12">
+        <div className="absolute inset-0 z-0 opacity-40 dark:opacity-20 pointer-events-none">
           <div className="absolute inset-0 bg-[radial-gradient(#a3a3a3_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_at_center,black_60%,transparent_100%)]" />
         </div>
 
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        {/* Décos confinées aux coins — masque au centre pour ne jamais chevaucher le texte */}
+        <div
+          className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:radial-gradient(ellipse_55%_50%_at_50%_50%,transparent_0%,transparent_72%,black_73%)]"
+        >
           <motion.div
-            className="absolute top-[12%] left-[8%] w-44 h-44 bg-[#FFD02F] shadow-xl rotate-[-8deg] p-5 text-xl leading-tight flex items-center justify-center text-center text-black/80 font-medium"
+            className="absolute top-[4%] left-[4%] w-36 h-36 bg-[#FFD02F] shadow-xl rotate-[-8deg] p-4 text-sm leading-tight flex items-center justify-center text-center text-black/80 font-medium"
             initial={{ opacity: 0, scale: 0.8, y: 60 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.7, ease: "backOut" }}
@@ -95,7 +96,7 @@ export function SignInPage() {
           </motion.div>
 
           <motion.div
-            className="absolute bottom-[18%] right-[10%] w-52 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 rotate-[4deg]"
+            className="absolute bottom-[4%] right-[4%] w-44 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 rotate-[4deg]"
             initial={{ opacity: 0, x: 80 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.7, delay: 0.15 }}
@@ -106,23 +107,13 @@ export function SignInPage() {
             <p className="text-xs font-bold mt-2 text-neutral-400">— Sarah, Product Designer</p>
           </motion.div>
 
-          <motion.div
-            className="absolute top-[30%] right-[20%]"
-            animate={{ x: [0, -80, -40, 0], y: [0, 40, -15, 0] }}
-            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-          >
+          <div className="absolute top-[6%] right-[6%]">
             <MousePointer2 className="w-6 h-6 text-[#EC4899] fill-[#EC4899]" />
             <div className="ml-4 -mt-4 bg-[#EC4899] text-white text-xs px-2 py-1 rounded-md font-bold">Julie</div>
-          </motion.div>
-
-          <motion.div
-            className="absolute top-[55%] left-[15%] w-36 h-28 bg-blue-100 dark:bg-blue-900/40 rounded-lg shadow-lg rotate-[6deg] border-2 border-blue-200 dark:border-blue-800"
-            animate={{ y: [0, -12, 0] }}
-            transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-          />
+          </div>
         </div>
 
-        <div className="relative z-10 max-w-md">
+        <div className="relative z-20 max-w-md px-4">
           <motion.h1
             className="text-5xl font-extrabold tracking-tight leading-[1.1] mb-6"
             initial={{ opacity: 0, y: 20 }}
@@ -170,7 +161,6 @@ export function SignInPage() {
 
       {/* Right panel — form */}
       <div className="flex-1 flex flex-col items-center justify-center p-6 sm:p-10 relative">
-        {/* Mobile decorative strip */}
         <div className="lg:hidden absolute top-0 left-0 right-0 h-32 overflow-hidden pointer-events-none">
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(#a3a3a3_1px,transparent_1px)] [background-size:20px_20px]" />
           <motion.div
@@ -190,7 +180,6 @@ export function SignInPage() {
             Boardly
           </Link>
 
-          {/* Mobile headline */}
           <div className="lg:hidden mb-8">
             <h1 className="text-3xl font-extrabold tracking-tight mb-2">
               {isSignUp ? "Créez votre compte" : "Bon retour !"}

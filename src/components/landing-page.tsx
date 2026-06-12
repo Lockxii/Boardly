@@ -14,7 +14,6 @@ import {
   Layers,
   MessageSquare,
   ChevronDown,
-  Sparkles,
   Users,
   Infinity as InfinityIcon,
   Undo2,
@@ -22,7 +21,7 @@ import {
 import { motion, useScroll, useTransform, AnimatePresence } from "framer-motion";
 import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { apiFetch } from "@/lib/utils";
+import { fetchCurrentUser } from "@/lib/auth-client";
 import type { User } from "@/lib/types";
 
 const FAQ_ITEMS = [
@@ -154,12 +153,11 @@ function CanvasMockup() {
 export function LandingPage() {
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end start"] });
-  const y1 = useTransform(scrollYProgress, [0, 1], [0, 200]);
-  const y2 = useTransform(scrollYProgress, [0, 1], [0, -150]);
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, 80]);
 
   const { data: user } = useQuery<User | null>({
     queryKey: ["auth", "me"],
-    queryFn: () => apiFetch<User>("/api/auth/me"),
+    queryFn: fetchCurrentUser,
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -200,34 +198,41 @@ export function LandingPage() {
       </nav>
 
       {/* Hero */}
-      <section className="relative min-h-[90vh] flex flex-col items-center justify-center pt-20">
+      <section className="relative isolate min-h-[90vh] flex flex-col items-center justify-center pt-20">
         <div className="absolute inset-0 z-0 opacity-40 dark:opacity-20 pointer-events-none">
           <div className="absolute inset-0 bg-[radial-gradient(#a3a3a3_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_100%)]" />
         </div>
 
-        <div className="absolute inset-0 overflow-hidden pointer-events-none">
-          <motion.div style={{ y: y1, rotate: -5 }} className="absolute top-[15%] left-[5%] md:left-[15%] w-48 h-48 bg-[#FFD02F] shadow-xl transform rotate-[-6deg] p-6 text-2xl leading-tight flex items-center justify-center text-center text-black/80" initial={{ opacity: 0, scale: 0.8, y: 100 }} animate={{ opacity: 1, scale: 1, y: 0 }} transition={{ duration: 0.8, ease: "backOut" }}>
+        {/* Décos confinées aux coins — zone centrale masquée */}
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:radial-gradient(ellipse_60%_55%_at_50%_50%,transparent_0%,transparent_70%,black_71%)]">
+          <motion.div
+            style={{ y: y1, rotate: -5 }}
+            className="absolute top-[5%] left-[3%] xl:left-[5%] w-36 xl:w-44 h-36 xl:h-44 bg-[#FFD02F] shadow-xl rotate-[-6deg] p-4 xl:p-5 text-base xl:text-xl leading-tight flex items-center justify-center text-center text-black/80"
+            initial={{ opacity: 0, scale: 0.8, y: 100 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "backOut" }}
+          >
             "Ça claque !" ✨
           </motion.div>
 
-          <motion.div className="absolute top-[25%] right-[10%]" animate={{ x: [0, -100, -50, 0], y: [0, 50, -20, 0] }} transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}>
+          <div className="absolute top-[5%] right-[5%] xl:right-[8%]">
             <MousePointer2 className="w-6 h-6 text-[#EC4899] fill-[#EC4899]" />
             <div className="ml-4 -mt-4 bg-[#EC4899] text-white text-xs px-2 py-1 rounded-md font-bold">Julie</div>
-          </motion.div>
+          </div>
 
-          <motion.div style={{ y: y2, rotate: 5 }} className="absolute bottom-[20%] right-[5%] md:right-[15%] w-64 h-auto bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 flex flex-col gap-3" initial={{ opacity: 0, x: 100 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.8, delay: 0.2 }}>
+          <div className="absolute bottom-[5%] right-[3%] xl:right-[5%] w-52 xl:w-60 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 rotate-[5deg] hidden xl:block">
             <div className="flex items-center gap-3 border-b border-neutral-100 dark:border-neutral-700 pb-2">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs">TM</div>
-              <div className="flex-1 h-2 bg-neutral-100 rounded-full w-20" />
+              <div className="flex-1 h-2 bg-neutral-100 rounded-full" />
             </div>
-            <div className="space-y-2">
-              <div className="h-2 w-full bg-neutral-50 rounded-full" />
-              <div className="h-2 w-5/6 bg-neutral-50 rounded-full" />
+            <div className="space-y-2 mt-2">
+              <div className="h-2 w-full bg-neutral-100 dark:bg-neutral-700 rounded-full" />
+              <div className="h-2 w-5/6 bg-neutral-100 dark:bg-neutral-700 rounded-full" />
             </div>
-          </motion.div>
+          </div>
         </div>
 
-        <div className="relative z-10 text-center max-w-4xl px-6">
+        <div className="relative z-20 text-center max-w-4xl px-6">
           <motion.h1 className="text-6xl md:text-8xl font-extrabold tracking-tight mb-8 leading-[1.1]" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
             Votre cerveau, <br />
             <span className="relative inline-block">
@@ -282,10 +287,6 @@ export function LandingPage() {
       <section id="demo" className="py-32 px-6 max-w-7xl mx-auto scroll-mt-24">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
           <div>
-            <div className="inline-flex items-center gap-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 text-sm font-semibold px-4 py-1.5 rounded-full mb-6">
-              <Sparkles className="w-4 h-4" />
-              Aperçu produit
-            </div>
             <h2 className="text-4xl md:text-5xl font-bold mb-6 leading-tight">
               Un canvas qui ressemble à votre façon de penser.
             </h2>

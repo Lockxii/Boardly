@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/utils";
+import { authClient, fetchCurrentUser } from "@/lib/auth-client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,9 +15,9 @@ export function DashboardPage() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const { data: user } = useQuery<UserType>({
+  const { data: user } = useQuery<UserType | null>({
     queryKey: ["auth", "me"],
-    queryFn: () => apiFetch<UserType>("/api/auth/me"),
+    queryFn: fetchCurrentUser,
   });
 
   const { data: boards = [], isLoading } = useQuery<Board[]>({
@@ -52,7 +53,7 @@ export function DashboardPage() {
   const filteredBoards = boards.filter((b) => b.title.toLowerCase().includes(searchQuery.toLowerCase()));
 
   const handleSignOut = async () => {
-    await fetch("/api/auth/sign-out", { method: "POST", credentials: "include" });
+    await authClient.signOut();
     queryClient.setQueryData(["auth", "me"], null);
     navigate({ to: "/" });
   };
@@ -242,7 +243,8 @@ function SettingsDialog({ user, onSignOut }: { user?: UserType | null; onSignOut
     setLoading(true);
     setMessage(null);
     try {
-      await apiFetch("/api/auth/user", { method: "PUT", body: JSON.stringify({ name }) });
+      const { error } = await authClient.updateUser({ name });
+      if (error) throw error;
       queryClient.invalidateQueries({ queryKey: ["auth", "me"] });
       setMessage({ type: "success", text: "Profil mis à jour." });
     } catch {
@@ -256,7 +258,12 @@ function SettingsDialog({ user, onSignOut }: { user?: UserType | null; onSignOut
     setLoading(true);
     setMessage(null);
     try {
-      await apiFetch("/api/auth/password", { method: "PUT", body: JSON.stringify({ currentPassword, newPassword }) });
+      const { error } = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: false,
+      });
+      if (error) throw error;
       setMessage({ type: "success", text: "Mot de passe modifié." });
       setCurrentPassword("");
       setNewPassword("");

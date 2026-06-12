@@ -1,14 +1,14 @@
 import { createRouter, createRootRouteWithContext, createRoute, redirect, Outlet } from "@tanstack/react-router";
 import { QueryClient, useQuery, queryOptions } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
-import { apiFetch } from "./lib/utils";
+import { fetchCurrentUser } from "./lib/auth-client";
 import type { User } from "./lib/types";
 
 // Auth hook
 export function useCurrentUser() {
   return useQuery<User | null>({
     queryKey: ["auth", "me"],
-    queryFn: () => apiFetch<User>("/api/auth/me"),
+    queryFn: fetchCurrentUser,
     retry: false,
     staleTime: 5 * 60 * 1000,
   });
@@ -18,7 +18,7 @@ export function useCurrentUser() {
 const authQueryOptions = () =>
   queryOptions<User | null>({
     queryKey: ["auth", "me"],
-    queryFn: () => apiFetch<User>("/api/auth/me"),
+    queryFn: fetchCurrentUser,
     staleTime: 5 * 60 * 1000,
   });
 

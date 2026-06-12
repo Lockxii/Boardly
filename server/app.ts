@@ -1,10 +1,8 @@
 import express from "express";
 import cors from "cors";
-import cookieParser from "cookie-parser";
-import { PrismaClient } from "@prisma/client";
-import crypto from "crypto";
-
-const prisma = new PrismaClient();
+import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
+import { auth } from "./auth.js";
+import { prisma } from "./prisma.js";
 
 function getAppOrigin() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL;
@@ -12,25 +10,14 @@ function getAppOrigin() {
   return "http://localhost:5173";
 }
 
-function sessionCookieOptions() {
-  return {
-    httpOnly: false,
-    sameSite: "lax" as const,
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 30 * 24 * 60 * 60 * 1000,
-  };
-}
-
 async function getSessionUser(req: express.Request) {
-  const token = (req.cookies?.["better-auth.session_token"] as string) || undefined;
-  if (!token) return null;
-  const session = await prisma.session.findUnique({ where: { token }, include: { user: true } });
-  if (!session || session.expiresAt < new Date()) return null;
-  return session.user;
+  const session = await auth.api.getSession({
+    headers: fromNodeHeaders(req.headers),
+  });
+  return session?.user ?? null;
 }
 
-function requireAuth(handler: (req: express.Request, res: express.Response, user: any) => Promise<any>) {
+function requireAuth(handler: (req: express.Request, res: express.Response, user: NonNullable<Awaited<ReturnType<typeof getSessionUser>>>) => Promise<unknown>) {
   return async (req: express.Request, res: express.Response) => {
     const user = await getSessionUser(req);
     if (!user) return res.status(401).json({ error: "Non autorisé" });
@@ -43,108 +30,11 @@ export function createApp() {
   const origin = getAppOrigin();
 
   app.use(cors({ origin, credentials: true }));
+
+  // Better Auth must be mounted before express.json()
+  app.all("/api/auth/*splat", toNodeHandler(auth));
+
   app.use(express.json({ limit: "50mb" }));
-  app.use(cookieParser());
-
-  // --- AUTH ROUTES ---
-
-  app.post("/api/auth/sign-up", async (req, res) => {
-    try {
-      const { email, password, name } = req.body;
-      if (!email || !password || !name) return res.status(400).json({ error: "Champs manquants" });
-
-      const existing = await prisma.user.findUnique({ where: { email } });
-      if (existing) return res.status(400).json({ error: "Cet email est déjà utilisé" });
-
-      const hashedPassword = crypto.createHash("sha256").update(password).digest("hex");
-      const user = await prisma.user.create({
-        data: {
-          email,
-          name,
-          emailVerified: true,
-          accounts: {
-            create: {
-              accountId: email,
-              providerId: "credential",
-              password: hashedPassword,
-            },
-          },
-        },
-      });
-
-      const token = crypto.randomUUID() + crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      await prisma.session.create({
-        data: { userId: user.id, token, expiresAt },
-      });
-
-      res.cookie("better-auth.session_token", token, sessionCookieOptions());
-      res.json({ id: user.id, name: user.name, email: user.email, image: user.image });
-    } catch (e: any) {
-      console.error("Sign-up error:", e);
-      res.status(500).json({ error: e.message || "Erreur serveur" });
-    }
-  });
-
-  app.post("/api/auth/sign-in", async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      if (!email || !password) return res.status(400).json({ error: "Champs manquants" });
-
-      const user = await prisma.user.findUnique({ where: { email }, include: { accounts: true } });
-      if (!user) return res.status(400).json({ error: "Email ou mot de passe incorrect" });
-
-      const hashedPassword = crypto.createHash("sha256").update(password).digest("hex");
-      const account = user.accounts.find((a: any) => a.password === hashedPassword);
-      if (!account) return res.status(400).json({ error: "Email ou mot de passe incorrect" });
-
-      const token = crypto.randomUUID() + crypto.randomUUID();
-      const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      await prisma.session.create({
-        data: { userId: user.id, token, expiresAt },
-      });
-
-      res.cookie("better-auth.session_token", token, sessionCookieOptions());
-      res.json({ id: user.id, name: user.name, email: user.email, image: user.image });
-    } catch (e: any) {
-      console.error("Sign-in error:", e);
-      res.status(500).json({ error: e.message || "Erreur serveur" });
-    }
-  });
-
-  app.post("/api/auth/sign-out", async (req, res) => {
-    const token = (req.cookies?.["better-auth.session_token"] as string) || undefined;
-    if (token) {
-      await prisma.session.deleteMany({ where: { token } });
-    }
-    res.clearCookie("better-auth.session_token");
-    res.json({ success: true });
-  });
-
-  app.get("/api/auth/me", async (req, res) => {
-    const user = await getSessionUser(req);
-    if (!user) return res.status(401).json(null);
-    res.json({ id: user.id, name: user.name, email: user.email, image: user.image });
-  });
-
-  app.put("/api/auth/user", requireAuth(async (req, res, user) => {
-    const { name } = req.body;
-    const updated = await prisma.user.update({
-      where: { id: user.id },
-      data: { name },
-    });
-    res.json({ id: updated.id, name: updated.name, email: updated.email, image: updated.image });
-  }));
-
-  app.put("/api/auth/password", requireAuth(async (req, res, user) => {
-    const { currentPassword, newPassword } = req.body;
-    const hashed = crypto.createHash("sha256").update(currentPassword).digest("hex");
-    const account = await prisma.account.findFirst({ where: { userId: user.id, password: hashed } });
-    if (!account) return res.status(400).json({ error: "Mot de passe actuel incorrect" });
-    const newHashed = crypto.createHash("sha256").update(newPassword).digest("hex");
-    await prisma.account.update({ where: { id: account.id }, data: { password: newHashed } });
-    res.json({ success: true });
-  }));
 
   // --- BOARD ROUTES ---
 
@@ -216,8 +106,9 @@ export function createApp() {
         create: { boardId, email, role: "editor" },
       });
       res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message || "Erreur lors de l'invitation" });
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Erreur lors de l'invitation";
+      res.status(500).json({ error: message });
     }
   }));
 
@@ -292,9 +183,10 @@ export function createApp() {
       });
       const data = await response.json();
       res.json(data);
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : "Liveblocks error";
       console.error("Liveblocks auth error:", e);
-      res.status(500).json({ error: e.message });
+      res.status(500).json({ error: message });
     }
   });
 
