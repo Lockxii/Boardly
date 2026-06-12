@@ -152,6 +152,12 @@ a[href*="liveblocks.io"] {
   padding-top: 20vh;
 }
 
+/* Canvas board — block trackpad swipe-back / overscroll on Mac */
+.board-canvas-root {
+  overscroll-behavior: none;
+  touch-action: none;
+}
+
 /* Smooth canvas transitions */
 .canvas-g {
   will-change: transform;

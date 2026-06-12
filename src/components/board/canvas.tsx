@@ -74,6 +74,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   const pastePointRef = React.useRef<{ x: number; y: number } | null>(null);
   const dropDepthRef = React.useRef(0);
   const dropPreviewCacheRef = React.useRef<Map<string, string>>(new Map());
+  const mainRef = React.useRef<HTMLElement>(null);
   const showPresentation = useCanvasStore((s) => s.showPresentation);
   const setShowPresentation = useCanvasStore((s) => s.setShowPresentation);
 
@@ -863,6 +864,41 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     };
   }, [setCamera]);
 
+  // Block Mac trackpad swipe-back when panning the canvas (horizontal wheel → browser history).
+  const handleBoardWheel = useCallback(
+    (e: WheelEvent) => {
+      e.preventDefault();
+      const cam = useCanvasStore.getState().camera;
+      if (e.ctrlKey || e.metaKey) {
+        const delta = -e.deltaY * 0.001;
+        setCamera({ ...cam, zoom: Math.min(Math.max(cam.zoom + delta, 0.1), 5) });
+      } else {
+        setCamera({ x: cam.x - e.deltaX, y: cam.y - e.deltaY, zoom: cam.zoom });
+      }
+    },
+    [setCamera],
+  );
+
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", handleBoardWheel, { passive: false });
+    return () => el.removeEventListener("wheel", handleBoardWheel);
+  }, [handleBoardWheel]);
+
+  useEffect(() => {
+    const html = document.documentElement;
+    const body = document.body;
+    const prevHtml = html.style.overscrollBehavior;
+    const prevBody = body.style.overscrollBehavior;
+    html.style.overscrollBehavior = "none";
+    body.style.overscrollBehavior = "none";
+    return () => {
+      html.style.overscrollBehavior = prevHtml;
+      body.style.overscrollBehavior = prevBody;
+    };
+  }, []);
+
   const bgClass =
     template === "blueprint"
       ? BLUEPRINT.canvasClass
@@ -876,7 +912,8 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
 
   return (
     <main
-      className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`}
+      ref={mainRef}
+      className={`board-canvas-root h-full w-full relative touch-none overflow-hidden overscroll-none ${bgClass}`}
       style={{ cursor: cursorStyle }}
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
@@ -925,17 +962,8 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
       <svg
         id="board-canvas"
-        className="w-[100vw] h-[100vh]"
+        className="w-[100vw] h-[100vh] overscroll-none"
         style={{ contain: "layout paint" }}
-        onWheel={(e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            const delta = -e.deltaY * 0.001;
-            setCamera({ ...camera, zoom: Math.min(Math.max(camera.zoom + delta, 0.1), 5) });
-          } else {
-            setCamera({ x: camera.x - e.deltaX, y: camera.y - e.deltaY, zoom: camera.zoom });
-          }
-        }}
         onPointerMove={onPointerMove}
         onPointerLeave={() => { syncCursor(null); setCursorPoint(null); }}
         onPointerDown={onPointerDown}
