@@ -1,10 +1,20 @@
 import { useCanvasStore } from "@/store/canvas-store";
-import { getLayerCenter } from "@/lib/canvas-utils";
-import { bezierConnectionPath } from "@/lib/motion-utils";
+import {
+  buildConnectionPath,
+  getConnectionEndpoints,
+  getConnectionStyle,
+  getStrokeDasharray,
+  markerUrl,
+} from "@/lib/connection-utils";
 
-export function ConnectionsLayer() {
+type ConnectionsLayerProps = {
+  onConnectionPointerDown: (e: React.PointerEvent, connectionId: string) => void;
+};
+
+export function ConnectionsLayer({ onConnectionPointerDown }: ConnectionsLayerProps) {
   const connections = useCanvasStore((s) => s.connections);
   const layers = useCanvasStore((s) => s.layers);
+  const selectedConnectionId = useCanvasStore((s) => s.selectedConnectionId);
 
   if (connections.length === 0) return null;
 
@@ -14,20 +24,37 @@ export function ConnectionsLayer() {
         const from = layers[connection.fromId];
         const to = layers[connection.toId];
         if (!from || !to) return null;
-        const a = getLayerCenter(from);
-        const b = getLayerCenter(to);
-        const path = bezierConnectionPath(a, b);
+
+        const { start, end } = getConnectionEndpoints(from, to);
+        const style = getConnectionStyle(connection);
+        const path = buildConnectionPath(start, end, style.routing);
+        const dash = getStrokeDasharray(style.lineStyle);
+        const selected = selectedConnectionId === connection.id;
+        const stroke = selected ? "#2563EB" : style.stroke;
+
         return (
-          <g key={connection.id}>
+          <g key={connection.id} className="pointer-events-auto">
             <path
               d={path}
               fill="none"
-              stroke={connection.stroke || "#64748B"}
-              strokeWidth={connection.strokeWidth || 2}
-              strokeLinecap="round"
-              className="connection-path"
+              stroke="transparent"
+              strokeWidth={14}
+              className="cursor-pointer"
+              onPointerDown={(e) => onConnectionPointerDown(e, connection.id)}
             />
-            <circle cx={b.x} cy={b.y} r={4} fill={connection.stroke || "#64748B"} />
+            <path
+              d={path}
+              fill="none"
+              stroke={stroke}
+              strokeWidth={style.strokeWidth}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeDasharray={dash}
+              markerStart={markerUrl(style.arrowStart, "start")}
+              markerEnd={markerUrl(style.arrowEnd, "end")}
+              className={style.lineStyle === "solid" ? undefined : "connection-path-animated"}
+              pointerEvents="none"
+            />
           </g>
         );
       })}

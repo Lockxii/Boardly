@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { nanoid } from "nanoid";
 import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData, BoardConnection, CanvasVersion, LayerComment, LayerReaction, TrashEntry, LinkPreview } from "@/lib/types";
 import { getLinkLayerDimensions, getLinkLayerHeightFromLayer } from "@/lib/brand-icons";
+import { DEFAULT_CONNECTION_STYLE, type ConnectionStyle } from "@/lib/connection-utils";
 import { apiFetch } from "@/lib/utils";
 import { generateBoardThumbnail } from "@/lib/board-thumbnail";
 import {
@@ -57,7 +58,12 @@ interface CanvasStore {
   // Connector tool
   connectFromId: string | null;
   setConnectFromId: (id: string | null) => void;
+  selectedConnectionId: string | null;
+  setSelectedConnectionId: (id: string | null) => void;
+  connectionDefaults: ConnectionStyle;
+  setConnectionDefaults: (style: Partial<ConnectionStyle>) => void;
   addConnection: (fromId: string, toId: string) => void;
+  updateConnection: (id: string, updates: Partial<BoardConnection>) => void;
   removeConnection: (id: string) => void;
 
   // Layout
@@ -225,7 +231,11 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }),
 
   connectFromId: null,
-  setConnectFromId: (connectFromId) => set({ connectFromId }),
+  setConnectFromId: (connectFromId) => set({ connectFromId, selectedConnectionId: connectFromId ? null : get().selectedConnectionId }),
+  selectedConnectionId: null,
+  setSelectedConnectionId: (selectedConnectionId) => set({ selectedConnectionId, selection: selectedConnectionId ? [] : get().selection }),
+  connectionDefaults: { ...DEFAULT_CONNECTION_STYLE },
+  setConnectionDefaults: (style) => set((s) => ({ connectionDefaults: { ...s.connectionDefaults, ...style } })),
 
   // Presence
   selection: [],
@@ -265,7 +275,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   }),
 
   // Selection & cursor
-  setSelection: (ids) => set({ selection: ids }),
+  setSelection: (ids) => set({ selection: ids, selectedConnectionId: ids.length > 0 ? null : get().selectedConnectionId }),
   setCursor: (cursor) => set({ cursor }),
 
   // History — dual-stack undo/redo. pushHistory() saves the PRE-mutation state.
@@ -648,20 +658,45 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       return;
     }
     get().pushHistory();
+    const defaults = get().connectionDefaults;
     set((s) => ({
       connections: [
         ...s.connections,
-        { id: nanoid(), fromId, toId, stroke: "#64748B", strokeWidth: 2 },
+        {
+          id: nanoid(),
+          fromId,
+          toId,
+          stroke: defaults.stroke,
+          strokeWidth: defaults.strokeWidth,
+          lineStyle: defaults.lineStyle,
+          arrowStart: defaults.arrowStart,
+          arrowEnd: defaults.arrowEnd,
+          routing: defaults.routing,
+        },
       ],
       connectFromId: null,
+      selectedConnectionId: null,
       canvasState: { mode: "none" },
     }));
     get().addAuditEntry("created", "Connecteur");
   },
 
+  updateConnection: (id, updates) => {
+    set((s) => {
+      const connection = s.connections.find((c) => c.id === id);
+      if (!connection) return s;
+      return {
+        connections: s.connections.map((c) => (c.id === id ? { ...c, ...updates } : c)),
+      };
+    });
+  },
+
   removeConnection: (id) => {
     get().pushHistory();
-    set((s) => ({ connections: s.connections.filter((c) => c.id !== id) }));
+    set((s) => ({
+      connections: s.connections.filter((c) => c.id !== id),
+      selectedConnectionId: s.selectedConnectionId === id ? null : s.selectedConnectionId,
+    }));
   },
 
   alignSelection: (align) => {
@@ -789,6 +824,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       canRedo: false,
       selection: [],
       connectFromId: null,
+      selectedConnectionId: null,
       saveStatus: "idle",
       lastSavedAt: null,
     }),
@@ -812,6 +848,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         canRedo: false,
         selection: [],
         connectFromId: null,
+        selectedConnectionId: null,
       });
     };
 

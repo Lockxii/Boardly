@@ -1,6 +1,5 @@
 import { useCanvasStore } from "@/store/canvas-store";
-import { getLayerCenter } from "@/lib/canvas-utils";
-import { bezierConnectionPath } from "@/lib/motion-utils";
+import { buildConnectionPath, getConnectionEndpoints, getConnectionStyle, getStrokeDasharray, getLayerEdgePoint, markerUrl } from "@/lib/connection-utils";
 import type { Layer } from "@/lib/types";
 
 type CanvasOverlayProps = {
@@ -49,19 +48,35 @@ export function CanvasOverlay({ translateGhost, cursorPoint }: CanvasOverlayProp
         </>
       )}
 
-      {connectFromId && cursorPoint && layers[connectFromId] && (
-        <g>
-          <path
-            d={bezierConnectionPath(getLayerCenter(layers[connectFromId]), cursorPoint)}
-            fill="none"
-            stroke="#2563EB"
-            strokeWidth={2}
-            strokeDasharray="6 4"
-            className="connect-preview-path"
-          />
-          <circle cx={cursorPoint.x} cy={cursorPoint.y} r={5} fill="#2563EB" opacity={0.6} />
-        </g>
-      )}
+      {connectFromId && cursorPoint && layers[connectFromId] && (() => {
+        const from = layers[connectFromId];
+        const hover = connectHoverId ? layers[connectHoverId] : null;
+        const defaults = useCanvasStore.getState().connectionDefaults;
+        const start = hover && connectHoverId !== connectFromId
+          ? getConnectionEndpoints(from, hover).start
+          : getLayerEdgePoint(from, cursorPoint);
+        const endPoint = hover && connectHoverId !== connectFromId
+          ? getConnectionEndpoints(from, hover).end
+          : cursorPoint;
+        const path = buildConnectionPath(start, endPoint, defaults.routing);
+        const dash = getStrokeDasharray(defaults.lineStyle);
+        return (
+          <g>
+            <path
+              d={path}
+              fill="none"
+              stroke="#2563EB"
+              strokeWidth={defaults.strokeWidth}
+              strokeDasharray={dash}
+              strokeLinecap="round"
+              markerStart={markerUrl(defaults.arrowStart, "start")}
+              markerEnd={markerUrl(defaults.arrowEnd, "end")}
+              className="connect-preview-path"
+            />
+            {!hover && <circle cx={cursorPoint.x} cy={cursorPoint.y} r={5} fill="#2563EB" opacity={0.6} />}
+          </g>
+        );
+      })()}
 
       {connectHoverId && connectFromId && layers[connectHoverId] && connectHoverId !== connectFromId && (
         <rect

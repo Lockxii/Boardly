@@ -13,6 +13,7 @@ import { CommandPalette } from "./command-palette";
 import { StatusBar } from "./status-bar";
 import { ShortcutsHelp } from "./shortcuts-help";
 import { ConnectionsLayer } from "./connections-layer";
+import { ConnectionTools } from "./connection-tools";
 import { CursorsPresence } from "./cursors-presence";
 import { BoardSearchDialog } from "./board-search-dialog";
 import { LayerCommentsPanel } from "./layer-comments-panel";
@@ -537,6 +538,8 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       return;
     }
 
+    state.setSelectedConnectionId(null);
+
     if (!state.selection.includes(layerId)) {
       setSelection([layerId]);
     }
@@ -545,6 +548,15 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     captureTranslateGhost();
     setCanvasState({ mode: "translating", current: point });
   }, [camera, setSelection, setCanvasState, captureTranslateGhost]);
+
+  const onConnectionPointerDown = useCallback((e: React.PointerEvent, connectionId: string) => {
+    e.stopPropagation();
+    const state = useCanvasStore.getState();
+    state.setSelectedConnectionId(connectionId);
+    state.setConnectFromId(null);
+    state.setConnectHoverId(null);
+    setCanvasState({ mode: "none" });
+  }, [setCanvasState]);
 
   const onResizeHandlePointerDown = useCallback((e: React.PointerEvent, initialBounds: any) => {
     e.stopPropagation();
@@ -591,6 +603,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         setPasteGhostKind(null);
         clearTranslateGhost();
         useCanvasStore.getState().closeCommentsPanel();
+        useCanvasStore.getState().setSelectedConnectionId(null);
         setCanvasState({ mode: "none" });
         setSelection([]);
         return;
@@ -624,7 +637,13 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         case "h": setCanvasState({ mode: "panning" }); break;
         case "l": setCanvasState({ mode: "inserting", layerType: "Line" }); break;
         case "F": if (e.shiftKey) setCanvasState({ mode: "inserting", layerType: "Frame" }); break;
-        case "Delete": case "Backspace": store.deleteLayers(); break;
+        case "Delete": case "Backspace":
+          if (store.selectedConnectionId) {
+            store.removeConnection(store.selectedConnectionId);
+          } else {
+            store.deleteLayers();
+          }
+          break;
         case "d": if (e.ctrlKey || e.metaKey) { e.preventDefault(); store.duplicateLayers(); } break;
         case "z": if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); } break;
         case "v": if (!e.ctrlKey && !e.metaKey) setCanvasState({ mode: "none" }); break;
@@ -741,6 +760,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       <Navbar title={title} boardId={boardId} isPublic={isPublic} readOnly={readOnly} />
       {!readOnly && <Toolbar />}
       {!readOnly && <PencilToolbar />}
+      {!readOnly && <ConnectionTools />}
       {!readOnly && <SelectionTools camera={camera} />}
       <ZoomControls />
       {!readOnly && <BrushPreview />}
@@ -780,6 +800,18 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
           <pattern id="blueprint-pattern-major" width="80" height="80" patternUnits="userSpaceOnUse">
             <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#A8C8E8" strokeWidth="1" className="dark:stroke-slate-500" />
           </pattern>
+          <marker id="conn-arrow-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 0 0 L 10 5 L 0 10 Z" fill="context-stroke" />
+          </marker>
+          <marker id="conn-arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+            <path d="M 10 0 L 0 5 L 10 10 Z" fill="context-stroke" />
+          </marker>
+          <marker id="conn-dot-end" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <circle cx="5" cy="5" r="3.5" fill="context-stroke" />
+          </marker>
+          <marker id="conn-dot-start" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
+            <circle cx="5" cy="5" r="3.5" fill="context-stroke" />
+          </marker>
         </defs>
         <g className="canvas-g" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})`, transformOrigin: "0 0" }}>
           {showGrid && template === "grid" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid-pattern)" />}
@@ -789,6 +821,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
               <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#blueprint-pattern-major)" />
             </>
           )}
+          <ConnectionsLayer onConnectionPointerDown={onConnectionPointerDown} />
           <CanvasLayers
             camera={camera}
             onLayerPointerDown={onLayerPointerDown}
@@ -796,7 +829,6 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
             onLayerRotatePointerDown={onLayerRotatePointerDown}
             onChange={(id, val) => updateLayerText(id, val)}
           />
-          <ConnectionsLayer />
           <CanvasOverlay translateGhost={translateGhost} cursorPoint={cursorPoint} />
         </g>
       </svg>

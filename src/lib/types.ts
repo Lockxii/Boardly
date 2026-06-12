@@ -40,12 +40,20 @@ export type TrashEntry = {
   layers: Record<string, Layer>;
 };
 
+export type ConnectionLineStyle = "solid" | "dashed" | "dotted";
+export type ConnectionMarker = "none" | "arrow" | "dot";
+export type ConnectionRouting = "bezier" | "straight";
+
 export type BoardConnection = {
   id: string;
   fromId: string;
   toId: string;
   stroke?: string;
   strokeWidth?: number;
+  lineStyle?: ConnectionLineStyle;
+  arrowStart?: ConnectionMarker;
+  arrowEnd?: ConnectionMarker;
+  routing?: ConnectionRouting;
 };
 
 export type CanvasVersion = {
