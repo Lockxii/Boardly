@@ -13,6 +13,7 @@ interface LayerPreviewProps {
   onLayerRotatePointerDown: (e: React.PointerEvent, layerId: string) => void;
   onChange: (newValue: string) => void;
   selectionColor?: string;
+  highlighted?: boolean;
 }
 
 const fontMap: Record<string, string> = {
@@ -35,7 +36,7 @@ function getSvgPathFromPoints(points: number[][]) {
   return d;
 }
 
-export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResizePointerDown, onLayerRotatePointerDown, onChange, selectionColor }: LayerPreviewProps) => {
+export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResizePointerDown, onLayerRotatePointerDown, onChange, selectionColor, highlighted }: LayerPreviewProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const editableRef = useRef<HTMLDivElement>(null);
   const layerComments = useCanvasStore((s) => s.layerComments[id]?.length ?? 0);
@@ -114,10 +115,12 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
     <g
       onPointerDown={(e) => onLayerPointerDown(e, id)}
       onDoubleClick={handleDoubleClick}
+      className={highlighted ? "layer-flash" : undefined}
       style={{
         transform: `translate(${layer.x}px, ${layer.y}px) rotate(${rotation}deg)`,
         transformOrigin: `${layer.width / 2}px ${layer.height / 2}px`,
         cursor: isLocked ? "default" : "move",
+        willChange: "transform",
       }}
     >
       {layer.type === "Path" && (

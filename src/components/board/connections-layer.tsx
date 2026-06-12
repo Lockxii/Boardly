@@ -1,5 +1,6 @@
 import { useCanvasStore } from "@/store/canvas-store";
 import { getLayerCenter } from "@/lib/canvas-utils";
+import { bezierConnectionPath } from "@/lib/motion-utils";
 
 export function ConnectionsLayer() {
   const connections = useCanvasStore((s) => s.connections);
@@ -15,8 +16,7 @@ export function ConnectionsLayer() {
         if (!from || !to) return null;
         const a = getLayerCenter(from);
         const b = getLayerCenter(to);
-        const midX = (a.x + b.x) / 2;
-        const path = `M ${a.x} ${a.y} C ${midX} ${a.y}, ${midX} ${b.y}, ${b.x} ${b.y}`;
+        const path = bezierConnectionPath(a, b);
         return (
           <g key={connection.id}>
             <path
@@ -25,6 +25,7 @@ export function ConnectionsLayer() {
               stroke={connection.stroke || "#64748B"}
               strokeWidth={connection.strokeWidth || 2}
               strokeLinecap="round"
+              className="connection-path"
             />
             <circle cx={b.x} cy={b.y} r={4} fill={connection.stroke || "#64748B"} />
           </g>

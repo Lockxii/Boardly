@@ -1,4 +1,5 @@
 import { memo, useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2, AlignLeft, AlignCenter, AlignRight,
   AlignVerticalJustifyCenter, AlignVerticalJustifyStart, AlignVerticalJustifyEnd,
@@ -204,12 +205,18 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
     });
   }, []);
 
-  if (!selection || selection.length === 0) return null;
-
   const preventFocusLoss = (e: React.MouseEvent) => e.preventDefault();
 
   return (
-    <div className="absolute top-22 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-1 p-1 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto overflow-hidden no-scrollbar transition-all z-50" onMouseDown={preventFocusLoss}>
+    <AnimatePresence>
+      {selection && selection.length > 0 && (
+    <motion.div
+      key="selection-tools"
+      initial={{ opacity: 0, y: -8, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: -8, scale: 0.96 }}
+      transition={{ type: "spring", stiffness: 420, damping: 28 }}
+      className="absolute top-22 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-1 p-1 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto overflow-hidden no-scrollbar transition-all z-50" onMouseDown={preventFocusLoss}>
       <div className="px-1 cursor-grab text-neutral-300 dark:text-neutral-600"><GripVertical className="h-4 w-4" /></div>
 
       {!isLocked && (
@@ -412,7 +419,9 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
           <Trash2 className="h-4 w-4" />
         </Button>
       </div>
-    </div>
+    </motion.div>
+      )}
+    </AnimatePresence>
   );
 });
 

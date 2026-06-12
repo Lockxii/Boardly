@@ -34,6 +34,14 @@ interface CanvasStore {
   showSearch: boolean;
   setShowSearch: (show: boolean) => void;
 
+  highlightedLayerIds: string[];
+  flashRevision: number;
+  connectHoverId: string | null;
+  dropTargetColumnId: string | null;
+  flashLayers: (ids: string[]) => void;
+  setConnectHoverId: (id: string | null) => void;
+  setDropTargetColumnId: (id: string | null) => void;
+
   // Save state
   saveStatus: "idle" | "saving" | "saved" | "error";
   lastSavedAt: number | null;
@@ -175,6 +183,20 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   showSearch: false,
   setShowSearch: (showSearch) => set({ showSearch }),
 
+  highlightedLayerIds: [],
+  flashRevision: 0,
+  connectHoverId: null,
+  dropTargetColumnId: null,
+  flashLayers: (ids) => {
+    const token = get().flashRevision + 1;
+    set({ highlightedLayerIds: ids, flashRevision: token });
+    window.setTimeout(() => {
+      if (get().flashRevision === token) set({ highlightedLayerIds: [] });
+    }, 900);
+  },
+  setConnectHoverId: (connectHoverId) => set({ connectHoverId }),
+  setDropTargetColumnId: (dropTargetColumnId) => set({ dropTargetColumnId }),
+
   saveStatus: "idle",
   lastSavedAt: null,
   setSaveStatus: (saveStatus, at) =>
@@ -263,6 +285,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       canUndo: newUndoStack.length > 0,
       canRedo: true,
     });
+    get().flashLayers(restored.selection);
   },
 
   redo: () => {
@@ -281,6 +304,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       canUndo: true,
       canRedo: newRedoStack.length > 0,
     });
+    get().flashLayers(restored.selection);
   },
 
   // Layer mutations
@@ -706,6 +730,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       brandColors: ["#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"],
       readOnly: false,
       showSearch: false,
+      highlightedLayerIds: [],
+      flashRevision: 0,
+      connectHoverId: null,
+      dropTargetColumnId: null,
       undoStack: [],
       redoStack: [],
       canUndo: false,

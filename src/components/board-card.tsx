@@ -1,5 +1,7 @@
+import { useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { Clock, Trash2, Users, Copy } from "lucide-react";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { TemplatePreview, getTemplateLabel } from "@/components/template-preview";
 import { BoardMetaDialog } from "@/components/board-meta-dialog";
@@ -13,21 +15,34 @@ type BoardCardProps = {
 
 export function BoardCard({ board, onDelete, onDuplicate }: BoardCardProps) {
   const isOwner = board.isOwner !== false;
+  const [hovered, setHovered] = useState(false);
 
   return (
-    <Link to="/board/$boardId" params={{ boardId: board.id }} className="group relative block">
+    <Link
+      to="/board/$boardId"
+      params={{ boardId: board.id }}
+      className="group relative block"
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+    >
       <article className="overflow-hidden rounded-2xl border border-neutral-200/80 dark:border-neutral-800 bg-white dark:bg-neutral-900 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-black/[0.06]">
         <div className="relative aspect-[16/10] overflow-hidden border-b border-neutral-200/80 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-950">
-          {board.thumbnail ? (
-            <img
-              src={board.thumbnail}
-              alt=""
-              className="h-full w-full object-cover"
-              loading="lazy"
-            />
-          ) : (
-            <TemplatePreview template={board.template} className="h-full w-full rounded-none border-0" />
-          )}
+          <motion.div
+            className="h-full w-full origin-center"
+            animate={{ scale: hovered ? 1.06 : 1 }}
+            transition={{ type: "spring", stiffness: 260, damping: 22 }}
+          >
+            {board.thumbnail ? (
+              <img
+                src={board.thumbnail}
+                alt=""
+                className="h-full w-full object-cover"
+                loading="lazy"
+              />
+            ) : (
+              <TemplatePreview template={board.template} className="h-full w-full rounded-none border-0" />
+            )}
+          </motion.div>
           {!isOwner && (
             <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-white/90 dark:bg-neutral-900/90 px-2.5 py-1 text-[11px] font-semibold text-blue-700 dark:text-blue-300 shadow-sm">
               <Users className="h-3 w-3" />

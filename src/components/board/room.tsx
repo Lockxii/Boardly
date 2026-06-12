@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Canvas } from "./canvas";
 import { useCanvasStore } from "@/store/canvas-store";
 import { RouteLoading } from "@/components/route-loading";
@@ -74,8 +75,17 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
         if (!remote.canvasData?.layerIds?.length) return;
         if (state.lastSavedAt && updatedAt <= state.lastSavedAt + 2000) return;
 
+        const prevLayers = state.layers;
+        const nextLayers = remote.canvasData.layers;
+        const changedIds = remote.canvasData.layerIds.filter((id) => {
+          const before = prevLayers[id];
+          const after = nextLayers[id];
+          if (!before || !after) return !!after;
+          return before.x !== after.x || before.y !== after.y || before.value !== after.value || before.fill !== after.fill;
+        }).slice(0, 10);
+
         useCanvasStore.setState({
-          layers: remote.canvasData.layers,
+          layers: nextLayers,
           layerIds: remote.canvasData.layerIds,
           connections: remote.canvasData.connections || [],
           versions: remote.canvasData.versions || [],
@@ -84,6 +94,11 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
           brandColors: remote.canvasData.brandColors || useCanvasStore.getState().brandColors,
           selection: [],
         });
+
+        if (changedIds.length > 0) {
+          useCanvasStore.getState().flashLayers(changedIds);
+          toast.message("Le board a été mis à jour");
+        }
       } catch {}
     };
 

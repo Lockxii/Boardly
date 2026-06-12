@@ -1,7 +1,6 @@
 import { useCanvasStore } from "@/store/canvas-store";
 import { pointerEventToCanvasPoint } from "@/lib/utils";
 import { nanoid } from "nanoid";
-import { LayerPreview } from "./layer-preview";
 import { Toolbar } from "./toolbar";
 import { PencilToolbar } from "./pencil-toolbar";
 import { BrushPreview } from "./brush-preview";
@@ -17,11 +16,15 @@ import { ConnectionsLayer } from "./connections-layer";
 import { CursorsPresence } from "./cursors-presence";
 import { BoardSearchDialog } from "./board-search-dialog";
 import { LayerCommentsPanel } from "./layer-comments-panel";
+import { CanvasLayers } from "./canvas-layers";
+import { CanvasOverlay } from "./canvas-overlay";
+import { PasteGhost } from "./paste-ghost";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/utils";
 import type { Layer, LayerType, LinkPreview } from "@/lib/types";
 import { BLUEPRINT } from "@/lib/template-styles";
 import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
+import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
 
 export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
@@ -38,7 +41,13 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
 
   const pencilDraft = React.useRef<string | null>(null);
   const clipboardRef = React.useRef<Layer[]>([]);
+  const translateGhostRef = React.useRef<Record<string, Layer> | null>(null);
+  const lastCursorSyncRef = React.useRef(0);
+  const panVelocityRef = React.useRef({ x: 0, y: 0 });
   const [showShortcuts, setShowShortcuts] = useState(false);
+  const [translateGhost, setTranslateGhost] = useState<Record<string, Layer> | null>(null);
+  const [cursorPoint, setCursorPoint] = useState<{ x: number; y: number } | null>(null);
+  const [pasteGhostKind, setPasteGhostKind] = useState<"layer" | null>(null);
 
   useEffect(() => {
     setReadOnly(readOnly);
@@ -57,7 +66,43 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     return map;
   }, [layers]);
 
-  // Copy
+  const syncCursor = useCallback((point: { x: number; y: number } | null) => {
+    const now = Date.now();
+    if (point && now - lastCursorSyncRef.current < 120) return;
+    lastCursorSyncRef.current = now;
+    setCursor(point);
+  }, [setCursor]);
+
+  const collectMovingLayerIds = useCallback((state: ReturnType<typeof useCanvasStore.getState>) => {
+    const moving = new Set(state.selection);
+    for (const id of state.selection) {
+      const g = state.layers[id]?.groupId;
+      if (!g) continue;
+      for (const [lid, layer] of Object.entries(state.layers)) {
+        if (layer.groupId === g) moving.add(lid);
+      }
+    }
+    return moving;
+  }, []);
+
+  const captureTranslateGhost = useCallback(() => {
+    const state = useCanvasStore.getState();
+    const moving = collectMovingLayerIds(state);
+    const ghost: Record<string, Layer> = {};
+    for (const id of moving) {
+      const layer = state.layers[id];
+      if (layer) ghost[id] = { ...layer };
+    }
+    translateGhostRef.current = ghost;
+    setTranslateGhost(ghost);
+  }, [collectMovingLayerIds]);
+
+  const clearTranslateGhost = useCallback(() => {
+    translateGhostRef.current = null;
+    setTranslateGhost(null);
+    useCanvasStore.getState().setDropTargetColumnId(null);
+  }, []);
+
   const copyLayers = useCallback(() => {
     const copied: Layer[] = [];
     for (const id of selection) {
@@ -65,7 +110,10 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       if (layer) copied.push({ ...layer });
     }
     clipboardRef.current = copied;
-    if (copied.length > 0) toast.success(`${copied.length} élément${copied.length > 1 ? "s" : ""} copié${copied.length > 1 ? "s" : ""}`);
+    if (copied.length > 0) {
+      setPasteGhostKind("layer");
+      toast.success(`${copied.length} élément${copied.length > 1 ? "s" : ""} copié${copied.length > 1 ? "s" : ""}`);
+    }
   }, [selection, layers]);
 
   const insertImageAt = useCallback(async (file: File, point?: { x: number; y: number }) => {
@@ -102,6 +150,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       newSelection.push(id);
     }
     setSelection(newSelection);
+    setPasteGhostKind(null);
     toast.success(`${clipboardRef.current.length} élément${clipboardRef.current.length > 1 ? "s" : ""} collé${clipboardRef.current.length > 1 ? "s" : ""}`);
   }, [camera, setSelection]);
 
@@ -309,14 +358,43 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     const current = pointerEventToCanvasPoint(e, camera);
-    setCursor(current);
+    syncCursor(current);
+    setCursorPoint(current);
     const state = useCanvasStore.getState();
-    if (state.canvasState.mode === "translating") translateSelectedLayers(current);
-    else if (state.canvasState.mode === "resizing") resizeSelectedLayer(current, e.shiftKey);
+
+    if (state.connectFromId) {
+      let hover: string | null = null;
+      for (let i = state.layerIds.length - 1; i >= 0; i--) {
+        const id = state.layerIds[i];
+        const layer = state.layers[id];
+        if (layer && id !== state.connectFromId && pointInLayer(current, layer)) {
+          hover = id;
+          break;
+        }
+      }
+      state.setConnectHoverId(hover);
+    }
+
+    if (state.canvasState.mode === "translating") {
+      translateSelectedLayers(current);
+      const hasNote = state.selection.some((id) => state.layers[id]?.type === "Note");
+      if (hasNote) {
+        state.setDropTargetColumnId(findColumnAtPoint(state.layers, state.layerIds, current));
+      }
+    } else if (state.canvasState.mode === "resizing") resizeSelectedLayer(current, e.shiftKey);
     else if (state.canvasState.mode === "rotating") rotateSelectedLayer(current);
     else if (state.canvasState.mode === "panning" && state.canvasState.start && state.canvasState.camStart) {
       const { start, camStart } = state.canvasState;
-      setCamera({ x: camStart.x + (e.clientX - start.x), y: camStart.y + (e.clientY - start.y), zoom: camera.zoom });
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      panVelocityRef.current = { x: dx * 0.08, y: dy * 0.08 };
+      const rawX = camStart.x + dx;
+      const rawY = camStart.y + dy;
+      setCamera({
+        x: rubberBand(rawX, -8000, 8000),
+        y: rubberBand(rawY, -8000, 8000),
+        zoom: camera.zoom,
+      });
     }
     else if (state.canvasState.mode === "selectionNet") setCanvasState({ mode: "selectionNet", origin: state.canvasState.origin, current });
     else if (state.canvasState.mode === "inserting" && state.canvasState.origin) setCanvasState({ ...state.canvasState, current });
@@ -324,7 +402,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       if (pencilTool === "draw") continueDrawing(current, e);
       else if (pencilTool === "erase" && e.buttons === 1) eraser(current);
     }
-  }, [camera, setCursor, setCanvasState, pencilTool, translateSelectedLayers, resizeSelectedLayer, rotateSelectedLayer, continueDrawing, eraser]);
+  }, [camera, syncCursor, setCanvasState, pencilTool, translateSelectedLayers, resizeSelectedLayer, rotateSelectedLayer, continueDrawing, eraser, setCamera]);
 
   const onPointerDown = useCallback((e: React.PointerEvent) => {
     const point = pointerEventToCanvasPoint(e, camera);
@@ -357,6 +435,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         const layer = state.layers[state.selection[0]];
         if (layer) addAuditEntry("modified", layer.type);
       }
+      clearTranslateGhost();
       setCanvasState({ mode: "none" });
     } else if (state.canvasState.mode === "panning") {
       setCanvasState({ mode: "panning" });
@@ -402,6 +481,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         return;
       }
       state.addConnection(state.connectFromId, layerId);
+      state.setConnectHoverId(null);
       toast.success("Éléments reliés");
       return;
     }
@@ -411,8 +491,9 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     }
     // Save pre-mutation state BEFORE translate
     state.pushHistory();
+    captureTranslateGhost();
     setCanvasState({ mode: "translating", current: point });
-  }, [camera, setSelection, setCanvasState]);
+  }, [camera, setSelection, setCanvasState, captureTranslateGhost]);
 
   const onResizeHandlePointerDown = useCallback((e: React.PointerEvent, initialBounds: any) => {
     e.stopPropagation();
@@ -455,6 +536,9 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         if (useCanvasStore.getState().showCommandPalette) { useCanvasStore.getState().setShowCommandPalette(false); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
         useCanvasStore.getState().setConnectFromId(null);
+        useCanvasStore.getState().setConnectHoverId(null);
+        setPasteGhostKind(null);
+        clearTranslateGhost();
         setCanvasState({ mode: "none" });
         setSelection([]);
         return;
@@ -524,10 +608,13 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [camera, setCamera, setCanvasState, setSelection, showShortcuts, layers, layerIds, copyLayers, pasteLayers, undo, redo, insertLayer]);
 
-  // Space to pan
+  // Space to pan with momentum
   useEffect(() => {
     let spaceDown = false;
     let startX = 0, startY = 0, startCamX = 0, startCamY = 0;
+    let lastX = 0, lastY = 0;
+    let momentumRaf = 0;
+
     function onKeyDown(e: KeyboardEvent) {
       if (e.key === " " && !e.repeat) {
         const ae = document.activeElement as HTMLElement;
@@ -538,7 +625,9 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     function onKeyUp(e: KeyboardEvent) { if (e.key === " ") { spaceDown = false; document.body.style.cursor = ""; } }
     function onMouseDown(e: MouseEvent) {
       if (!spaceDown) return;
+      cancelAnimationFrame(momentumRaf);
       startX = e.clientX; startY = e.clientY;
+      lastX = e.clientX; lastY = e.clientY;
       const cam = useCanvasStore.getState().camera;
       startCamX = cam.x; startCamY = cam.y;
       document.body.style.cursor = "grabbing";
@@ -546,15 +635,34 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     function onMouseMove(e: MouseEvent) {
       if (!spaceDown || startX === 0) return;
       const cam = useCanvasStore.getState().camera;
+      panVelocityRef.current = { x: (e.clientX - lastX) * 0.65, y: (e.clientY - lastY) * 0.65 };
+      lastX = e.clientX; lastY = e.clientY;
       setCamera({ x: startCamX + (e.clientX - startX), y: startCamY + (e.clientY - startY), zoom: cam.zoom });
     }
-    function onMouseUp() { if (spaceDown) document.body.style.cursor = "grab"; startX = 0; }
+    function onMouseUp() {
+      if (spaceDown) document.body.style.cursor = "grab";
+      if (startX !== 0) {
+        let vx = panVelocityRef.current.x;
+        let vy = panVelocityRef.current.y;
+        const glide = () => {
+          if (Math.abs(vx) < 0.35 && Math.abs(vy) < 0.35) return;
+          const cam = useCanvasStore.getState().camera;
+          setCamera({ x: cam.x + vx, y: cam.y + vy, zoom: cam.zoom });
+          vx *= 0.9;
+          vy *= 0.9;
+          momentumRaf = requestAnimationFrame(glide);
+        };
+        momentumRaf = requestAnimationFrame(glide);
+      }
+      startX = 0;
+    }
     window.addEventListener("keydown", onKeyDown);
     window.addEventListener("keyup", onKeyUp);
     window.addEventListener("mousedown", onMouseDown);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
     return () => {
+      cancelAnimationFrame(momentumRaf);
       window.removeEventListener("keydown", onKeyDown);
       window.removeEventListener("keyup", onKeyUp);
       window.removeEventListener("mousedown", onMouseDown);
@@ -586,6 +694,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       {!readOnly && showCommandPalette && <CommandPalette />}
       <BoardSearchDialog />
       {!readOnly && <LayerCommentsPanel />}
+      {!readOnly && pasteGhostKind && <PasteGhost kind="layer" label="Éléments copiés — Ctrl+V pour coller" />}
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <StatusBar />
       {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
@@ -603,7 +712,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
           }
         }}
         onPointerMove={onPointerMove}
-        onPointerLeave={() => setCursor(null)}
+        onPointerLeave={() => { syncCursor(null); setCursorPoint(null); }}
         onPointerDown={onPointerDown}
         onPointerUp={onPointerUp}
       >
@@ -618,7 +727,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
             <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#A8C8E8" strokeWidth="1" className="dark:stroke-slate-500" />
           </pattern>
         </defs>
-        <g className="canvas-g" style={{ transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})` }}>
+        <g className="canvas-g" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})`, transformOrigin: "0 0" }}>
           {showGrid && template === "grid" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid-pattern)" />}
           {showGrid && template === "blueprint" && (
             <>
@@ -626,35 +735,15 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
               <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#blueprint-pattern-major)" />
             </>
           )}
-          {layerIds.map((id: string) => (
-            <LayerPreview
-              key={id}
-              id={id}
-              layer={layers[id]}
-              onLayerPointerDown={onLayerPointerDown}
-              onLayerResizePointerDown={onResizeHandlePointerDown}
-              onLayerRotatePointerDown={onLayerRotatePointerDown}
-              onChange={(val: string) => updateLayerText(id, val)}
-              selectionColor={selection.includes(id) ? "#3b82f6" : undefined}
-            />
-          ))}
+          <CanvasLayers
+            camera={camera}
+            onLayerPointerDown={onLayerPointerDown}
+            onLayerResizePointerDown={onResizeHandlePointerDown}
+            onLayerRotatePointerDown={onLayerRotatePointerDown}
+            onChange={(id, val) => updateLayerText(id, val)}
+          />
           <ConnectionsLayer />
-          {canvasState.mode === "selectionNet" && canvasState.current && (
-            <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" x={Math.min(canvasState.origin.x, canvasState.current.x)} y={Math.min(canvasState.origin.y, canvasState.current.y)} width={Math.abs(canvasState.origin.x - canvasState.current.x)} height={Math.abs(canvasState.origin.y - canvasState.current.y)} />
-          )}
-          {canvasState.mode === "inserting" && canvasState.origin && canvasState.current && (() => {
-            const x = Math.min(canvasState.origin.x, canvasState.current.x);
-            const y = Math.min(canvasState.origin.y, canvasState.current.y);
-            const w = Math.abs(canvasState.origin.x - canvasState.current.x);
-            const h = Math.abs(canvasState.origin.y - canvasState.current.y);
-            if (canvasState.layerType === "Line") return <line className="stroke-blue-500 stroke-1" x1={canvasState.origin.x} y1={canvasState.origin.y} x2={canvasState.current.x} y2={canvasState.current.y} strokeWidth={3} strokeLinecap="round" />;
-            if (canvasState.layerType === "Frame" || canvasState.layerType === "Column") return <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" strokeDasharray={canvasState.layerType === "Frame" ? "8 4" : undefined} x={x} y={y} width={w} height={h} rx={12} />;
-            if (canvasState.layerType === "Ellipse") return <ellipse className="fill-blue-500/5 stroke-blue-500 stroke-1" cx={(canvasState.origin.x + canvasState.current.x) / 2} cy={(canvasState.origin.y + canvasState.current.y) / 2} rx={w / 2} ry={h / 2} />;
-            if (canvasState.layerType === "Triangle") return <polygon className="fill-blue-500/5 stroke-blue-500 stroke-1" points={`${x + w / 2},${y} ${x + w},${y + h} ${x},${y + h}`} />;
-            if (canvasState.layerType === "Diamond") return <polygon className="fill-blue-500/5 stroke-blue-500 stroke-1" points={`${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}`} />;
-            if (canvasState.layerType === "Arrow") return <path className="fill-blue-500/5 stroke-blue-500 stroke-1" d={`M ${x},${y + h * 0.3} L ${x + w * 0.6},${y + h * 0.3} L ${x + w * 0.6},${y} L ${x + w},${y + h * 0.5} L ${x + w * 0.6},${y + h} L ${x + w * 0.6},${y + h * 0.7} L ${x},${y + h * 0.7} Z`} />;
-            return <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" x={x} y={y} width={w} height={h} />;
-          })()}
+          <CanvasOverlay translateGhost={translateGhost} cursorPoint={cursorPoint} />
         </g>
       </svg>
     </main>

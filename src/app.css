@@ -155,6 +155,113 @@ a[href*="liveblocks.io"] {
 /* Smooth canvas transitions */
 .canvas-g {
   will-change: transform;
+  backface-visibility: hidden;
+}
+
+.layer-translate-ghost {
+  fill: rgba(59, 130, 246, 0.12);
+  stroke: rgba(59, 130, 246, 0.45);
+  stroke-width: 2;
+  stroke-dasharray: 6 4;
+  animation: ghost-pulse 1.2s ease-in-out infinite;
+}
+
+.snap-guide-line {
+  stroke: rgba(59, 130, 246, 0.35);
+  stroke-width: 1;
+  stroke-dasharray: 4 6;
+}
+
+.connect-preview-path {
+  animation: dash-flow 0.8s linear infinite;
+}
+
+.connect-hover-ring {
+  fill: rgba(37, 99, 235, 0.08);
+  stroke: rgba(37, 99, 235, 0.75);
+  stroke-width: 2;
+  animation: ring-pulse 0.9s ease-in-out infinite;
+}
+
+.insertion-preview {
+  transition: opacity 0.12s ease;
+}
+
+.insertion-dim-label {
+  fill: #2563EB;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: ui-monospace, monospace;
+  paint-order: stroke;
+  stroke: rgba(255, 255, 255, 0.85);
+  stroke-width: 3px;
+}
+
+.layer-flash .layer-flash-target,
+.layer-flash > rect:first-of-type,
+.layer-flash > foreignObject {
+  animation: layer-flash 0.85s ease-out;
+}
+
+.layer-drop-glow {
+  animation: drop-glow 1s ease-in-out infinite;
+}
+
+.connection-path {
+  stroke-dasharray: 6 4;
+  animation: dash-flow 1.4s linear infinite;
+}
+
+.remote-cursor {
+  will-change: transform;
+  transition: transform 0.05s linear;
+}
+
+.paste-ghost {
+  animation: paste-float 1.6s ease-in-out infinite;
+}
+
+.layer-hover-preview {
+  animation: fade-up 0.18s ease-out;
+}
+
+.brush-preview-ring {
+  transition: transform 0.04s linear;
+}
+
+@keyframes ghost-pulse {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes dash-flow {
+  to { stroke-dashoffset: -20; }
+}
+
+@keyframes ring-pulse {
+  0%, 100% { opacity: 0.7; }
+  50% { opacity: 1; }
+}
+
+@keyframes layer-flash {
+  0% { filter: drop-shadow(0 0 0 rgba(37, 99, 235, 0)); }
+  35% { filter: drop-shadow(0 0 14px rgba(37, 99, 235, 0.55)); }
+  100% { filter: drop-shadow(0 0 0 rgba(37, 99, 235, 0)); }
+}
+
+@keyframes drop-glow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+
+@keyframes paste-float {
+  0%, 100% { transform: translate(var(--x, 0), var(--y, 0)); }
+  50% { transform: translate(calc(var(--x, 0) + 0px), calc(var(--y, 0) - 3px)); }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 /* Minimap styles */
