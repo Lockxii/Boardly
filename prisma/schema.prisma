@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -18,7 +18,6 @@ model User {
 
   sessions      Session[]
   accounts      Account[]
-  
   boards        Board[]
   presences     Presence[]
 
@@ -28,7 +27,7 @@ model User {
 model Session {
   id        String   @id @default(cuid())
   userId    String
-  token     String   
+  token     String
   expiresAt DateTime
   ipAddress String?
   userAgent String?
@@ -51,7 +50,7 @@ model Account {
   accessTokenExpiresAt  DateTime?
   refreshTokenExpiresAt DateTime?
   scope                 String?
-  password              String?   
+  password              String?
   createdAt             DateTime  @default(now())
   updatedAt             DateTime  @updatedAt
 
@@ -61,23 +60,21 @@ model Account {
 }
 
 model Verification {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   identifier String
   value      String
   expiresAt  DateTime
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@map("verification")
 }
-
-// --- Boardly Specific Models ---
 
 model Board {
   id        String   @id @default(cuid())
   title     String
   authorId  String
-  template  String   @default("blank") // "blank", "grid", "blueprint"
+  template  String   @default("blank")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -94,7 +91,7 @@ model BoardMember {
   id        String   @id @default(cuid())
   boardId   String
   email     String
-  role      String   @default("editor") // "editor", "viewer"
+  role      String   @default("editor")
   createdAt DateTime @default(now())
 
   board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
@@ -106,7 +103,7 @@ model BoardMember {
 model BoardObject {
   id        String   @id @default(cuid())
   boardId   String
-  type      String   // "rect", "circle", "note", "text"
+  type      String
   x         Float
   y         Float
   width     Float?
@@ -131,7 +128,7 @@ model Connection {
   updatedAt DateTime @updatedAt
 
   board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
-  
+
   @@map("connection")
 }
 
@@ -142,7 +139,7 @@ model Presence {
   lastSeen  DateTime @default(now())
   cursorX   Float?
   cursorY   Float?
-  
+
   board     Board    @relation(fields: [boardId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -154,7 +151,7 @@ model ChatAttachment {
   name      String
   type      String
   size      Int
-  data      String   @db.Text 
+  data      String
   createdAt DateTime @default(now())
 
   @@map("chat_attachment")
