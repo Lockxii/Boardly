@@ -8,6 +8,8 @@
     "dev:client": "vite",
     "dev:server": "tsx watch server/index.ts",
     "build": "tsc -b && vite build",
+    "vercel-build": "prisma generate && npm run build",
+    "postinstall": "prisma generate",
     "start": "NODE_ENV=production tsx server/index.ts",
     "lint": "eslint .",
     "db:push": "prisma db push",
