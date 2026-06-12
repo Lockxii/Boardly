@@ -7,6 +7,7 @@ import { ensureBoardSchema } from "./schema-sync.js";
 import { fetchLinkPreview } from "./link-preview.js";
 import { fetchMusicPreviewHandler } from "./music-preview.js";
 import { buildTemplateCanvas } from "./board-seeds.js";
+import { chatWithFred, isFredConfigured } from "./fred-ai.js";
 
 function getAppOrigin() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
@@ -117,6 +118,7 @@ export function createApp() {
       databaseUrl: !!process.env.DATABASE_URL,
       authSecret: !!process.env.BETTER_AUTH_SECRET,
       authBaseUrl: getAppOrigin(),
+      fredAi: isFredConfigured(),
     };
 
     try {
@@ -199,6 +201,41 @@ export function createApp() {
       res.json(preview);
     } catch (error) {
       res.status(400).json({ error: error instanceof Error ? error.message : "Preview impossible" });
+    }
+  }));
+
+  // --- FRED AI ---
+
+  app.get("/api/fred/status", requireAuth(async (_req, res) => {
+    res.json({ configured: isFredConfigured() });
+  }));
+
+  app.post("/api/fred/chat", requireAuth(async (req, res, user) => {
+    const { message, history, boardContext, boardId } = req.body as {
+      message?: string;
+      history?: { role: "user" | "assistant"; content: string }[];
+      boardContext?: Record<string, unknown>;
+      boardId?: string;
+    };
+
+    if (!message?.trim()) return res.status(400).json({ error: "Message requis" });
+
+    if (boardId) {
+      const access = await getBoardAccess(boardId, user as { id: string; email: string });
+      if (!access) return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    try {
+      const result = await chatWithFred({
+        message: message.trim(),
+        history,
+        boardContext: boardContext as Parameters<typeof chatWithFred>[0]["boardContext"],
+      });
+      res.json(result);
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Erreur Fred AI";
+      const status = msg.includes("GOOGLE_AI_API_KEY") ? 503 : 500;
+      res.status(status).json({ error: msg });
     }
   }));
 

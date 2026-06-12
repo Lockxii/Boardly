@@ -718,6 +718,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
 
       if (e.key === "Escape") {
         if (useCanvasStore.getState().showPresentation) { useCanvasStore.getState().setShowPresentation(false); return; }
+        if (useCanvasStore.getState().showFredPanel) { useCanvasStore.getState().setShowFredPanel(false); return; }
         if (useCanvasStore.getState().showCommandPalette) { useCanvasStore.getState().setShowCommandPalette(false); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
         useCanvasStore.getState().dismissConnectionTools();
@@ -757,6 +758,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
           break;
         case "F": if (e.shiftKey) setCanvasState({ mode: "inserting", layerType: "Frame" }); break;
         case "P": if (e.shiftKey && !readOnly) { e.preventDefault(); useCanvasStore.getState().setShowPresentation(true); } break;
+        case "A": if (e.shiftKey && !readOnly) { e.preventDefault(); useCanvasStore.getState().setShowFredPanel(!useCanvasStore.getState().showFredPanel); } break;
         case "Delete": case "Backspace":
           if (store.selectedConnectionId) {
             store.removeConnection(store.selectedConnectionId);
@@ -920,7 +922,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       onDragOver={handleDragOver}
       onDrop={handleCanvasDrop}
     >
-      <Navbar title={title} boardId={boardId} isPublic={isPublic} readOnly={readOnly} />
+      <Navbar title={title} boardId={boardId} template={template} isPublic={isPublic} readOnly={readOnly} />
       {!readOnly && <Toolbar />}
       {!readOnly && <PencilToolbar />}
       {!readOnly && <ConnectionTools />}

@@ -1,4 +1,4 @@
-import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation, Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { BoardlyBrand } from "@/components/boardly-brand";
@@ -7,6 +7,7 @@ import { HistoryDialog } from "./history-dialog";
 import { ShareDialog } from "./share-dialog";
 import { TrashDialog } from "./trash-dialog";
 import { ChatPanel } from "./chat-panel";
+import { FredPanel } from "./fred-panel";
 import { NavIconButton } from "./nav-icon-button";
 import { FloatingDock, useFloatingDock } from "./floating-dock";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
@@ -18,16 +19,17 @@ import { useCanvasStore } from "@/store/canvas-store";
 interface NavbarProps {
   title: string;
   boardId?: string;
+  template?: string;
   isPublic?: boolean;
   readOnly?: boolean;
 }
 
-export function Navbar({ title, boardId, isPublic = false, readOnly = false }: NavbarProps) {
+export function Navbar({ title, boardId, template, isPublic = false, readOnly = false }: NavbarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [newTitle, setNewTitle] = useState(title);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { setShowCommandPalette, darkMode, toggleDarkMode, setShowPresentation } = useCanvasStore();
+  const { setShowCommandPalette, darkMode, toggleDarkMode, setShowPresentation, showFredPanel, setShowFredPanel } = useCanvasStore();
 
   const actualBoardId = boardId || "";
 
@@ -164,6 +166,8 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
           toggleDarkMode={toggleDarkMode}
           darkMode={darkMode}
           setShowCommandPalette={setShowCommandPalette}
+          showFredPanel={showFredPanel}
+          setShowFredPanel={setShowFredPanel}
           handleExport={handleExport}
           handleExportPNG={handleExportPNG}
           handleExportSVG={handleExportSVG}
@@ -171,6 +175,14 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
         />
       </FloatingDock>
       {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
+      {showFredPanel && !readOnly && (
+        <FredPanel
+          onClose={() => setShowFredPanel(false)}
+          boardTitle={title}
+          boardTemplate={template}
+          boardId={actualBoardId || undefined}
+        />
+      )}
     </>
   );
 }
@@ -191,6 +203,8 @@ function NavbarContent({
   toggleDarkMode,
   darkMode,
   setShowCommandPalette,
+  showFredPanel,
+  setShowFredPanel,
   handleExport,
   handleExportPNG,
   handleExportSVG,
@@ -211,6 +225,8 @@ function NavbarContent({
   toggleDarkMode: () => void;
   darkMode: boolean;
   setShowCommandPalette: (v: boolean) => void;
+  showFredPanel: boolean;
+  setShowFredPanel: (v: boolean) => void;
   handleExport: () => void;
   handleExportPNG: () => void;
   handleExportSVG: () => void;
@@ -292,6 +308,16 @@ function NavbarContent({
         {!readOnly && (
           <NavIconButton onClick={() => setShowPresentation(true)} title="Présentation (Shift+P)" className={btnSize}>
             <Presentation className={iconSize} />
+          </NavIconButton>
+        )}
+        {!readOnly && (
+          <NavIconButton
+            active={showFredPanel}
+            onClick={() => setShowFredPanel(!showFredPanel)}
+            title="Fred AI (Shift+A)"
+            className={btnSize}
+          >
+            <Bot className={iconSize} />
           </NavIconButton>
         )}
         <NavIconButton active={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion" className={btnSize}>

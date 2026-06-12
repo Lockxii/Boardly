@@ -102,6 +102,8 @@ interface CanvasStore {
   toggleMinimap: () => void;
   showCommandPalette: boolean;
   setShowCommandPalette: (show: boolean) => void;
+  showFredPanel: boolean;
+  setShowFredPanel: (show: boolean) => void;
   showPresentation: boolean;
   setShowPresentation: (show: boolean) => void;
   snapToGrid: boolean;
@@ -270,6 +272,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   toggleMinimap: () => set((s) => ({ showMinimap: !s.showMinimap })),
   showCommandPalette: false,
   setShowCommandPalette: (showCommandPalette) => set({ showCommandPalette }),
+  showFredPanel: false,
+  setShowFredPanel: (showFredPanel) => set({ showFredPanel }),
   showPresentation: false,
   setShowPresentation: (showPresentation) => set({ showPresentation }),
   snapToGrid: false,
