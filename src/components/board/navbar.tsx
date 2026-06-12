@@ -1,6 +1,7 @@
 import { ChevronLeft, Share2, MoreHorizontal, Check, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
+import { BoardlyBrand } from "@/components/boardly-brand";
 import { useState, useRef, useEffect } from "react";
 import { InviteDialog } from "./invite-dialog";
 import { TeamDialog } from "./team-dialog";
@@ -136,12 +137,15 @@ export function Navbar({ title, boardId }: NavbarProps) {
 
   return (
     <>
-      <nav className="absolute top-4 left-4 right-4 h-14 flex items-center bg-transparent backdrop-blur-sm rounded-xl border border-neutral-200/20 dark:border-neutral-700/20 px-4 pointer-events-auto z-20 transition-all">
-        <div className="flex items-center gap-4 flex-1">
-          <Button variant="ghost" size="icon" asChild className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20">
-            <Link to="/dashboard"><ChevronLeft className="h-5 w-5 text-neutral-600 dark:text-neutral-400" /></Link>
+      <nav className="absolute top-4 left-4 right-4 h-14 flex items-center bg-white/85 dark:bg-neutral-900/85 backdrop-blur-md rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 shadow-sm shadow-black/[0.04] px-3 sm:px-4 pointer-events-auto z-20 transition-all">
+        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+          <Button variant="ghost" size="icon" asChild className="h-9 w-9 shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-800">
+            <Link to="/dashboard" title="Retour au dashboard">
+              <ChevronLeft className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
+            </Link>
           </Button>
-          <div className="h-6 w-[1px] bg-neutral-300 dark:bg-neutral-600" />
+          <BoardlyBrand to="/dashboard" showName={false} size={28} className="hidden sm:flex shrink-0" />
+          <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-700 shrink-0" />
           {isEditing ? (
             <input
               ref={inputRef}

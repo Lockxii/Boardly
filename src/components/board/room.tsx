@@ -1,7 +1,7 @@
 import { Canvas } from "./canvas";
-import { Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
+import { RouteLoading } from "@/components/route-loading";
 
 interface RoomProps {
   roomId: string;
@@ -16,6 +16,8 @@ export function Room({ roomId, template, title, boardId }: RoomProps) {
 
   useEffect(() => {
     loadBoard(roomId);
+    const isDark = document.documentElement.classList.contains("dark");
+    useCanvasStore.setState({ darkMode: isDark });
     setReady(true);
   }, [roomId, loadBoard]);
 
@@ -29,11 +31,7 @@ export function Room({ roomId, template, title, boardId }: RoomProps) {
   }, [ready, roomId]);
 
   if (!ready) {
-    return (
-      <div className="h-screen w-full flex items-center justify-center bg-neutral-100 dark:bg-neutral-950 text-neutral-400">
-        <Loader2 className="h-10 w-10 animate-spin" />
-      </div>
-    );
+    return <RouteLoading label="Chargement du canvas..." />;
   }
 
   return <Canvas template={template} title={title} boardId={boardId} />;

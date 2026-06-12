@@ -3,6 +3,7 @@ import { QueryClient, useQuery, queryOptions } from "@tanstack/react-query";
 import { lazy, Suspense } from "react";
 import { fetchCurrentUser } from "./lib/auth-client";
 import type { User } from "./lib/types";
+import { RouteLoading } from "./components/route-loading";
 
 // Auth hook
 export function useCurrentUser() {
@@ -21,18 +22,6 @@ const authQueryOptions = () =>
     queryFn: fetchCurrentUser,
     staleTime: 5 * 60 * 1000,
   });
-
-// Loading fallback
-function RouteLoading() {
-  return (
-    <div className="h-screen w-full flex items-center justify-center bg-neutral-50 dark:bg-neutral-950">
-      <div className="flex flex-col items-center gap-3">
-        <div className="h-8 w-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-        <span className="text-sm text-neutral-500">Chargement...</span>
-      </div>
-    </div>
-  );
-}
 
 // Root route
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
