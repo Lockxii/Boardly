@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import {
   ArrowRight,
-  Layout,
   MousePointer2,
   Pencil,
   Share2,
@@ -23,6 +22,7 @@ import { useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { fetchCurrentUser } from "@/lib/auth-client";
 import { LandingNavbar } from "@/components/landing-navbar";
+import { BoardlyBrand } from "@/components/boardly-brand";
 import type { User } from "@/lib/types";
 
 const FAQ_ITEMS = [
@@ -527,12 +527,7 @@ export function LandingPage() {
 
       <footer className="border-t border-neutral-200 dark:border-neutral-800 py-12 bg-white dark:bg-neutral-950">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-          <div className="flex items-center gap-2 font-bold">
-            <div className="h-6 w-6 bg-black dark:bg-white rounded flex items-center justify-center text-white dark:text-black">
-              <Layout className="h-3 w-3" />
-            </div>
-            Boardly
-          </div>
+          <BoardlyBrand size={24} />
           <p className="text-neutral-500 text-sm">© 2026 Boardly. Tous droits réservés.</p>
           <div className="flex gap-6 text-sm font-medium text-neutral-600 dark:text-neutral-400">
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition">Twitter</a>

@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { useNavigate, Link } from "@tanstack/react-router";
+import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Layout, MousePointer2, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
+import { BoardlyBrand } from "@/components/boardly-brand";
+import { MousePointer2, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
 import { authClient, fetchCurrentUser } from "@/lib/auth-client";
 
 export function SignInPage() {
@@ -174,12 +175,10 @@ export function SignInPage() {
         </div>
 
         <div className="w-full max-w-md relative z-10 mt-16 lg:mt-0">
-          <Link to="/" className="inline-flex items-center gap-2 font-bold text-xl mb-8 hover:opacity-80 transition">
-            <div className="h-8 w-8 bg-black dark:bg-white rounded-lg flex items-center justify-center text-white dark:text-black shadow-lg">
-              <Layout className="h-5 w-5" />
-            </div>
-            Boardly
-          </Link>
+          <BoardlyBrand
+            to="/"
+            className="text-xl mb-8 hover:opacity-80 transition"
+          />
 
           <div className="lg:hidden mb-8">
             <h1 className="text-3xl font-extrabold tracking-tight mb-2">

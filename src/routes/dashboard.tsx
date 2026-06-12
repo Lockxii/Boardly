@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { BoardlyBrand } from "@/components/boardly-brand";
 import { Plus, Layout, Clock, Trash2, Settings, User, Lock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Board, User as UserType } from "@/lib/types";
@@ -63,9 +64,7 @@ export function DashboardPage() {
       {/* Header */}
       <header className="flex justify-between items-center mb-12 max-w-6xl mx-auto">
         <div className="flex items-center gap-4">
-          <div className="h-10 w-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-500/20">
-            <Layout className="w-6 h-6 text-white" />
-          </div>
+          <BoardlyBrand to="/dashboard" showName={false} size={40} className="shadow-lg shadow-blue-500/20" />
           <h1 className="text-3xl font-bold text-neutral-900 dark:text-white tracking-tight">Mes Tableaux</h1>
         </div>
         <div className="flex items-center gap-4">

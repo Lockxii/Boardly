@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import { Menu, X } from "lucide-react";
-import { Logo } from "@/components/ui/logo";
+import { BoardlyBrand } from "@/components/boardly-brand";
 import { cn } from "@/lib/utils";
 
 const NAV_LINKS = [
@@ -44,14 +44,11 @@ export function LandingNavbar({ isLoggedIn, ctaTo }: LandingNavbarProps) {
     >
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-6 px-4 sm:px-6">
         {/* Logo */}
-        <Link
+        <BoardlyBrand
           to="/"
-          className="flex items-center gap-2.5 font-bold text-lg tracking-tight shrink-0"
+          className="text-lg shrink-0"
           onClick={() => setMobileOpen(false)}
-        >
-          <Logo size={32} />
-          <span>Boardly</span>
-        </Link>
+        />
 
         {/* Center nav — desktop */}
         {!isLoggedIn && (
