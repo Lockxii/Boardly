@@ -125,6 +125,7 @@ interface CanvasStore {
   insertLayer: (type: LayerType, x: number, y: number, width?: number, height?: number) => string | null;
   insertLinkLayer: (preview: LinkPreview, x: number, y: number) => string | null;
   insertLinkLayersBatch: (items: { preview: LinkPreview; x: number; y: number }[]) => string[];
+  insertImageLayersBatch: (items: { src: string; x: number; y: number; width: number; height: number }[]) => string[];
   fitLinkLayerToImage: (id: string, naturalWidth: number, naturalHeight: number) => void;
   deleteLayers: (ids?: string[]) => void;
   restoreTrashEntry: (entryId: string) => void;
@@ -504,6 +505,41 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       canvasState: { mode: "none" },
     });
     get().addAuditEntry("created", newIds.length === 1 ? "Link" : `Link x${newIds.length}`);
+    return newIds;
+  },
+
+  insertImageLayersBatch: (items) => {
+    if (items.length === 0) return [];
+    get().pushHistory();
+    const newIds: string[] = [];
+    let nextLayers = get().layers;
+    let nextLayerIds = get().layerIds;
+
+    for (const { src, x, y, width, height } of items) {
+      const id = nanoid();
+      nextLayers = {
+        ...nextLayers,
+        [id]: {
+          type: "Image",
+          x,
+          y,
+          width,
+          height,
+          fill: "",
+          src,
+        },
+      };
+      nextLayerIds = [...nextLayerIds, id];
+      newIds.push(id);
+    }
+
+    set({
+      layers: nextLayers,
+      layerIds: nextLayerIds,
+      selection: newIds,
+      canvasState: { mode: "none" },
+    });
+    get().addAuditEntry("created", newIds.length === 1 ? "Image" : `Image x${newIds.length}`);
     return newIds;
   },
 

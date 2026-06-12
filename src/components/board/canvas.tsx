@@ -20,15 +20,25 @@ import { LayerCommentsPanel } from "./layer-comments-panel";
 import { CanvasLayers } from "./canvas-layers";
 import { CanvasOverlay } from "./canvas-overlay";
 import { PasteGhost } from "./paste-ghost";
+import { DropPreviewGhost } from "./drop-preview-ghost";
 import { PresentationMode } from "./presentation-mode";
 import { toast } from "sonner";
 import type { Layer, LayerType } from "@/lib/types";
 import { BLUEPRINT } from "@/lib/template-styles";
-import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
+import { compressDataUrl } from "@/lib/canvas-utils";
 import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
 import { extractPlainTextFromClipboard, extractUrlsFromClipboard } from "@/lib/clipboard-utils";
 import { getDefaultPastePoint, pasteUrlsAt } from "@/lib/link-paste-actions";
-import { extractDropPayload, hasDropPayload, screenToCanvasPoint } from "@/lib/canvas-drop";
+import { extractImageFilesFromClipboard, insertImagesAt } from "@/lib/image-insert-actions";
+import {
+  extractDropPayload,
+  getDropPreviewKind,
+  getDropPreviewLabel,
+  hasDropPayload,
+  screenToCanvasPoint,
+} from "@/lib/canvas-drop";
+import { filePreviewKey } from "@/lib/image-insert";
+import type { DropPreviewKind } from "@/lib/canvas-drop";
 
 export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
@@ -51,10 +61,19 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [translateGhost, setTranslateGhost] = useState<Record<string, Layer> | null>(null);
   const [cursorPoint, setCursorPoint] = useState<{ x: number; y: number } | null>(null);
-  const [pasteGhostKind, setPasteGhostKind] = useState<"layer" | "link" | null>(null);
+  const [pasteGhostKind, setPasteGhostKind] = useState<"layer" | "link" | "image" | null>(null);
+  const [pasteGhostPreview, setPasteGhostPreview] = useState<string | null>(null);
   const [dropActive, setDropActive] = useState(false);
+  const [dropPreview, setDropPreview] = useState<{
+    kind: DropPreviewKind;
+    previews: string[];
+    label: string;
+    x: number;
+    y: number;
+  } | null>(null);
   const pastePointRef = React.useRef<{ x: number; y: number } | null>(null);
   const dropDepthRef = React.useRef(0);
+  const dropPreviewCacheRef = React.useRef<Map<string, string>>(new Map());
   const showPresentation = useCanvasStore((s) => s.showPresentation);
   const setShowPresentation = useCanvasStore((s) => s.setShowPresentation);
 
@@ -120,6 +139,41 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     useCanvasStore.getState().setDropTargetColumnId(null);
   }, []);
 
+  const clearDropPreview = useCallback(() => {
+    for (const url of dropPreviewCacheRef.current.values()) URL.revokeObjectURL(url);
+    dropPreviewCacheRef.current.clear();
+    setDropPreview(null);
+  }, []);
+
+  const updateDropPreview = useCallback(
+    (dataTransfer: DataTransfer, clientX: number, clientY: number) => {
+      const kind = getDropPreviewKind(dataTransfer);
+      if (!kind) {
+        clearDropPreview();
+        return;
+      }
+
+      const { imageFiles } = extractDropPayload(dataTransfer);
+      const previews: string[] = [];
+      for (const file of imageFiles.slice(0, 4)) {
+        const key = filePreviewKey(file);
+        if (!dropPreviewCacheRef.current.has(key)) {
+          dropPreviewCacheRef.current.set(key, URL.createObjectURL(file));
+        }
+        previews.push(dropPreviewCacheRef.current.get(key)!);
+      }
+
+      setDropPreview({
+        kind,
+        previews,
+        label: getDropPreviewLabel(dataTransfer),
+        x: clientX,
+        y: clientY,
+      });
+    },
+    [clearDropPreview],
+  );
+
   const copyLayers = useCallback(() => {
     const copied: Layer[] = [];
     for (const id of selection) {
@@ -133,26 +187,12 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     }
   }, [selection, layers]);
 
-  const insertImageAt = useCallback(async (file: File, point?: { x: number; y: number }) => {
-    try {
-      const src = await compressImageFile(file);
-      const centerX = point?.x ?? pastePointRef.current?.x ?? (window.innerWidth / 2 - camera.x) / camera.zoom;
-      const centerY = point?.y ?? pastePointRef.current?.y ?? (window.innerHeight / 2 - camera.y) / camera.zoom;
-      const id = nanoid();
-      useCanvasStore.getState().pushHistory();
-      useCanvasStore.setState((s) => ({
-        layers: {
-          ...s.layers,
-          [id]: { type: "Image" as LayerType, x: centerX - 100, y: centerY - 100, height: 200, width: 200, fill: "", src } as Layer,
-        },
-        layerIds: [...s.layerIds, id],
-        selection: [id],
-      }));
-      toast.success("Image ajoutée");
-    } catch {
-      toast.error("Impossible d'ajouter l'image");
-    }
-  }, [camera]);
+  useEffect(() => {
+    return () => {
+      for (const url of dropPreviewCacheRef.current.values()) URL.revokeObjectURL(url);
+      if (pasteGhostPreview) URL.revokeObjectURL(pasteGhostPreview);
+    };
+  }, [pasteGhostPreview]);
 
   const pasteLayers = useCallback(() => {
     if (clipboardRef.current.length === 0) return false;
@@ -205,16 +245,15 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       const ae = document.activeElement as HTMLElement;
       if (ae?.tagName === "TEXTAREA" || ae?.tagName === "INPUT" || ae?.isContentEditable) return;
 
-      const items = e.clipboardData?.items;
-      if (items) {
-        for (const item of items) {
-          if (item.type.startsWith("image/")) {
-            e.preventDefault();
-            const file = item.getAsFile();
-            if (file) await insertImageAt(file);
-            return;
-          }
-        }
+      const imageFiles = extractImageFilesFromClipboard(e.clipboardData);
+      if (imageFiles.length > 0) {
+        e.preventDefault();
+        setPasteGhostKind(null);
+        if (pasteGhostPreview) URL.revokeObjectURL(pasteGhostPreview);
+        setPasteGhostPreview(null);
+        const point = pastePointRef.current ?? getDefaultPastePoint(camera);
+        await insertImagesAt(imageFiles, point);
+        return;
       }
 
       const urls = extractUrlsFromClipboard(e.clipboardData);
@@ -241,7 +280,25 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [insertImageAt, insertTextAt, pasteLayers, camera, readOnly]);
+  }, [insertTextAt, pasteLayers, camera, readOnly, pasteGhostPreview]);
+
+  useEffect(() => {
+    if (readOnly) return;
+    const onCopy = (e: ClipboardEvent) => {
+      const ae = document.activeElement as HTMLElement;
+      if (ae?.tagName === "TEXTAREA" || ae?.tagName === "INPUT" || ae?.isContentEditable) return;
+      const imageFiles = extractImageFilesFromClipboard(e.clipboardData);
+      if (imageFiles.length === 0) return;
+      const preview = URL.createObjectURL(imageFiles[0]);
+      setPasteGhostPreview((prev) => {
+        if (prev) URL.revokeObjectURL(prev);
+        return preview;
+      });
+      setPasteGhostKind("image");
+    };
+    window.addEventListener("copy", onCopy);
+    return () => window.removeEventListener("copy", onCopy);
+  }, [readOnly]);
 
   const handleCanvasDrop = useCallback(
     async (e: React.DragEvent) => {
@@ -249,22 +306,21 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       e.preventDefault();
       dropDepthRef.current = 0;
       setDropActive(false);
+      clearDropPreview();
 
       const point = screenToCanvasPoint(e.clientX, e.clientY, camera);
       pastePointRef.current = point;
       const { urls, imageFiles } = extractDropPayload(e.dataTransfer);
 
       if (imageFiles.length > 0) {
-        for (const file of imageFiles) {
-          await insertImageAt(file, point);
-        }
+        await insertImagesAt(imageFiles, point);
       }
 
       if (urls.length > 0) {
         await pasteUrlsAt(urls, point);
       }
     },
-    [camera, insertImageAt, readOnly],
+    [camera, clearDropPreview, readOnly],
   );
 
   const handleDragEnter = useCallback(
@@ -273,22 +329,27 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       e.preventDefault();
       dropDepthRef.current += 1;
       setDropActive(true);
+      updateDropPreview(e.dataTransfer, e.clientX, e.clientY);
     },
-    [readOnly],
+    [readOnly, updateDropPreview],
   );
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDragLeave = useCallback(() => {
     dropDepthRef.current = Math.max(0, dropDepthRef.current - 1);
-    if (dropDepthRef.current === 0) setDropActive(false);
-  }, []);
+    if (dropDepthRef.current === 0) {
+      setDropActive(false);
+      clearDropPreview();
+    }
+  }, [clearDropPreview]);
 
   const handleDragOver = useCallback(
     (e: React.DragEvent) => {
       if (readOnly || !hasDropPayload(e.dataTransfer)) return;
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
+      updateDropPreview(e.dataTransfer, e.clientX, e.clientY);
     },
-    [readOnly],
+    [readOnly, updateDropPreview],
   );
 
   const startDrawing = useCallback((point: { x: number; y: number }, pressure: number) => {
@@ -824,9 +885,30 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       {!readOnly && showCommandPalette && <CommandPalette />}
       <BoardSearchDialog />
       {!readOnly && <LayerCommentsPanel />}
-      {!readOnly && pasteGhostKind && <PasteGhost kind="layer" label="Éléments copiés — Ctrl+V pour coller" />}
+      {!readOnly && pasteGhostKind && (
+        <PasteGhost
+          kind={pasteGhostKind === "layer" ? "layer" : pasteGhostKind === "image" ? "image" : "link"}
+          label={
+            pasteGhostKind === "layer"
+              ? "Éléments copiés — Ctrl+V pour coller"
+              : pasteGhostKind === "image"
+                ? "Image copiée — Ctrl+V pour coller"
+                : undefined
+          }
+          previewUrl={pasteGhostPreview}
+        />
+      )}
       {dropActive && !readOnly && (
         <div className="pointer-events-none absolute inset-3 z-[15] rounded-2xl border-2 border-dashed border-blue-400/70 bg-blue-500/5" />
+      )}
+      {dropPreview && !readOnly && dropPreview.kind && (
+        <DropPreviewGhost
+          kind={dropPreview.kind}
+          previews={dropPreview.previews}
+          label={dropPreview.label}
+          x={dropPreview.x}
+          y={dropPreview.y}
+        />
       )}
       <PresentationMode open={showPresentation} onClose={() => setShowPresentation(false)} />
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}

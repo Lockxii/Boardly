@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { X } from "lucide-react";
 
 const SHORTCUTS = [
@@ -16,7 +16,7 @@ const SHORTCUTS = [
     { keys: "Ctrl+Shift+Z", desc: "Rétablir" },
     { keys: "Ctrl+D", desc: "Dupliquer" },
     { keys: "Ctrl+C", desc: "Copier" },
-    { keys: "Ctrl+V", desc: "Coller" },
+    { keys: "Ctrl+V", desc: "Coller (texte, image, lien, éléments)" },
     { keys: "Suppr", desc: "Supprimer" },
     { keys: "Flèches", desc: "Déplacer (Shift = ×10)" },
   ]},
@@ -30,6 +30,10 @@ const SHORTCUTS = [
     { keys: "M", desc: "Basculer minimap" },
     { keys: "Shift+S", desc: "Snap to grid" },
     { keys: "Shift+P", desc: "Mode présentation" },
+  ]},
+  { category: "Import", items: [
+    { keys: "Ctrl+V", desc: "Coller image / lien / texte" },
+    { keys: "Glisser-déposer", desc: "Images ou URLs sur le canvas" },
   ]},
   { category: "Général", items: [
     { keys: "Ctrl+K", desc: "Palette de commandes" },

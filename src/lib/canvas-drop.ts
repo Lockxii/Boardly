@@ -1,4 +1,7 @@
 import { extractUrlsFromText, extractUrlsFromClipboard } from "@/lib/clipboard-utils";
+import { collectImageFilesFromDataTransfer, isImageFile } from "@/lib/image-insert";
+
+export type DropPreviewKind = "images" | "urls" | "mixed" | null;
 
 export function screenToCanvasPoint(
   clientX: number,
@@ -23,14 +26,28 @@ export function extractDropPayload(dataTransfer: DataTransfer | null): {
     for (const url of extractUrlsFromText(uriList)) urls.add(url);
   }
 
-  const imageFiles: File[] = [];
-  if (dataTransfer.files?.length) {
-    for (const file of dataTransfer.files) {
-      if (file.type.startsWith("image/")) imageFiles.push(file);
-    }
-  }
+  return { urls: [...urls], imageFiles: collectImageFilesFromDataTransfer(dataTransfer) };
+}
 
-  return { urls: [...urls], imageFiles };
+export function getDropPreviewKind(dataTransfer: DataTransfer | null): DropPreviewKind {
+  if (!dataTransfer) return null;
+  const { urls, imageFiles } = extractDropPayload(dataTransfer);
+  if (imageFiles.length > 0 && urls.length > 0) return "mixed";
+  if (imageFiles.length > 0) return "images";
+  if (urls.length > 0) return "urls";
+  return null;
+}
+
+export function getDropPreviewLabel(dataTransfer: DataTransfer | null) {
+  const { urls, imageFiles } = extractDropPayload(dataTransfer);
+  if (imageFiles.length > 0 && urls.length > 0) {
+    return `${imageFiles.length} image${imageFiles.length > 1 ? "s" : ""} · ${urls.length} lien${urls.length > 1 ? "s" : ""}`;
+  }
+  if (imageFiles.length > 1) return `${imageFiles.length} images à déposer`;
+  if (imageFiles.length === 1) return imageFiles[0].name || "1 image à déposer";
+  if (urls.length > 1) return `${urls.length} liens à déposer`;
+  if (urls.length === 1) return "1 lien à déposer";
+  return "Déposer ici";
 }
 
 export function hasDropPayload(dataTransfer: DataTransfer | null) {
@@ -38,6 +55,8 @@ export function hasDropPayload(dataTransfer: DataTransfer | null) {
   const { urls, imageFiles } = extractDropPayload(dataTransfer);
   if (urls.length > 0 || imageFiles.length > 0) return true;
   return [...dataTransfer.types].some(
-    (t) => t === "text/uri-list" || t === "text/plain" || t.startsWith("image/"),
+    (t) => t === "text/uri-list" || t === "text/plain" || t === "Files" || t.startsWith("image/"),
   );
 }
+
+export { isImageFile };
