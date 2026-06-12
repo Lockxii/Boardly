@@ -40,7 +40,12 @@ export function SignInPage() {
       if (isSignUp) {
         const { error: signUpError } = await authClient.signUp.email({ email, password, name });
         if (signUpError) {
-          setError(signUpError.message || "Une erreur est survenue");
+          const message = signUpError.message || "Une erreur est survenue";
+          setError(
+            message.includes("already exists") || signUpError.code === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL"
+              ? "Cet email est déjà utilisé. Connectez-vous ou utilisez un autre email."
+              : message
+          );
           setLoading(false);
           return;
         }

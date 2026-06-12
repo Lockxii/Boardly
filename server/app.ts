@@ -5,7 +5,10 @@ import { auth } from "./auth.js";
 import { prisma } from "./prisma.js";
 
 function getAppOrigin() {
-  if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL;
+  if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
+  if (process.env.VERCEL_PROJECT_PRODUCTION_URL) {
+    return `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL.replace(/^https?:\/\//, "")}`;
+  }
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:5173";
 }
@@ -81,6 +84,25 @@ export function createApp() {
   app.all("/api/auth/*splat", toNodeHandler(auth));
 
   app.use(express.json({ limit: "50mb" }));
+
+  app.get("/api/health", async (_req, res) => {
+    const checks: Record<string, boolean | string> = {
+      databaseUrl: !!process.env.DATABASE_URL,
+      authSecret: !!process.env.BETTER_AUTH_SECRET,
+      authBaseUrl: getAppOrigin(),
+    };
+
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      checks.database = true;
+    } catch (error) {
+      checks.database = false;
+      checks.databaseError = error instanceof Error ? error.message : "unknown";
+    }
+
+    const ok = checks.database === true && checks.databaseUrl === true && checks.authSecret === true;
+    res.status(ok ? 200 : 503).json({ ok, checks });
+  });
 
   // --- BOARD ROUTES ---
 
@@ -281,6 +303,14 @@ export function createApp() {
       console.error("Liveblocks auth error:", e);
       res.status(500).json({ error: message });
     }
+  });
+
+  app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (res.headersSent) return next(err);
+    console.error("API error:", err);
+    res.status(500).json({
+      error: err instanceof Error ? err.message : "Erreur serveur",
+    });
   });
 
   return app;
