@@ -52,7 +52,6 @@ export function ConnectionsLayer({ onConnectionPointerDown }: ConnectionsLayerPr
               strokeDasharray={dash}
               markerStart={markerUrl(style.arrowStart, "start")}
               markerEnd={markerUrl(style.arrowEnd, "end")}
-              className={style.lineStyle === "solid" ? undefined : "connection-path-animated"}
               pointerEvents="none"
             />
           </g>

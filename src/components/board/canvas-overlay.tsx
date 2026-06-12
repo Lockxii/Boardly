@@ -11,6 +11,7 @@ export function CanvasOverlay({ translateGhost, cursorPoint }: CanvasOverlayProp
   const canvasState = useCanvasStore((s) => s.canvasState);
   const connectFromId = useCanvasStore((s) => s.connectFromId);
   const connectHoverId = useCanvasStore((s) => s.connectHoverId);
+  const connectionDefaults = useCanvasStore((s) => s.connectionDefaults);
   const layers = useCanvasStore((s) => s.layers);
   const snapToGrid = useCanvasStore((s) => s.snapToGrid);
 
@@ -51,27 +52,25 @@ export function CanvasOverlay({ translateGhost, cursorPoint }: CanvasOverlayProp
       {connectFromId && cursorPoint && layers[connectFromId] && (() => {
         const from = layers[connectFromId];
         const hover = connectHoverId ? layers[connectHoverId] : null;
-        const defaults = useCanvasStore.getState().connectionDefaults;
         const start = hover && connectHoverId !== connectFromId
           ? getConnectionEndpoints(from, hover).start
           : getLayerEdgePoint(from, cursorPoint);
         const endPoint = hover && connectHoverId !== connectFromId
           ? getConnectionEndpoints(from, hover).end
           : cursorPoint;
-        const path = buildConnectionPath(start, endPoint, defaults.routing);
-        const dash = getStrokeDasharray(defaults.lineStyle);
+        const path = buildConnectionPath(start, endPoint, connectionDefaults.routing);
+        const dash = getStrokeDasharray(connectionDefaults.lineStyle);
         return (
           <g>
             <path
               d={path}
               fill="none"
               stroke="#2563EB"
-              strokeWidth={defaults.strokeWidth}
+              strokeWidth={connectionDefaults.strokeWidth}
               strokeDasharray={dash}
               strokeLinecap="round"
-              markerStart={markerUrl(defaults.arrowStart, "start")}
-              markerEnd={markerUrl(defaults.arrowEnd, "end")}
-              className="connect-preview-path"
+              markerStart={markerUrl(connectionDefaults.arrowStart, "start")}
+              markerEnd={markerUrl(connectionDefaults.arrowEnd, "end")}
             />
             {!hover && <circle cx={cursorPoint.x} cy={cursorPoint.y} r={5} fill="#2563EB" opacity={0.6} />}
           </g>

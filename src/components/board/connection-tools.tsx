@@ -49,6 +49,7 @@ export const ConnectionTools = memo(function ConnectionTools() {
   const applyStyle = (updates: Partial<typeof style>) => {
     setConnectionDefaults(updates);
     if (selectedConnectionId) {
+      useCanvasStore.getState().pushHistory();
       updateConnection(selectedConnectionId, updates);
     }
   };
@@ -58,92 +59,85 @@ export const ConnectionTools = memo(function ConnectionTools() {
       {visible && (
         <motion.div
           key="connection-tools"
-          initial={{ opacity: 0, y: -8, scale: 0.96 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          exit={{ opacity: 0, y: -8, scale: 0.96 }}
-          transition={{ type: "spring", stiffness: 420, damping: 28 }}
-          className="absolute top-22 left-1/2 z-50 flex -translate-x-1/2 flex-wrap items-center gap-1 rounded-lg border border-neutral-200 bg-white p-1.5 shadow-xl pointer-events-auto dark:border-neutral-700 dark:bg-neutral-800 max-w-[95vw]"
-          onMouseDown={(e) => e.preventDefault()}
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={{ duration: 0.15 }}
+          className="absolute top-22 left-1/2 z-[60] flex -translate-x-1/2 flex-nowrap items-center gap-0.5 rounded-lg border border-neutral-200 bg-white px-1.5 py-1 shadow-xl pointer-events-auto dark:border-neutral-700 dark:bg-neutral-800 max-w-[min(96vw,920px)] overflow-x-auto no-scrollbar"
+          onPointerDown={(e) => e.stopPropagation()}
         >
-          <div className="flex items-center gap-1.5 px-1 text-xs font-medium text-neutral-500">
+          <div className="flex shrink-0 items-center gap-1 px-1 text-xs font-medium text-neutral-500">
             <Link2 className="h-3.5 w-3.5 text-blue-500" />
-            {connectFromId ? "Style du lien" : "Connecteur"}
+            <span className="hidden sm:inline">{connectFromId ? "Lien" : "Connecteur"}</span>
           </div>
 
-          <div className="mx-1 h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <Sep />
 
-          <div className="flex items-center gap-0.5">
-            {ROUTINGS.map(({ id, label, icon: Icon }) => (
-              <Button
-                key={id}
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 ${style.routing === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
-                title={label}
-                onClick={() => applyStyle({ routing: id })}
-              >
-                <Icon className="h-4 w-4" />
-              </Button>
-            ))}
-          </div>
+          {ROUTINGS.map(({ id, label, icon: Icon }) => (
+            <Button
+              key={id}
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 shrink-0 ${style.routing === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
+              title={label}
+              onClick={() => applyStyle({ routing: id })}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </Button>
+          ))}
 
-          <div className="mx-1 h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <Sep />
 
-          <div className="flex items-center gap-0.5">
-            {LINE_STYLES.map(({ id, label }) => (
-              <Button
-                key={id}
-                variant="ghost"
-                size="sm"
-                className={`h-8 px-2 text-xs ${style.lineStyle === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
-                onClick={() => applyStyle({ lineStyle: id })}
-              >
-                {label}
-              </Button>
-            ))}
-          </div>
+          {LINE_STYLES.map(({ id, label }) => (
+            <Button
+              key={id}
+              variant="ghost"
+              size="sm"
+              className={`h-7 shrink-0 px-2 text-[11px] ${style.lineStyle === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
+              title={label}
+              onClick={() => applyStyle({ lineStyle: id })}
+            >
+              {label}
+            </Button>
+          ))}
 
-          <div className="mx-1 h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+          <Sep />
 
-          <div className="flex items-center gap-1 px-1">
-            <span className="text-[10px] uppercase tracking-wide text-neutral-400">Début</span>
-            {MARKERS.map(({ id, label, icon: Icon }) => (
-              <Button
-                key={`start-${id}`}
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 ${style.arrowStart === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
-                title={`Début: ${label}`}
-                onClick={() => applyStyle({ arrowStart: id })}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </Button>
-            ))}
-          </div>
+          {MARKERS.map(({ id, label, icon: Icon }) => (
+            <Button
+              key={`start-${id}`}
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 shrink-0 ${style.arrowStart === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
+              title={`Début: ${label}`}
+              onClick={() => applyStyle({ arrowStart: id })}
+            >
+              <Icon className="h-3 w-3" />
+            </Button>
+          ))}
 
-          <div className="flex items-center gap-1 px-1">
-            <span className="text-[10px] uppercase tracking-wide text-neutral-400">Fin</span>
-            {MARKERS.map(({ id, label, icon: Icon }) => (
-              <Button
-                key={`end-${id}`}
-                variant="ghost"
-                size="icon"
-                className={`h-8 w-8 ${style.arrowEnd === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
-                title={`Fin: ${label}`}
-                onClick={() => applyStyle({ arrowEnd: id })}
-              >
-                <Icon className="h-3.5 w-3.5" />
-              </Button>
-            ))}
-          </div>
+          <span className="shrink-0 text-neutral-300 dark:text-neutral-600">→</span>
 
-          <div className="mx-1 h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+          {MARKERS.map(({ id, label, icon: Icon }) => (
+            <Button
+              key={`end-${id}`}
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 shrink-0 ${style.arrowEnd === id ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
+              title={`Fin: ${label}`}
+              onClick={() => applyStyle({ arrowEnd: id })}
+            >
+              <Icon className="h-3 w-3" />
+            </Button>
+          ))}
+
+          <Sep />
 
           <input
             type="color"
             value={style.stroke}
             onChange={(e) => applyStyle({ stroke: e.target.value })}
-            className="h-8 w-8 cursor-pointer rounded border border-neutral-200 bg-transparent p-0.5 dark:border-neutral-600"
+            className="h-7 w-7 shrink-0 cursor-pointer rounded border border-neutral-200 bg-transparent p-0.5 dark:border-neutral-600"
             title="Couleur"
           />
 
@@ -154,21 +148,21 @@ export const ConnectionTools = memo(function ConnectionTools() {
             step={1}
             value={style.strokeWidth}
             onChange={(e) => applyStyle({ strokeWidth: Number(e.target.value) })}
-            className="h-8 w-16 accent-blue-600"
+            className="h-7 w-14 shrink-0 accent-blue-600"
             title="Épaisseur"
           />
 
           {selectedConnectionId && (
             <>
-              <div className="mx-1 h-6 w-px bg-neutral-200 dark:bg-neutral-700" />
+              <Sep />
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
-                title="Supprimer le connecteur"
+                className="h-7 w-7 shrink-0 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
+                title="Supprimer"
                 onClick={() => removeConnection(selectedConnectionId)}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </>
           )}
@@ -177,3 +171,7 @@ export const ConnectionTools = memo(function ConnectionTools() {
     </AnimatePresence>
   );
 });
+
+function Sep() {
+  return <div className="mx-0.5 h-5 w-px shrink-0 bg-neutral-200 dark:bg-neutral-700" />;
+}

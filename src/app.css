@@ -172,10 +172,6 @@ a[href*="liveblocks.io"] {
   stroke-dasharray: 4 6;
 }
 
-.connect-preview-path {
-  animation: dash-flow 0.8s linear infinite;
-}
-
 .connect-hover-ring {
   fill: rgba(37, 99, 235, 0.08);
   stroke: rgba(37, 99, 235, 0.75);
@@ -207,10 +203,6 @@ a[href*="liveblocks.io"] {
   animation: drop-glow 1s ease-in-out infinite;
 }
 
-.connection-path-animated {
-  animation: dash-flow 1.4s linear infinite;
-}
-
 .remote-cursor {
   will-change: transform;
   transition: transform 0.05s linear;
@@ -231,10 +223,6 @@ a[href*="liveblocks.io"] {
 @keyframes ghost-pulse {
   0%, 100% { opacity: 0.55; }
   50% { opacity: 0.9; }
-}
-
-@keyframes dash-flow {
-  to { stroke-dashoffset: -20; }
 }
 
 @keyframes ring-pulse {

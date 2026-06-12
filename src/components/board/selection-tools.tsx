@@ -43,6 +43,8 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const commentsLayerId = useCanvasStore((s) => s.commentsLayerId);
   const toggleCommentsPanel = useCanvasStore((s) => s.toggleCommentsPanel);
   const layerComments = useCanvasStore((s) => s.layerComments);
+  const connectFromId = useCanvasStore((s) => s.connectFromId);
+  const selectedConnectionId = useCanvasStore((s) => s.selectedConnectionId);
   const brandColors = useCanvasStore((s) => s.brandColors);
   const setBrandColors = useCanvasStore((s) => s.setBrandColors);
 
@@ -214,7 +216,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
 
   return (
     <AnimatePresence>
-      {selection && selection.length > 0 && (
+      {selection && selection.length > 0 && !connectFromId && !selectedConnectionId && (
     <motion.div
       key="selection-tools"
       initial={{ opacity: 0, y: -8, scale: 0.96 }}
