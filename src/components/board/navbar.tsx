@@ -140,7 +140,7 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
         defaultCompact
         toggleMode="compact"
         allowCenterSnap
-        zIndex={30}
+        zIndex={40}
         collapsedContent={
           <>
             <BoardlyBrand to="/dashboard" showName={false} size={18} />

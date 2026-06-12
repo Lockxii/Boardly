@@ -26,7 +26,7 @@ export function Toolbar() {
       <FloatingDock
         id="toolbar"
         defaultAnchor="left-center"
-        zIndex={30}
+        zIndex={35}
         collapsedContent={
           <>
             <MousePointer2 className="h-3.5 w-3.5 text-neutral-500" />

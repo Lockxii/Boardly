@@ -20,6 +20,9 @@ export function isVerticalDock(anchor: DockAnchor) {
   return anchor === "left-center" || anchor === "right-center";
 }
 
+/** Clearance above the board status bar (h-7) + breathing room */
+export const DOCK_BOTTOM_OFFSET = "2.75rem";
+
 export function dockAnchorClasses(anchor: DockAnchor) {
   switch (anchor) {
     case "top-left":
@@ -29,16 +32,21 @@ export function dockAnchorClasses(anchor: DockAnchor) {
     case "top-right":
       return "top-4 right-4";
     case "bottom-left":
-      return "bottom-4 left-4";
+      return `left-4 max-w-[calc(100vw-2rem)]`;
     case "bottom-center":
-      return "bottom-4 left-1/2 -translate-x-1/2 max-w-[calc(100vw-2rem)]";
+      return `left-1/2 -translate-x-1/2 max-w-[calc(100vw-2rem)]`;
     case "bottom-right":
-      return "bottom-4 right-4";
+      return `right-4 max-w-[calc(100vw-2rem)]`;
     case "left-center":
       return "left-4 top-1/2 -translate-y-1/2";
     case "right-center":
       return "right-4 top-1/2 -translate-y-1/2";
   }
+}
+
+export function dockAnchorStyle(anchor: DockAnchor): { bottom: string } | undefined {
+  if (!anchor.startsWith("bottom")) return undefined;
+  return { bottom: DOCK_BOTTOM_OFFSET };
 }
 
 export function centerAnchor(anchor: DockAnchor): DockAnchor {

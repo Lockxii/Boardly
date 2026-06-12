@@ -63,7 +63,7 @@ export function StatusBar() {
     Cloud;
 
   return (
-    <div className="absolute bottom-0 left-0 right-0 h-7 bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm border-t border-neutral-200/50 dark:border-neutral-700/50 flex items-center px-3 gap-4 text-[10px] font-mono text-neutral-500 dark:text-neutral-400 pointer-events-none z-30 select-none">
+    <div className="absolute bottom-0 left-0 right-0 z-20 h-7 bg-white/80 dark:bg-neutral-800/80 backdrop-blur-sm border-t border-neutral-200/50 dark:border-neutral-700/50 flex items-center px-3 gap-4 text-[10px] font-mono text-neutral-500 dark:text-neutral-400 pointer-events-none select-none">
       <div className="flex items-center gap-1.5">
         <MousePointer2 className="h-3 w-3" />
         <span>{modeLabel}</span>

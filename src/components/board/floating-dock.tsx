@@ -16,6 +16,7 @@ import {
   type DockState,
   centerAnchor,
   dockAnchorClasses,
+  dockAnchorStyle,
   isVerticalDock,
   loadDockState,
   saveDockState,
@@ -162,7 +163,7 @@ export const FloatingDock = memo(function FloatingDock({
         width: "max-content",
         maxWidth: "calc(100vw - 2rem)",
       }
-    : { zIndex };
+    : { zIndex, ...dockAnchorStyle(state.anchor) };
 
   return (
     <FloatingDockContext.Provider

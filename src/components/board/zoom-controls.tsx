@@ -22,7 +22,7 @@ export function ZoomControls() {
     <FloatingDock
       id="zoom"
       defaultAnchor="bottom-left"
-      zIndex={25}
+      zIndex={35}
       collapsedContent={
         <>
           <ZoomIn className="h-3.5 w-3.5 text-neutral-500" />
