@@ -1,7 +1,9 @@
 import { memo, useState, useRef, useEffect } from "react";
 import { Lock, ExternalLink } from "lucide-react";
-import type { Layer } from "@/lib/types";
+import type { Layer, LayerReaction } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
+
+const EMPTY_REACTIONS: LayerReaction[] = [];
 
 interface LayerPreviewProps {
   id: string;
@@ -36,8 +38,8 @@ function getSvgPathFromPoints(points: number[][]) {
 export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResizePointerDown, onLayerRotatePointerDown, onChange, selectionColor }: LayerPreviewProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const editableRef = useRef<HTMLDivElement>(null);
-  const layerComments = useCanvasStore((s) => s.layerComments[id]?.length || 0);
-  const reactions = useCanvasStore((s) => s.reactions[id] || []);
+  const layerComments = useCanvasStore((s) => s.layerComments[id]?.length ?? 0);
+  const reactions = useCanvasStore((s) => s.reactions[id] ?? EMPTY_REACTIONS);
   const toggleChecklistItem = useCanvasStore((s) => s.toggleChecklistItem);
   const readOnly = useCanvasStore((s) => s.readOnly);
 
