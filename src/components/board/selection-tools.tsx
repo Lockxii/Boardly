@@ -6,7 +6,7 @@ import {
   Bold, Italic, Underline, Ban, Copy, Lock, Unlock,
   Highlighter, Palette, Type, GripVertical,
   AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
-  Group, Ungroup, ListChecks, MessageSquare, Link2,
+  Group, Ungroup, ListChecks, MessageSquare, Link2, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { useCanvasStore } from "@/store/canvas-store";
 import { NOTE_COLORS } from "@/lib/canvas-utils";
+import { refreshLinkLayerPreview } from "@/lib/link-paste-actions";
 
 interface SelectionToolsProps {
   camera: { x: number; y: number; zoom: number };
@@ -389,6 +390,15 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                 placeholder="https://..."
                 spellCheck={false}
               />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 shrink-0"
+                title="Actualiser l'aperçu"
+                onClick={() => void refreshLinkLayerPreview(selection[0])}
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
           )}
 

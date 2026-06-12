@@ -29,6 +29,7 @@ const SHORTCUTS = [
     { keys: "G", desc: "Basculer grille" },
     { keys: "M", desc: "Basculer minimap" },
     { keys: "Shift+S", desc: "Snap to grid" },
+    { keys: "Shift+P", desc: "Mode présentation" },
   ]},
   { category: "Général", items: [
     { keys: "Ctrl+K", desc: "Palette de commandes" },

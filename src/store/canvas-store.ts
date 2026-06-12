@@ -101,6 +101,8 @@ interface CanvasStore {
   toggleMinimap: () => void;
   showCommandPalette: boolean;
   setShowCommandPalette: (show: boolean) => void;
+  showPresentation: boolean;
+  setShowPresentation: (show: boolean) => void;
   snapToGrid: boolean;
   toggleSnapToGrid: () => void;
   darkMode: boolean;
@@ -122,6 +124,7 @@ interface CanvasStore {
   // Layer mutations
   insertLayer: (type: LayerType, x: number, y: number, width?: number, height?: number) => string | null;
   insertLinkLayer: (preview: LinkPreview, x: number, y: number) => string | null;
+  insertLinkLayersBatch: (items: { preview: LinkPreview; x: number; y: number }[]) => string[];
   fitLinkLayerToImage: (id: string, naturalWidth: number, naturalHeight: number) => void;
   deleteLayers: (ids?: string[]) => void;
   restoreTrashEntry: (entryId: string) => void;
@@ -264,6 +267,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   toggleMinimap: () => set((s) => ({ showMinimap: !s.showMinimap })),
   showCommandPalette: false,
   setShowCommandPalette: (showCommandPalette) => set({ showCommandPalette }),
+  showPresentation: false,
+  setShowPresentation: (showPresentation) => set({ showPresentation }),
   snapToGrid: false,
   toggleSnapToGrid: () => set((s) => ({ snapToGrid: !s.snapToGrid })),
   darkMode: typeof window !== "undefined" && document.documentElement.classList.contains("dark"),
@@ -453,6 +458,53 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     }));
     get().addAuditEntry("created", "Link");
     return id;
+  },
+
+  insertLinkLayersBatch: (items) => {
+    if (items.length === 0) return [];
+    get().pushHistory();
+    const newIds: string[] = [];
+    let nextLayers = get().layers;
+    let nextLayerIds = get().layerIds;
+
+    for (const { preview, x, y } of items) {
+      const id = nanoid();
+      const { width, height } = getLinkLayerDimensions(preview);
+      nextLayers = {
+        ...nextLayers,
+        [id]: {
+          type: "Link",
+          x,
+          y,
+          width,
+          height,
+          fill: "#ffffff",
+          url: preview.url,
+          linkTitle: preview.title,
+          linkDescription: preview.description,
+          linkImage: preview.image,
+          linkProvider: preview.provider || "generic",
+          linkAuthor: preview.author,
+          linkImageWidth: preview.imageWidth,
+          linkImageHeight: preview.imageHeight,
+          linkVideoId: preview.videoId,
+          cornerRadius: 10,
+          stroke: "#E2E8F0",
+          strokeWidth: 1,
+        },
+      };
+      nextLayerIds = [...nextLayerIds, id];
+      newIds.push(id);
+    }
+
+    set({
+      layers: nextLayers,
+      layerIds: nextLayerIds,
+      selection: newIds,
+      canvasState: { mode: "none" },
+    });
+    get().addAuditEntry("created", newIds.length === 1 ? "Link" : `Link x${newIds.length}`);
+    return newIds;
   },
 
   fitLinkLayerToImage: (id, naturalWidth, naturalHeight) => {

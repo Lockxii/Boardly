@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   MousePointer2, Square, Circle, Type, StickyNote, Pencil, Eraser,
   Layers, Grid3X3, Map, Keyboard, Home, Hand, Minus, Frame, Link2, Camera,
-  Plus, MoveRight, Diamond, Star, Triangle as TriangleIcon, Search
+  Plus, MoveRight, Diamond, Star, Triangle as TriangleIcon, Search, Presentation
 } from "lucide-react";
 
 interface Command {
@@ -22,7 +22,7 @@ export function CommandPalette() {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const { setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setCamera, createVersion, setConnectFromId } = useCanvasStore();
+  const { setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setShowPresentation, setCamera, createVersion, setConnectFromId } = useCanvasStore();
   const navigate = useNavigate();
 
   const commands: Command[] = useMemo(() => [
@@ -47,12 +47,13 @@ export function CommandPalette() {
     { id: "grid", label: "Basculer Grille", shortcut: "G", icon: Grid3X3, action: () => { toggleGrid(); setShowCommandPalette(false); }, category: "Vue" },
     { id: "minimap", label: "Basculer Minimap", shortcut: "M", icon: Map, action: () => { toggleMinimap(); setShowCommandPalette(false); }, category: "Vue" },
     { id: "search", label: "Rechercher dans le board", shortcut: "Ctrl+F", icon: Search, action: () => { useCanvasStore.getState().setShowSearch(true); setShowCommandPalette(false); }, category: "Vue" },
+    { id: "presentation", label: "Mode présentation", shortcut: "Shift+P", icon: Presentation, action: () => { setShowPresentation(true); setShowCommandPalette(false); }, category: "Vue" },
     { id: "resetzoom", label: "Réinitialiser Zoom", shortcut: "Ctrl+0", icon: Map, action: () => { setCamera({ x: 0, y: 0, zoom: 1 }); setShowCommandPalette(false); }, category: "Vue" },
     // Navigation
     { id: "home", label: "Accueil", icon: Home, action: () => { navigate({ to: "/" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "dashboard", label: "Dashboard", icon: Home, action: () => { navigate({ to: "/dashboard" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "shortcuts", label: "Voir les raccourcis", icon: Keyboard, action: () => { setShowCommandPalette(false); alert(HELP_TEXT); }, category: "Aide" },
-  ], [setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setCamera, navigate, createVersion, setConnectFromId]);
+  ], [setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setShowPresentation, setCamera, navigate, createVersion, setConnectFromId]);
 
   const filtered = useMemo(() => {
     if (!query) return commands;

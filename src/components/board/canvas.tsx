@@ -20,15 +20,15 @@ import { LayerCommentsPanel } from "./layer-comments-panel";
 import { CanvasLayers } from "./canvas-layers";
 import { CanvasOverlay } from "./canvas-overlay";
 import { PasteGhost } from "./paste-ghost";
+import { PresentationMode } from "./presentation-mode";
 import { toast } from "sonner";
-import { apiFetch } from "@/lib/utils";
-import type { Layer, LayerType, LinkPreview } from "@/lib/types";
+import type { Layer, LayerType } from "@/lib/types";
 import { BLUEPRINT } from "@/lib/template-styles";
 import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
 import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
-import { extractPlainTextFromClipboard, extractUrlFromClipboard } from "@/lib/clipboard-utils";
-import { getLinkLayerDimensions } from "@/lib/brand-icons";
-import { detectLinkProviderFromUrl } from "@/lib/link-providers";
+import { extractPlainTextFromClipboard, extractUrlsFromClipboard } from "@/lib/clipboard-utils";
+import { getDefaultPastePoint, pasteUrlsAt } from "@/lib/link-paste-actions";
+import { extractDropPayload, hasDropPayload, screenToCanvasPoint } from "@/lib/canvas-drop";
 
 export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
@@ -38,7 +38,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     setShowSearch,
     snapToGrid, toggleSnapToGrid,
     layerIds, layers, selection, setSelection, setCursor,
-    insertLayer, insertLinkLayer, deleteLayers, duplicateLayers, updateLayer, updateLayerText, nudgeLayers,
+    insertLayer, deleteLayers, duplicateLayers, updateLayer, updateLayerText, nudgeLayers,
     pushHistory, undo, redo, canUndo, canRedo,
     addAuditEntry, setReadOnly,
   } = useCanvasStore();
@@ -51,7 +51,12 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   const [showShortcuts, setShowShortcuts] = useState(false);
   const [translateGhost, setTranslateGhost] = useState<Record<string, Layer> | null>(null);
   const [cursorPoint, setCursorPoint] = useState<{ x: number; y: number } | null>(null);
-  const [pasteGhostKind, setPasteGhostKind] = useState<"layer" | null>(null);
+  const [pasteGhostKind, setPasteGhostKind] = useState<"layer" | "link" | null>(null);
+  const [dropActive, setDropActive] = useState(false);
+  const pastePointRef = React.useRef<{ x: number; y: number } | null>(null);
+  const dropDepthRef = React.useRef(0);
+  const showPresentation = useCanvasStore((s) => s.showPresentation);
+  const setShowPresentation = useCanvasStore((s) => s.setShowPresentation);
 
   useEffect(() => {
     setReadOnly(readOnly);
@@ -131,8 +136,8 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   const insertImageAt = useCallback(async (file: File, point?: { x: number; y: number }) => {
     try {
       const src = await compressImageFile(file);
-      const centerX = point?.x ?? (window.innerWidth / 2 - camera.x) / camera.zoom;
-      const centerY = point?.y ?? (window.innerHeight / 2 - camera.y) / camera.zoom;
+      const centerX = point?.x ?? pastePointRef.current?.x ?? (window.innerWidth / 2 - camera.x) / camera.zoom;
+      const centerY = point?.y ?? pastePointRef.current?.y ?? (window.innerHeight / 2 - camera.y) / camera.zoom;
       const id = nanoid();
       useCanvasStore.getState().pushHistory();
       useCanvasStore.setState((s) => ({
@@ -168,8 +173,8 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   }, [setSelection]);
 
   const insertTextAt = useCallback((text: string, point?: { x: number; y: number }) => {
-    const centerX = point?.x ?? (window.innerWidth / 2 - camera.x) / camera.zoom;
-    const centerY = point?.y ?? (window.innerHeight / 2 - camera.y) / camera.zoom;
+    const centerX = point?.x ?? pastePointRef.current?.x ?? (window.innerWidth / 2 - camera.x) / camera.zoom;
+    const centerY = point?.y ?? pastePointRef.current?.y ?? (window.innerHeight / 2 - camera.y) / camera.zoom;
     const id = nanoid();
     useCanvasStore.getState().pushHistory();
     const width = Math.min(420, Math.max(160, text.length * 7));
@@ -212,37 +217,80 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         }
       }
 
-      const url = extractUrlFromClipboard(e.clipboardData);
-      if (url) {
+      const urls = extractUrlsFromClipboard(e.clipboardData);
+      if (urls.length > 0) {
         e.preventDefault();
-        const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom;
-        const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom;
-        try {
-          const preview = await apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(url)}`);
-          const { width, height } = getLinkLayerDimensions(preview);
-          insertLinkLayer(preview, centerX - width / 2, centerY - height / 2);
-          toast.success("Lien collé");
-        } catch {
-          const fallbackProvider = detectLinkProviderFromUrl(url);
-          const fallback = { url, title: new URL(url).hostname, description: url, image: "", provider: fallbackProvider };
-          const { width, height } = getLinkLayerDimensions(fallback);
-          insertLinkLayer(fallback, centerX - width / 2, centerY - height / 2);
-          toast.success("Lien collé");
-        }
+        setPasteGhostKind(null);
+        const point = pastePointRef.current ?? getDefaultPastePoint(camera);
+        await pasteUrlsAt(urls, point);
         return;
       }
 
       const plainText = extractPlainTextFromClipboard(e.clipboardData);
       if (plainText) {
         e.preventDefault();
-        insertTextAt(plainText);
+        const point = pastePointRef.current ?? getDefaultPastePoint(camera);
+        insertTextAt(plainText, point);
+        return;
+      }
+
+      if (clipboardRef.current.length > 0) {
+        e.preventDefault();
+        pasteLayers();
       }
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [insertImageAt, insertLinkLayer, insertTextAt, camera, readOnly]);
+  }, [insertImageAt, insertTextAt, pasteLayers, camera, readOnly]);
 
-  // Drawing
+  const handleCanvasDrop = useCallback(
+    async (e: React.DragEvent) => {
+      if (readOnly) return;
+      e.preventDefault();
+      dropDepthRef.current = 0;
+      setDropActive(false);
+
+      const point = screenToCanvasPoint(e.clientX, e.clientY, camera);
+      pastePointRef.current = point;
+      const { urls, imageFiles } = extractDropPayload(e.dataTransfer);
+
+      if (imageFiles.length > 0) {
+        for (const file of imageFiles) {
+          await insertImageAt(file, point);
+        }
+      }
+
+      if (urls.length > 0) {
+        await pasteUrlsAt(urls, point);
+      }
+    },
+    [camera, insertImageAt, readOnly],
+  );
+
+  const handleDragEnter = useCallback(
+    (e: React.DragEvent) => {
+      if (readOnly || !hasDropPayload(e.dataTransfer)) return;
+      e.preventDefault();
+      dropDepthRef.current += 1;
+      setDropActive(true);
+    },
+    [readOnly],
+  );
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    dropDepthRef.current = Math.max(0, dropDepthRef.current - 1);
+    if (dropDepthRef.current === 0) setDropActive(false);
+  }, []);
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (readOnly || !hasDropPayload(e.dataTransfer)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    },
+    [readOnly],
+  );
+
   const startDrawing = useCallback((point: { x: number; y: number }, pressure: number) => {
     // Save pre-mutation state BEFORE drawing
     useCanvasStore.getState().pushHistory();
@@ -412,6 +460,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   const onPointerMove = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
     const current = pointerEventToCanvasPoint(e, camera);
+    pastePointRef.current = current;
     syncCursor(current);
     setCursorPoint(current);
     const state = useCanvasStore.getState();
@@ -598,6 +647,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       }
 
       if (e.key === "Escape") {
+        if (useCanvasStore.getState().showPresentation) { useCanvasStore.getState().setShowPresentation(false); return; }
         if (useCanvasStore.getState().showCommandPalette) { useCanvasStore.getState().setShowCommandPalette(false); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
         useCanvasStore.getState().setConnectFromId(null);
@@ -626,10 +676,6 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key === "v") {
-        if (clipboardRef.current.length > 0) {
-          e.preventDefault();
-          pasteLayers();
-        }
         return;
       }
 
@@ -639,6 +685,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         case "h": setCanvasState({ mode: "panning" }); break;
         case "l": setCanvasState({ mode: "inserting", layerType: "Line" }); break;
         case "F": if (e.shiftKey) setCanvasState({ mode: "inserting", layerType: "Frame" }); break;
+        case "P": if (e.shiftKey && !readOnly) { e.preventDefault(); useCanvasStore.getState().setShowPresentation(true); } break;
         case "Delete": case "Backspace":
           if (store.selectedConnectionId) {
             store.removeConnection(store.selectedConnectionId);
@@ -758,7 +805,14 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   else if (canvasState.mode === "panning") cursorStyle = "grab";
 
   return (
-    <main className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`} style={{ cursor: cursorStyle }}>
+    <main
+      className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`}
+      style={{ cursor: cursorStyle }}
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleCanvasDrop}
+    >
       <Navbar title={title} boardId={boardId} isPublic={isPublic} readOnly={readOnly} />
       {!readOnly && <Toolbar />}
       {!readOnly && <PencilToolbar />}
@@ -771,6 +825,10 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       <BoardSearchDialog />
       {!readOnly && <LayerCommentsPanel />}
       {!readOnly && pasteGhostKind && <PasteGhost kind="layer" label="Éléments copiés — Ctrl+V pour coller" />}
+      {dropActive && !readOnly && (
+        <div className="pointer-events-none absolute inset-3 z-[15] rounded-2xl border-2 border-dashed border-blue-400/70 bg-blue-500/5" />
+      )}
+      <PresentationMode open={showPresentation} onClose={() => setShowPresentation(false)} />
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <StatusBar />
       {boardId && <CursorsPresence boardId={boardId} camera={camera} />}

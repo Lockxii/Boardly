@@ -1,4 +1,4 @@
-import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { BoardlyBrand } from "@/components/boardly-brand";
@@ -27,7 +27,7 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
   const [newTitle, setNewTitle] = useState(title);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { setShowCommandPalette, darkMode, toggleDarkMode } = useCanvasStore();
+  const { setShowCommandPalette, darkMode, toggleDarkMode, setShowPresentation } = useCanvasStore();
 
   const actualBoardId = boardId || "";
 
@@ -167,6 +167,7 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
           handleExport={handleExport}
           handleExportPNG={handleExportPNG}
           handleExportSVG={handleExportSVG}
+          setShowPresentation={setShowPresentation}
         />
       </FloatingDock>
       {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
@@ -193,6 +194,7 @@ function NavbarContent({
   handleExport,
   handleExportPNG,
   handleExportSVG,
+  setShowPresentation,
 }: {
   title: string;
   isEditing: boolean;
@@ -212,6 +214,7 @@ function NavbarContent({
   handleExport: () => void;
   handleExportPNG: () => void;
   handleExportSVG: () => void;
+  setShowPresentation: (show: boolean) => void;
 }) {
   const { vertical, compact } = useFloatingDock();
   const iconOnly = vertical || compact;
@@ -286,6 +289,11 @@ function NavbarContent({
         <NavIconButton onClick={() => setShowCommandPalette(true)} title="Commandes (Ctrl+K)" className={btnSize}>
           <Keyboard className={iconSize} />
         </NavIconButton>
+        {!readOnly && (
+          <NavIconButton onClick={() => setShowPresentation(true)} title="Présentation (Shift+P)" className={btnSize}>
+            <Presentation className={iconSize} />
+          </NavIconButton>
+        )}
         <NavIconButton active={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion" className={btnSize}>
           <MessageSquare className={iconSize} />
         </NavIconButton>
