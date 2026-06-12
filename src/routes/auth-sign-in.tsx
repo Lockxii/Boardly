@@ -82,12 +82,9 @@ export function SignInPage() {
           <div className="absolute inset-0 bg-[radial-gradient(#a3a3a3_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_at_center,black_60%,transparent_100%)]" />
         </div>
 
-        {/* Décos confinées aux coins — masque au centre pour ne jamais chevaucher le texte */}
-        <div
-          className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:radial-gradient(ellipse_55%_50%_at_50%_50%,transparent_0%,transparent_72%,black_73%)]"
-        >
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
           <motion.div
-            className="absolute top-[4%] left-[4%] w-36 h-36 bg-[#FFD02F] shadow-xl rotate-[-8deg] p-4 text-sm leading-tight flex items-center justify-center text-center text-black/80 font-medium"
+            className="absolute top-[10%] left-[8%] w-40 h-40 bg-[#FFD02F] shadow-xl rotate-[-8deg] p-4 text-base leading-tight flex items-center justify-center text-center text-black/80 font-medium"
             initial={{ opacity: 0, scale: 0.8, y: 60 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.7, ease: "backOut" }}
@@ -96,7 +93,7 @@ export function SignInPage() {
           </motion.div>
 
           <motion.div
-            className="absolute bottom-[4%] right-[4%] w-44 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 rotate-[4deg]"
+            className="absolute bottom-[12%] right-[8%] w-48 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 rotate-[4deg]"
             initial={{ opacity: 0, x: 80 }}
             animate={{ opacity: 1, x: 0 }}
             transition={{ duration: 0.7, delay: 0.15 }}
@@ -107,10 +104,14 @@ export function SignInPage() {
             <p className="text-xs font-bold mt-2 text-neutral-400">— Sarah, Product Designer</p>
           </motion.div>
 
-          <div className="absolute top-[6%] right-[6%]">
+          <motion.div
+            className="absolute top-[18%] right-[12%]"
+            animate={{ x: [0, -20, -10, 0], y: [0, 12, -6, 0] }}
+            transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+          >
             <MousePointer2 className="w-6 h-6 text-[#EC4899] fill-[#EC4899]" />
             <div className="ml-4 -mt-4 bg-[#EC4899] text-white text-xs px-2 py-1 rounded-md font-bold">Julie</div>
-          </div>
+          </motion.div>
         </div>
 
         <div className="relative z-20 max-w-md px-4">

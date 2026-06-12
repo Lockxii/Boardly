@@ -153,7 +153,8 @@ function CanvasMockup() {
 export function LandingPage() {
   const containerRef = useRef(null);
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ["start start", "end start"] });
-  const y1 = useTransform(scrollYProgress, [0, 1], [0, 80]);
+  const y1 = useTransform(scrollYProgress, [0, 1], [0, 60]);
+  const y2 = useTransform(scrollYProgress, [0, 1], [0, -40]);
 
   const { data: user } = useQuery<User | null>({
     queryKey: ["auth", "me"],
@@ -203,11 +204,10 @@ export function LandingPage() {
           <div className="absolute inset-0 bg-[radial-gradient(#a3a3a3_1px,transparent_1px)] [background-size:24px_24px] [mask-image:radial-gradient(ellipse_at_center,black_50%,transparent_100%)]" />
         </div>
 
-        {/* Décos confinées aux coins — zone centrale masquée */}
-        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none [mask-image:radial-gradient(ellipse_60%_55%_at_50%_50%,transparent_0%,transparent_70%,black_71%)]">
+        <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
           <motion.div
             style={{ y: y1, rotate: -5 }}
-            className="absolute top-[5%] left-[3%] xl:left-[5%] w-36 xl:w-44 h-36 xl:h-44 bg-[#FFD02F] shadow-xl rotate-[-6deg] p-4 xl:p-5 text-base xl:text-xl leading-tight flex items-center justify-center text-center text-black/80"
+            className="absolute top-[14%] left-[4%] sm:left-[8%] md:left-[12%] lg:left-[14%] w-44 md:w-48 h-44 md:h-48 bg-[#FFD02F] shadow-xl rotate-[-6deg] p-5 md:p-6 text-lg md:text-2xl leading-tight flex items-center justify-center text-center text-black/80"
             initial={{ opacity: 0, scale: 0.8, y: 100 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             transition={{ duration: 0.8, ease: "backOut" }}
@@ -215,12 +215,22 @@ export function LandingPage() {
             "Ça claque !" ✨
           </motion.div>
 
-          <div className="absolute top-[5%] right-[5%] xl:right-[8%]">
+          <motion.div
+            className="absolute top-[22%] right-[6%] sm:right-[10%] md:right-[12%]"
+            animate={{ x: [0, -24, -12, 0], y: [0, 16, -8, 0] }}
+            transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
+          >
             <MousePointer2 className="w-6 h-6 text-[#EC4899] fill-[#EC4899]" />
             <div className="ml-4 -mt-4 bg-[#EC4899] text-white text-xs px-2 py-1 rounded-md font-bold">Julie</div>
-          </div>
+          </motion.div>
 
-          <div className="absolute bottom-[5%] right-[3%] xl:right-[5%] w-52 xl:w-60 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 rotate-[5deg] hidden xl:block">
+          <motion.div
+            style={{ y: y2, rotate: 5 }}
+            className="absolute bottom-[16%] right-[4%] sm:right-[8%] md:right-[12%] w-56 md:w-64 bg-white dark:bg-neutral-800 rounded-xl border border-neutral-200 dark:border-neutral-700 shadow-2xl p-4 hidden sm:block"
+            initial={{ opacity: 0, x: 80 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
             <div className="flex items-center gap-3 border-b border-neutral-100 dark:border-neutral-700 pb-2">
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-xs">TM</div>
               <div className="flex-1 h-2 bg-neutral-100 rounded-full" />
@@ -229,7 +239,7 @@ export function LandingPage() {
               <div className="h-2 w-full bg-neutral-100 dark:bg-neutral-700 rounded-full" />
               <div className="h-2 w-5/6 bg-neutral-100 dark:bg-neutral-700 rounded-full" />
             </div>
-          </div>
+          </motion.div>
         </div>
 
         <div className="relative z-20 text-center max-w-4xl px-6">
