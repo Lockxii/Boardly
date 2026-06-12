@@ -34,15 +34,34 @@ export function getViewportCanvasBounds(
   };
 }
 
+export function getLayerBounds(layer: Layer) {
+  if (layer.type === "Path" && layer.points?.length) {
+    const active = layer.points.filter((p) => p[3] !== 1);
+    if (active.length > 0) {
+      const absolute = layer.width === 0 && layer.height === 0;
+      const xs = active.map((p) => (absolute ? p[0] : p[0] + layer.x));
+      const ys = active.map((p) => (absolute ? p[1] : p[1] + layer.y));
+      const pad = (layer.strokeWidth || 2) / 2 + 2;
+      const minX = Math.min(...xs) - pad;
+      const minY = Math.min(...ys) - pad;
+      const maxX = Math.max(...xs) + pad;
+      const maxY = Math.max(...ys) + pad;
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    }
+  }
+  return { x: layer.x, y: layer.y, width: layer.width, height: layer.height };
+}
+
 export function isLayerInViewport(
   layer: Layer,
   bounds: ReturnType<typeof getViewportCanvasBounds>
 ) {
+  const box = getLayerBounds(layer);
   return (
-    layer.x + layer.width >= bounds.minX &&
-    layer.x <= bounds.maxX &&
-    layer.y + layer.height >= bounds.minY &&
-    layer.y <= bounds.maxY
+    box.x + box.width >= bounds.minX &&
+    box.x <= bounds.maxX &&
+    box.y + box.height >= bounds.minY &&
+    box.y <= bounds.maxY
   );
 }
 

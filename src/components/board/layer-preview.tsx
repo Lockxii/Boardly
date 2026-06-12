@@ -127,7 +127,17 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
       }}
     >
       {layer.type === "Path" && (
-        <path d={getSvgPathFromPoints(layer.points || [])} stroke={isDrawing ? "#9ca3af" : layer.fill || "#000"} strokeWidth={layer.strokeWidth || 2} fill="none" strokeLinecap="round" strokeLinejoin="round" strokeOpacity={isDrawing ? 0.3 : 1} transform={`scale(${pathScaleX}, ${pathScaleY})`} style={{ transformOrigin: "top left" }} />
+        <path
+          d={getSvgPathFromPoints(layer.points || [])}
+          stroke={layer.fill || "#000"}
+          strokeWidth={layer.strokeWidth || 2}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          strokeOpacity={isDrawing ? 0.92 : 1}
+          transform={isDrawing ? undefined : `scale(${pathScaleX}, ${pathScaleY})`}
+          style={isDrawing ? undefined : { transformOrigin: "top left" }}
+        />
       )}
       {layer.type === "Line" && (
         <line x1={0} y1={0} x2={layer.width} y2={layer.height} stroke={layer.fill || "#111827"} strokeWidth={layer.strokeWidth || 3} strokeLinecap="round" />
