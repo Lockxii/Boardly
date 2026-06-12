@@ -41,7 +41,7 @@ export function TeamDialog({ boardId }: TeamDialogProps) {
           {isLoading ? (
             <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>
           ) : members.length === 0 ? (
-            <p className="text-sm text-neutral-500 text-center py-8">Aucun collaborateur invité pour le moment.</p>
+            <p className="text-sm text-neutral-500 text-center py-8">Personne n&apos;a encore rejoint via le lien d&apos;invitation.</p>
           ) : (
             <div className="space-y-3">
               {members.map((member) => (

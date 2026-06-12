@@ -13,7 +13,16 @@ export function BoardPage() {
 
   const { data: board, isLoading, error } = useQuery<Board>({
     queryKey: ["boards", boardId],
-    queryFn: () => apiFetch<Board>(`/api/boards/${boardId}`),
+    queryFn: async () => {
+      try {
+        return await apiFetch<Board>(`/api/boards/${boardId}`);
+      } catch (e) {
+        const message = e instanceof Error ? e.message : "";
+        if (message !== "Accès refusé") throw e;
+        await apiFetch(`/api/boards/${boardId}/join`, { method: "POST" });
+        return apiFetch<Board>(`/api/boards/${boardId}`);
+      }
+    },
   });
 
   if (isLoading) {

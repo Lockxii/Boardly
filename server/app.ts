@@ -374,23 +374,22 @@ export function createApp() {
     res.json(members);
   }));
 
-  app.post("/api/boards/:id/invite", requireAuth(async (req, res, user) => {
+  app.post("/api/boards/:id/join", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
-    const access = await getBoardAccess(boardId, user as { id: string; email: string });
-    if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut inviter" });
-    const { email } = req.body;
-    if (!email) return res.status(400).json({ error: "Email requis" });
-    try {
-      await prisma.boardMember.upsert({
-        where: { boardId_email: { boardId, email } },
-        update: {},
-        create: { boardId, email, role: "editor" },
-      });
-      res.json({ success: true });
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Erreur lors de l'invitation";
-      res.status(500).json({ error: message });
+    const board = await prisma.board.findUnique({ where: { id: boardId } });
+    if (!board) return res.status(404).json({ error: "Tableau introuvable" });
+
+    const authUser = user as { id: string; email: string };
+    if (board.authorId === authUser.id) {
+      return res.json({ success: true, role: "owner" });
     }
+
+    await prisma.boardMember.upsert({
+      where: { boardId_email: { boardId, email: authUser.email } },
+      update: {},
+      create: { boardId, email: authUser.email, role: "editor" },
+    });
+    res.json({ success: true, role: "editor" });
   }));
 
   app.delete("/api/boards/:id/members/:email", requireAuth(async (req, res, user) => {
