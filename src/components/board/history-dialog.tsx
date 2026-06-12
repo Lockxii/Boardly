@@ -3,6 +3,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { History, Clock, User, Camera, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import { NavIconButton } from "./nav-icon-button";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -16,9 +17,9 @@ export function HistoryDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20">
-          <History className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
-        </Button>
+        <NavIconButton title="Historique">
+          <History className="h-5 w-5" />
+        </NavIconButton>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px] max-h-[80vh] flex flex-col">
         <DialogHeader>

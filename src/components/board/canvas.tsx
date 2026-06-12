@@ -54,6 +54,14 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
     return () => setReadOnly(false);
   }, [readOnly, setReadOnly]);
 
+  useEffect(() => {
+    const state = useCanvasStore.getState();
+    if (!state.commentsPanelOpen || !state.commentsLayerId) return;
+    if (selection.length !== 1 || selection[0] !== state.commentsLayerId) {
+      state.closeCommentsPanel();
+    }
+  }, [selection]);
+
   const pencilThickness = useCanvasStore((s) => s.pencilThickness);
   const lastUsedColor = useCanvasStore((s) => s.lastUsedColor);
 
@@ -539,6 +547,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         useCanvasStore.getState().setConnectHoverId(null);
         setPasteGhostKind(null);
         clearTranslateGhost();
+        useCanvasStore.getState().closeCommentsPanel();
         setCanvasState({ mode: "none" });
         setSelection([]);
         return;

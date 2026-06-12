@@ -2,6 +2,7 @@ import { Trash2, RotateCcw } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/store/canvas-store";
+import { NavIconButton } from "./nav-icon-button";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 
@@ -13,14 +14,14 @@ export function TrashDialog() {
   return (
     <Dialog>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 relative" title="Corbeille">
-          <Trash2 className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
+        <NavIconButton className="relative" title="Corbeille">
+          <Trash2 className="h-5 w-5" />
           {trash.length > 0 && (
             <span className="absolute -top-0.5 -right-0.5 h-4 min-w-4 px-1 rounded-full bg-red-500 text-[10px] text-white flex items-center justify-center">
               {trash.length}
             </span>
           )}
-        </Button>
+        </NavIconButton>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[80vh] flex flex-col">
         <DialogHeader>

@@ -6,7 +6,7 @@ import {
   Bold, Italic, Underline, Ban, Copy, Lock, Unlock,
   Highlighter, Palette, Type, GripVertical,
   AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
-  Group, Ungroup, ListChecks,
+  Group, Ungroup, ListChecks, MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -39,6 +39,10 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const addChecklistItem = useCanvasStore((s) => s.addChecklistItem);
   const toggleReaction = useCanvasStore((s) => s.toggleReaction);
   const readOnly = useCanvasStore((s) => s.readOnly);
+  const commentsPanelOpen = useCanvasStore((s) => s.commentsPanelOpen);
+  const commentsLayerId = useCanvasStore((s) => s.commentsLayerId);
+  const toggleCommentsPanel = useCanvasStore((s) => s.toggleCommentsPanel);
+  const layerComments = useCanvasStore((s) => s.layerComments);
   const brandColors = useCanvasStore((s) => s.brandColors);
   const setBrandColors = useCanvasStore((s) => s.setBrandColors);
 
@@ -355,6 +359,21 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
               <Button variant="ghost" size="icon" className="h-8 w-8" title="Grouper" onClick={() => groupSelection()}><Group className="h-4 w-4" /></Button>
               <Button variant="ghost" size="icon" className="h-8 w-8" title="Dégrouper" onClick={() => ungroupSelection()}><Ungroup className="h-4 w-4" /></Button>
             </div>
+          )}
+
+          {!readOnly && selection.length === 1 && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-8 w-8 ${commentsPanelOpen && commentsLayerId === selection[0] ? "bg-blue-100 text-blue-700 dark:bg-blue-900/40" : ""}`}
+              title="Commentaires sur l'élément"
+              onClick={() => toggleCommentsPanel(selection[0])}
+            >
+              <MessageSquare className="h-4 w-4" />
+              {(layerComments[selection[0]]?.length || 0) > 0 && (
+                <span className="sr-only">{layerComments[selection[0]]?.length} commentaires</span>
+              )}
+            </Button>
           )}
 
           {!readOnly && selection.length === 1 && (

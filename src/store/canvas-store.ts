@@ -42,6 +42,12 @@ interface CanvasStore {
   setConnectHoverId: (id: string | null) => void;
   setDropTargetColumnId: (id: string | null) => void;
 
+  commentsPanelOpen: boolean;
+  commentsLayerId: string | null;
+  openCommentsPanel: (layerId: string) => void;
+  closeCommentsPanel: () => void;
+  toggleCommentsPanel: (layerId: string) => void;
+
   // Save state
   saveStatus: "idle" | "saving" | "saved" | "error";
   lastSavedAt: number | null;
@@ -196,6 +202,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
   setConnectHoverId: (connectHoverId) => set({ connectHoverId }),
   setDropTargetColumnId: (dropTargetColumnId) => set({ dropTargetColumnId }),
+
+  commentsPanelOpen: false,
+  commentsLayerId: null,
+  openCommentsPanel: (layerId) => set({ commentsPanelOpen: true, commentsLayerId: layerId }),
+  closeCommentsPanel: () => set({ commentsPanelOpen: false, commentsLayerId: null }),
+  toggleCommentsPanel: (layerId) =>
+    set((s) =>
+      s.commentsPanelOpen && s.commentsLayerId === layerId
+        ? { commentsPanelOpen: false, commentsLayerId: null }
+        : { commentsPanelOpen: true, commentsLayerId: layerId }
+    ),
 
   saveStatus: "idle",
   lastSavedAt: null,
@@ -734,6 +751,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       flashRevision: 0,
       connectHoverId: null,
       dropTargetColumnId: null,
+      commentsPanelOpen: false,
+      commentsLayerId: null,
       undoStack: [],
       redoStack: [],
       canUndo: false,

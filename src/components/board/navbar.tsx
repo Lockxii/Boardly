@@ -3,12 +3,11 @@ import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { BoardlyBrand } from "@/components/boardly-brand";
 import { useState, useRef, useEffect } from "react";
-import { InviteDialog } from "./invite-dialog";
-import { TeamDialog } from "./team-dialog";
 import { HistoryDialog } from "./history-dialog";
 import { ShareDialog } from "./share-dialog";
 import { TrashDialog } from "./trash-dialog";
 import { ChatPanel } from "./chat-panel";
+import { NavIconButton } from "./nav-icon-button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/utils";
@@ -171,27 +170,25 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 text-neutral-600 dark:text-neutral-400" onClick={toggleDarkMode} title={darkMode ? "Mode clair" : "Mode sombre"}>
+        <div className="flex items-center gap-1 sm:gap-2">
+          <NavIconButton onClick={toggleDarkMode} title={darkMode ? "Mode clair" : "Mode sombre"}>
             {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </Button>
-          <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 text-neutral-600 dark:text-neutral-400" onClick={() => setShowCommandPalette(true)} title="Commandes (Ctrl+K)">
+          </NavIconButton>
+          <NavIconButton onClick={() => setShowCommandPalette(true)} title="Commandes (Ctrl+K)">
             <Keyboard className="h-5 w-5" />
-          </Button>
-          <Button variant="ghost" size="icon" className={`h-9 w-9 hover:bg-white/20 ${isChatOpen ? "bg-white/20 text-blue-500" : "text-neutral-600 dark:text-neutral-400"}`} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion">
+          </NavIconButton>
+          <NavIconButton active={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion">
             <MessageSquare className="h-5 w-5" />
-          </Button>
+          </NavIconButton>
           <HistoryDialog />
           {!readOnly && <TrashDialog />}
-          {!readOnly && <TeamDialog boardId={actualBoardId} />}
-          {!readOnly && <InviteDialog boardId={actualBoardId} />}
           {!readOnly && actualBoardId && <ShareDialog boardId={actualBoardId} isPublic={isPublic} />}
           {readOnly && (
             <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-1 rounded-full">Lecture seule</span>
           )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20"><MoreHorizontal className="h-5 w-5 text-neutral-600 dark:text-neutral-400" /></Button>
+              <NavIconButton title="Plus d'options"><MoreHorizontal className="h-5 w-5" /></NavIconButton>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Exporter</DropdownMenuLabel>
