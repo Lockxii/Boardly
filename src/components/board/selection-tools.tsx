@@ -38,6 +38,8 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const addChecklistItem = useCanvasStore((s) => s.addChecklistItem);
   const toggleReaction = useCanvasStore((s) => s.toggleReaction);
   const readOnly = useCanvasStore((s) => s.readOnly);
+  const brandColors = useCanvasStore((s) => s.brandColors);
+  const setBrandColors = useCanvasStore((s) => s.setBrandColors);
 
   const selectionInfo = useMemo(() => {
     if (!selection || selection.length === 0) return null;
@@ -222,6 +224,33 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
               <DropdownMenuContent className="w-64 p-3 select-none" align="start" sideOffset={10}>
                 <DropdownMenuLabel className="mb-2">Apparence</DropdownMenuLabel>
                 <div className="space-y-4">
+                  <div className="space-y-2">
+                    <span className="text-xs text-neutral-500 font-medium">Palette marque</span>
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      {brandColors.map((color, i) => (
+                        <button
+                          key={`${color}-${i}`}
+                          type="button"
+                          title="Appliquer la couleur"
+                          className="h-6 w-6 rounded-full border-2 border-white dark:border-neutral-600 shadow-sm hover:scale-110 transition-transform"
+                          style={{ backgroundColor: color }}
+                          onClick={() => setFill(color)}
+                        />
+                      ))}
+                      <input
+                        type="color"
+                        className="h-6 w-6 rounded cursor-pointer border-0 p-0"
+                        value={brandColors[0] || "#2563EB"}
+                        title="Modifier la couleur principale"
+                        onChange={(e) => {
+                          const next = [...brandColors];
+                          next[0] = e.target.value;
+                          setBrandColors(next);
+                          setFill(e.target.value);
+                        }}
+                      />
+                    </div>
+                  </div>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center text-xs text-neutral-500 font-medium">
                       <span>Remplissage</span>

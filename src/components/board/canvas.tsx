@@ -17,7 +17,6 @@ import { ConnectionsLayer } from "./connections-layer";
 import { CursorsPresence } from "./cursors-presence";
 import { BoardSearchDialog } from "./board-search-dialog";
 import { LayerCommentsPanel } from "./layer-comments-panel";
-import { BrandPaletteBar } from "./brand-palette-bar";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/utils";
 import type { Layer, LayerType, LinkPreview } from "@/lib/types";
@@ -587,7 +586,6 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       {!readOnly && showCommandPalette && <CommandPalette />}
       <BoardSearchDialog />
       {!readOnly && <LayerCommentsPanel />}
-      {!readOnly && <BrandPaletteBar />}
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <StatusBar />
       {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
