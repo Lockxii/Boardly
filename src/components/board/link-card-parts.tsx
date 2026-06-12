@@ -11,20 +11,8 @@ import {
   resolveLinkProvider,
   type LinkProvider,
 } from "@/lib/brand-icons";
-
-function youtubeIdFromUrl(url?: string) {
-  if (!url) return null;
-  try {
-    const parsed = new URL(url);
-    const host = parsed.hostname.replace(/^www\./, "").replace(/^m\./, "");
-    if (host === "youtu.be") return parsed.pathname.slice(1).split("/")[0] || null;
-    const parts = parsed.pathname.split("/").filter(Boolean);
-    if (parts[0] === "shorts" || parts[0] === "embed" || parts[0] === "live") return parts[1] || null;
-    return parsed.searchParams.get("v");
-  } catch {
-    return null;
-  }
-}
+import { LinkMediaPreview } from "@/components/board/link-media-preview";
+import { youtubeIdFromUrl } from "@/lib/link-media-utils";
 
 function BrandLogo({
   provider,
@@ -71,6 +59,7 @@ export function LinkCardImage({
   width,
   imageWidth,
   imageHeight,
+  readOnly,
   onNaturalSize,
 }: {
   src: string;
@@ -79,6 +68,7 @@ export function LinkCardImage({
   width: number;
   imageWidth?: number;
   imageHeight?: number;
+  readOnly?: boolean;
   onNaturalSize?: (width: number, height: number) => void;
 }) {
   const videoId = provider === "youtube" ? youtubeIdFromUrl(url) : null;
@@ -86,34 +76,34 @@ export function LinkCardImage({
   const imageHeightPx = getLinkImageHeight(resolved, width, imageWidth, imageHeight);
   const isMusic = resolved === "spotify" || resolved === "apple-music" || resolved === "deezer" || resolved === "amazon-music" || resolved === "soundcloud";
 
+  const brandBadge =
+    resolved !== "generic" ? (
+      <div className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 shadow-sm backdrop-blur-sm pointer-events-none">
+        <BrandLogo provider={resolved} className="h-4 w-4" mono={!isColorLinkLogo(resolved)} />
+      </div>
+    ) : null;
+
   return (
-    <div
-      className={`relative w-full shrink-0 overflow-hidden ${isMusic ? "bg-neutral-100 dark:bg-neutral-900" : "bg-neutral-100 dark:bg-neutral-950"}`}
-      style={{ height: imageHeightPx }}
-    >
-      <img
-        src={src}
-        alt=""
-        className="h-full w-full object-contain"
-        onLoad={(e) => {
-          const img = e.currentTarget;
-          if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-            onNaturalSize?.(img.naturalWidth, img.naturalHeight);
-          }
-        }}
-        onError={(e) => {
-          if (provider === "youtube" && videoId && !e.currentTarget.dataset.fallback) {
-            e.currentTarget.dataset.fallback = "1";
-            e.currentTarget.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
-          }
-        }}
-      />
-      {resolved !== "generic" && (
-        <div className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 shadow-sm backdrop-blur-sm">
-          <BrandLogo provider={resolved} className="h-4 w-4" mono={!isColorLinkLogo(resolved)} />
-        </div>
-      )}
-    </div>
+    <LinkMediaPreview
+      src={src}
+      provider={resolved}
+      url={url}
+      height={imageHeightPx}
+      readOnly={readOnly}
+      brandBadge={brandBadge}
+      onImageLoad={(e) => {
+        const img = e.currentTarget;
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+          onNaturalSize?.(img.naturalWidth, img.naturalHeight);
+        }
+      }}
+      onImageError={(e) => {
+        if (provider === "youtube" && videoId && !e.currentTarget.dataset.fallback) {
+          e.currentTarget.dataset.fallback = "1";
+          e.currentTarget.src = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+        }
+      }}
+    />
   );
 }
 
