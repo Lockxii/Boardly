@@ -109,9 +109,11 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
     e.target.value = "";
   };
 
+  const dismissConnectionTools = useCanvasStore((s) => s.dismissConnectionTools);
+
   const startConnectMode = () => {
     if (connectFromId) {
-      setConnectFromId(null);
+      dismissConnectionTools();
       return;
     }
     const sel = useCanvasStore.getState().selection;

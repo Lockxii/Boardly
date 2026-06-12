@@ -613,6 +613,9 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         if (layer.x < right && layer.x + layer.width > left && layer.y < bottom && layer.y + layer.height > top) ids.push(id);
       }
       setSelection(ids);
+      if (ids.length === 0) {
+        state.dismissConnectionTools();
+      }
       setCanvasState({ mode: "none" });
     } else if (state.canvasState.mode === "inserting") {
       const { origin } = state.canvasState;
@@ -664,6 +667,11 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   const onConnectionPointerDown = useCallback((e: React.PointerEvent, connectionId: string) => {
     e.stopPropagation();
     const state = useCanvasStore.getState();
+    if (state.selectedConnectionId === connectionId) {
+      state.dismissConnectionTools();
+      setCanvasState({ mode: "none" });
+      return;
+    }
     state.setSelectedConnectionId(connectionId);
     state.setConnectFromId(null);
     state.setConnectHoverId(null);
@@ -711,12 +719,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         if (useCanvasStore.getState().showPresentation) { useCanvasStore.getState().setShowPresentation(false); return; }
         if (useCanvasStore.getState().showCommandPalette) { useCanvasStore.getState().setShowCommandPalette(false); return; }
         if (showShortcuts) { setShowShortcuts(false); return; }
-        useCanvasStore.getState().setConnectFromId(null);
-        useCanvasStore.getState().setConnectHoverId(null);
-        setPasteGhostKind(null);
-        clearTranslateGhost();
-        useCanvasStore.getState().closeCommentsPanel();
-        useCanvasStore.getState().setSelectedConnectionId(null);
+        useCanvasStore.getState().dismissConnectionTools();
         setCanvasState({ mode: "none" });
         setSelection([]);
         return;
@@ -743,8 +746,14 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       if (isInput) return;
 
       switch (e.key) {
-        case "h": setCanvasState({ mode: "panning" }); break;
-        case "l": setCanvasState({ mode: "inserting", layerType: "Line" }); break;
+        case "h":
+          setCanvasState({ mode: "panning" });
+          store.dismissConnectionTools();
+          break;
+        case "l":
+          setCanvasState({ mode: "inserting", layerType: "Line" });
+          store.dismissConnectionTools();
+          break;
         case "F": if (e.shiftKey) setCanvasState({ mode: "inserting", layerType: "Frame" }); break;
         case "P": if (e.shiftKey && !readOnly) { e.preventDefault(); useCanvasStore.getState().setShowPresentation(true); } break;
         case "Delete": case "Backspace":
@@ -756,7 +765,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
           break;
         case "d": if (e.ctrlKey || e.metaKey) { e.preventDefault(); store.duplicateLayers(); } break;
         case "z": if (e.ctrlKey || e.metaKey) { e.preventDefault(); if (e.shiftKey) redo(); else undo(); } break;
-        case "v": if (!e.ctrlKey && !e.metaKey) setCanvasState({ mode: "none" }); break;
+        case "v": if (!e.ctrlKey && !e.metaKey) { setCanvasState({ mode: "none" }); store.dismissConnectionTools(); } break;
         case "r": if (!e.ctrlKey && !e.metaKey) setCanvasState({ mode: "inserting", layerType: "Rectangle" }); break;
         case "e": if (!e.ctrlKey && !e.metaKey) setCanvasState({ mode: "inserting", layerType: "Ellipse" }); break;
         case "t": if (!e.ctrlKey && !e.metaKey) setCanvasState({ mode: "inserting", layerType: "Text" }); break;

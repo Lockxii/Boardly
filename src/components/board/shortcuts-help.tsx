@@ -30,6 +30,7 @@ const SHORTCUTS = [
     { keys: "M", desc: "Basculer minimap" },
     { keys: "Shift+S", desc: "Snap to grid" },
     { keys: "Shift+P", desc: "Mode présentation" },
+    { keys: "Échap / V", desc: "Quitter connecteur / relier" },
   ]},
   { category: "Import", items: [
     { keys: "Ctrl+V", desc: "Coller image / lien / texte" },

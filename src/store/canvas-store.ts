@@ -60,6 +60,7 @@ interface CanvasStore {
   setConnectFromId: (id: string | null) => void;
   selectedConnectionId: string | null;
   setSelectedConnectionId: (id: string | null) => void;
+  dismissConnectionTools: () => void;
   connectionDefaults: ConnectionStyle;
   setConnectionDefaults: (style: Partial<ConnectionStyle>) => void;
   addConnection: (fromId: string, toId: string) => void;
@@ -238,6 +239,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setConnectFromId: (connectFromId) => set({ connectFromId, selectedConnectionId: connectFromId ? null : get().selectedConnectionId }),
   selectedConnectionId: null,
   setSelectedConnectionId: (selectedConnectionId) => set({ selectedConnectionId, selection: selectedConnectionId ? [] : get().selection }),
+  dismissConnectionTools: () => set({ connectFromId: null, connectHoverId: null, selectedConnectionId: null }),
   connectionDefaults: { ...DEFAULT_CONNECTION_STYLE },
   setConnectionDefaults: (style) => set((s) => ({ connectionDefaults: { ...s.connectionDefaults, ...style } })),
 

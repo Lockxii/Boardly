@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Link2, Minus, ArrowRight, Circle, Spline, MoveHorizontal } from "lucide-react";
+import { Trash2, Link2, Minus, ArrowRight, Circle, Spline, MoveHorizontal, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/store/canvas-store";
 import type { ConnectionLineStyle, ConnectionMarker, ConnectionRouting } from "@/lib/connection-utils";
@@ -30,6 +30,7 @@ export const ConnectionTools = memo(function ConnectionTools() {
   const setConnectionDefaults = useCanvasStore((s) => s.setConnectionDefaults);
   const updateConnection = useCanvasStore((s) => s.updateConnection);
   const removeConnection = useCanvasStore((s) => s.removeConnection);
+  const dismissConnectionTools = useCanvasStore((s) => s.dismissConnectionTools);
   const readOnly = useCanvasStore((s) => s.readOnly);
 
   const visible = !readOnly && (!!connectFromId || !!selectedConnectionId);
@@ -68,7 +69,7 @@ export const ConnectionTools = memo(function ConnectionTools() {
         >
           <div className="flex shrink-0 items-center gap-1 px-1 text-xs font-medium text-neutral-500">
             <Link2 className="h-3.5 w-3.5 text-blue-500" />
-            <span className="hidden sm:inline">{connectFromId ? "Lien" : "Connecteur"}</span>
+            <span className="hidden sm:inline">{connectFromId ? "Relier" : "Connecteur"}</span>
           </div>
 
           <Sep />
@@ -159,13 +160,29 @@ export const ConnectionTools = memo(function ConnectionTools() {
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7 shrink-0 text-red-500 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/40"
-                title="Supprimer"
+                title="Supprimer le connecteur"
                 onClick={() => removeConnection(selectedConnectionId)}
               >
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </>
           )}
+
+          <Sep />
+
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 gap-1 px-2 text-[11px] text-neutral-600 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-700"
+            title="Fermer (Échap ou V)"
+            onClick={() => dismissConnectionTools()}
+          >
+            <X className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">{connectFromId ? "Annuler" : "Fermer"}</span>
+            <kbd className="hidden lg:inline rounded border border-neutral-200 bg-neutral-50 px-1 font-mono text-[9px] dark:border-neutral-600 dark:bg-neutral-900">
+              Esc
+            </kbd>
+          </Button>
         </motion.div>
       )}
     </AnimatePresence>

@@ -10,6 +10,7 @@ export function StatusBar() {
   const saveStatus = useCanvasStore((s) => s.saveStatus);
   const lastSavedAt = useCanvasStore((s) => s.lastSavedAt);
   const connectFromId = useCanvasStore((s) => s.connectFromId);
+  const selectedConnectionId = useCanvasStore((s) => s.selectedConnectionId);
   const [mousePos, setMousePos] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -29,7 +30,8 @@ export function StatusBar() {
   }, []);
 
   const modeLabel = (() => {
-    if (connectFromId) return "Relier — cliquez sur l'élément d'arrivée";
+    if (connectFromId) return "Relier — clique sur l'arrivée · Échap / ✕ / V pour quitter";
+    if (selectedConnectionId) return "Connecteur · Échap / ✕ / recliquer la flèche pour quitter";
     switch (canvasState.mode) {
       case "none": return "Sélection";
       case "translating": return "Déplacement";
