@@ -8,6 +8,7 @@ import { ShareDialog } from "./share-dialog";
 import { TrashDialog } from "./trash-dialog";
 import { ChatPanel } from "./chat-panel";
 import { NavIconButton } from "./nav-icon-button";
+import { FloatingDock, useFloatingDock } from "./floating-dock";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/utils";
@@ -133,15 +134,98 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
 
   return (
     <>
-      <nav className="absolute top-4 left-4 right-4 h-14 flex items-center bg-white/85 dark:bg-neutral-900/85 backdrop-blur-md rounded-xl border border-neutral-200/70 dark:border-neutral-700/70 shadow-sm shadow-black/[0.04] px-3 sm:px-4 pointer-events-auto z-20 transition-all">
-        <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+      <FloatingDock
+        id="navbar"
+        defaultAnchor="top-center"
+        zIndex={30}
+        collapsedContent={
+          <>
+            <BoardlyBrand to="/dashboard" showName={false} size={20} />
+            <span className="max-w-[120px] truncate">{title}</span>
+          </>
+        }
+      >
+        <NavbarContent
+          title={title}
+          isEditing={isEditing}
+          setIsEditing={setIsEditing}
+          newTitle={newTitle}
+          setNewTitle={setNewTitle}
+          inputRef={inputRef}
+          onSubmit={onSubmit}
+          isChatOpen={isChatOpen}
+          setIsChatOpen={setIsChatOpen}
+          readOnly={readOnly}
+          actualBoardId={actualBoardId}
+          isPublic={isPublic}
+          toggleDarkMode={toggleDarkMode}
+          darkMode={darkMode}
+          setShowCommandPalette={setShowCommandPalette}
+          handleExport={handleExport}
+          handleExportPNG={handleExportPNG}
+          handleExportSVG={handleExportSVG}
+        />
+      </FloatingDock>
+      {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
+    </>
+  );
+}
+
+function NavbarContent({
+  title,
+  isEditing,
+  setIsEditing,
+  newTitle,
+  setNewTitle,
+  inputRef,
+  onSubmit,
+  isChatOpen,
+  setIsChatOpen,
+  readOnly,
+  actualBoardId,
+  isPublic,
+  toggleDarkMode,
+  darkMode,
+  setShowCommandPalette,
+  handleExport,
+  handleExportPNG,
+  handleExportSVG,
+}: {
+  title: string;
+  isEditing: boolean;
+  setIsEditing: (v: boolean) => void;
+  newTitle: string;
+  setNewTitle: (v: string) => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+  onSubmit: () => void;
+  isChatOpen: boolean;
+  setIsChatOpen: (v: boolean) => void;
+  readOnly: boolean;
+  actualBoardId: string;
+  isPublic: boolean;
+  toggleDarkMode: () => void;
+  darkMode: boolean;
+  setShowCommandPalette: (v: boolean) => void;
+  handleExport: () => void;
+  handleExportPNG: () => void;
+  handleExportSVG: () => void;
+}) {
+  const { vertical } = useFloatingDock();
+
+  return (
+    <nav
+      className={`flex min-w-0 items-center gap-1 sm:gap-2 px-0.5 ${
+        vertical ? "h-auto flex-col py-1" : "h-12 flex-row flex-1"
+      }`}
+    >
+        <div className={`flex min-w-0 items-center gap-2 sm:gap-3 ${vertical ? "flex-col" : "flex-1 flex-row"}`}>
           <Button variant="ghost" size="icon" asChild className="h-9 w-9 shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-800">
             <Link to="/dashboard" title="Retour au dashboard">
               <ChevronLeft className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
             </Link>
           </Button>
           <BoardlyBrand to="/dashboard" showName={false} size={28} className="hidden sm:flex shrink-0" />
-          <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-700 shrink-0" />
+          {!vertical && <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-700 shrink-0" />}
           {isEditing ? (
             <input
               ref={inputRef}
@@ -170,7 +254,7 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
           </div>
         </div>
 
-        <div className="flex items-center gap-1 sm:gap-2">
+        <div className={`flex items-center gap-1 sm:gap-2 ${vertical ? "flex-col" : "flex-row flex-wrap justify-end"}`}>
           <NavIconButton onClick={toggleDarkMode} title={darkMode ? "Mode clair" : "Mode sombre"}>
             {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </NavIconButton>
@@ -201,7 +285,5 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
           </DropdownMenu>
         </div>
       </nav>
-      {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
-    </>
   );
 }

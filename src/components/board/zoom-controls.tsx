@@ -1,6 +1,7 @@
 import { useCanvasStore } from "@/store/use-canvas-store";
 import { Button } from "@/components/ui/button";
-import { Minus, Plus, RotateCcw } from "lucide-react";
+import { Minus, Plus, RotateCcw, ZoomIn } from "lucide-react";
+import { FloatingDock, useFloatingDock } from "./floating-dock";
 
 export function ZoomControls() {
   const { camera, setCamera } = useCanvasStore();
@@ -18,18 +19,60 @@ export function ZoomControls() {
   };
 
   return (
-    <div className="absolute bottom-4 left-4 flex items-center gap-1 bg-white dark:bg-neutral-800 p-1 rounded-lg shadow-md border border-neutral-200 dark:border-neutral-700 pointer-events-auto">
-      <Button variant="ghost" size="icon" onClick={() => handleZoom(-0.1)} title="Zoom arrière (Ctrl+-)">
+    <FloatingDock
+      id="zoom"
+      defaultAnchor="bottom-left"
+      zIndex={25}
+      collapsedContent={
+        <>
+          <ZoomIn className="h-3.5 w-3.5 text-neutral-500" />
+          <span className="font-mono tabular-nums">{Math.round(camera.zoom * 100)}%</span>
+        </>
+      }
+    >
+      <ZoomControlsContent
+        zoom={camera.zoom}
+        onZoomOut={() => handleZoom(-0.1)}
+        onZoomIn={() => handleZoom(0.1)}
+        onReset={handleReset}
+        onFitAll={handleFitAll}
+      />
+    </FloatingDock>
+  );
+}
+
+function ZoomControlsContent({
+  zoom,
+  onZoomOut,
+  onZoomIn,
+  onReset,
+  onFitAll,
+}: {
+  zoom: number;
+  onZoomOut: () => void;
+  onZoomIn: () => void;
+  onReset: () => void;
+  onFitAll: () => void;
+}) {
+  const { vertical } = useFloatingDock();
+
+  return (
+    <div className={`flex items-center gap-0.5 ${vertical ? "flex-col py-0.5" : "flex-row"}`}>
+      <Button variant="ghost" size="icon" onClick={onZoomOut} className="h-8 w-8" title="Zoom arrière (Ctrl+-)">
         <Minus className="h-4 w-4" />
       </Button>
-      <button onClick={handleReset} className="w-12 text-xs font-mono font-medium text-center hover:bg-neutral-100 dark:hover:bg-neutral-700 rounded py-1" title="Réinitialiser (Ctrl+0)">
-        {Math.round(camera.zoom * 100)}%
+      <button
+        onClick={onReset}
+        className="min-w-12 rounded px-1 py-1 text-center font-mono text-xs font-medium hover:bg-neutral-100 dark:hover:bg-neutral-700"
+        title="Réinitialiser (Ctrl+0)"
+      >
+        {Math.round(zoom * 100)}%
       </button>
-      <Button variant="ghost" size="icon" onClick={() => handleZoom(0.1)} title="Zoom avant (Ctrl+=)">
+      <Button variant="ghost" size="icon" onClick={onZoomIn} className="h-8 w-8" title="Zoom avant (Ctrl+=)">
         <Plus className="h-4 w-4" />
       </Button>
-      <div className="w-[1px] h-5 bg-neutral-200 dark:bg-neutral-700" />
-      <Button variant="ghost" size="icon" onClick={handleFitAll} className="h-8 w-8" title="Recentrer (Ctrl+0)">
+      <div className={`bg-neutral-200 dark:bg-neutral-700 ${vertical ? "h-px w-5" : "h-5 w-px"}`} />
+      <Button variant="ghost" size="icon" onClick={onFitAll} className="h-8 w-8" title="Recentrer (Ctrl+0)">
         <RotateCcw className="h-3.5 w-3.5" />
       </Button>
     </div>
