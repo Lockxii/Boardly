@@ -24,7 +24,7 @@ export function AppShell({ user, onSignOut, actions, children }: AppShellProps) 
       />
 
       <header className="sticky top-0 z-40 border-b border-neutral-200/80 dark:border-neutral-800/80 bg-[#FDFCF8]/90 dark:bg-[#0A0A0A]/90 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-4 px-4 sm:px-6">
           <BoardlyBrand to="/dashboard" className="text-lg" />
 
           <div className="flex items-center gap-2 sm:gap-3">

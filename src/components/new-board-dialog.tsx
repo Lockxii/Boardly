@@ -19,6 +19,8 @@ type NewBoardDialogProps = {
   isLoading?: boolean;
   triggerVariant?: "default" | "outline";
   triggerLabel?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function NewBoardDialog({
@@ -26,15 +28,19 @@ export function NewBoardDialog({
   isLoading,
   triggerVariant = "default",
   triggerLabel = "Nouveau tableau",
+  open: openProp,
+  onOpenChange: onOpenChangeProp,
 }: NewBoardDialogProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const open = openProp ?? internalOpen;
+  const setOpen = onOpenChangeProp ?? setInternalOpen;
   const [title, setTitle] = useState("");
   const [selectedTemplate, setSelectedTemplate] = useState("blank");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onCreate(title || "Sans titre", selectedTemplate);
-    setOpen(false);
+    handleSubmitSuccess();
     setTitle("");
     setSelectedTemplate("blank");
   };
@@ -45,6 +51,10 @@ export function NewBoardDialog({
       setTitle("");
       setSelectedTemplate("blank");
     }
+  };
+
+  const handleSubmitSuccess = () => {
+    handleOpenChange(false);
   };
 
   return (

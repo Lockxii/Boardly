@@ -2,11 +2,11 @@ import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Layout, Search, Copy, ArrowUpDown } from "lucide-react";
+import { Layout, Search, ArrowUpDown, Sparkles } from "lucide-react";
 import { apiFetch } from "@/lib/utils";
 import { authClient, fetchCurrentUser } from "@/lib/auth-client";
 import { AppShell } from "@/components/app-shell";
-import { BoardCard, BoardCardSkeleton } from "@/components/board-card";
+import { BoardCard, BoardCardSkeleton, CreateBoardCard } from "@/components/board-card";
 import { NewBoardDialog } from "@/components/new-board-dialog";
 import { DeleteBoardDialog } from "@/components/delete-board-dialog";
 import { Input } from "@/components/ui/input";
@@ -17,26 +17,33 @@ type SortKey = "updated" | "title" | "created";
 
 function BoardSection({
   title,
-  description,
+  count,
   boards,
   onDelete,
   onDuplicate,
+  showCreate,
+  onCreateClick,
 }: {
   title: string;
-  description?: string;
+  count: number;
   boards: Board[];
   onDelete?: (board: Board) => void;
   onDuplicate?: (board: Board) => void;
+  showCreate?: boolean;
+  onCreateClick?: () => void;
 }) {
-  if (boards.length === 0) return null;
+  if (boards.length === 0 && !showCreate) return null;
 
   return (
-    <section className="space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold tracking-tight">{title}</h2>
-        {description && <p className="text-sm text-neutral-500 mt-1">{description}</p>}
+    <section className="space-y-5">
+      <div className="flex items-baseline justify-between gap-4">
+        <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-neutral-500 dark:text-neutral-400">
+          {title}
+        </h2>
+        <span className="text-xs font-medium text-neutral-400">{count}</span>
       </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        {showCreate && onCreateClick && <CreateBoardCard onClick={onCreateClick} />}
         {boards.map((board) => (
           <BoardCard key={board.id} board={board} onDelete={onDelete} onDuplicate={onDuplicate} />
         ))}
@@ -52,6 +59,7 @@ export function DashboardPage() {
   const [boardToDelete, setBoardToDelete] = useState<Board | null>(null);
   const [sortKey, setSortKey] = useState<SortKey>("updated");
   const [folderFilter, setFolderFilter] = useState<string>("all");
+  const [createOpen, setCreateOpen] = useState(false);
 
   const { data: user } = useQuery<UserType | null>({
     queryKey: ["auth", "me"],
@@ -113,6 +121,7 @@ export function DashboardPage() {
   const ownedBoards = sortBoards(boards.filter((b) => b.isOwner !== false).filter(filterBoard));
   const sharedBoards = sortBoards(boards.filter((b) => b.isOwner === false).filter(filterBoard));
   const hasResults = ownedBoards.length > 0 || sharedBoards.length > 0;
+  const ownedCount = boards.filter((b) => b.isOwner !== false).length;
 
   const firstName = user?.name?.split(" ")[0];
 
@@ -128,77 +137,106 @@ export function DashboardPage() {
       onSignOut={handleSignOut}
       actions={
         <NewBoardDialog
+          open={createOpen}
+          onOpenChange={setCreateOpen}
           onCreate={(title, template) => createMutation.mutate({ title, template })}
           isLoading={createMutation.isPending}
         />
       }
     >
-      <div className="mx-auto max-w-6xl space-y-8">
-        <section>
-          <p className="text-sm font-medium text-blue-600 dark:text-blue-400 mb-1">Espace de travail</p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">
-            {firstName ? `Bon retour, ${firstName}` : "Bon retour"}
-          </h1>
-          <p className="mt-2 text-neutral-500 max-w-xl">
-            Vos tableaux sont sauvegardés dans le cloud. Reprenez un projet ou créez-en un nouveau.
-          </p>
+      <div className="mx-auto max-w-7xl space-y-8">
+        <section className="relative overflow-hidden rounded-3xl border border-neutral-200/70 bg-white/70 px-6 py-8 shadow-sm shadow-black/[0.03] backdrop-blur-md dark:border-neutral-800/80 dark:bg-neutral-900/50 sm:px-8">
+          <div
+            className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-blue-400/10 blur-3xl dark:bg-blue-500/10"
+            aria-hidden
+          />
+          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0">
+              <p className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-blue-700 dark:bg-blue-950/50 dark:text-blue-300">
+                <Sparkles className="h-3 w-3" />
+                Espace de travail
+              </p>
+              <h1 className="text-3xl font-bold tracking-tight sm:text-4xl lg:text-[2.75rem] lg:leading-tight">
+                {firstName ? `Bon retour, ${firstName}` : "Bon retour"}
+              </h1>
+              <p className="mt-2 text-sm text-neutral-500 sm:text-base">
+                Reprenez un moodboard, collez vos refs, ou partez d&apos;un canvas vierge.
+              </p>
+            </div>
+            {!isLoading && boards.length > 0 && (
+              <div className="flex shrink-0 gap-6 border-t border-neutral-200/80 pt-4 lg:border-t-0 lg:border-l lg:pl-8 lg:pt-0 dark:border-neutral-800">
+                <div>
+                  <p className="text-2xl font-bold tabular-nums">{ownedCount}</p>
+                  <p className="text-xs text-neutral-500">Tableaux</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold tabular-nums">{sharedBoards.length}</p>
+                  <p className="text-xs text-neutral-500">Partagés</p>
+                </div>
+              </div>
+            )}
+          </div>
         </section>
 
         {boards.length > 0 && (
-          <div className="flex flex-col sm:flex-row gap-3 max-w-2xl">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-3 rounded-2xl border border-neutral-200/70 bg-white/80 p-3 shadow-sm backdrop-blur-sm dark:border-neutral-800/80 dark:bg-neutral-900/60 sm:flex-row sm:items-center">
+            <div className="relative min-w-0 flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
               <Input
-                placeholder="Rechercher un tableau..."
+                placeholder="Rechercher un tableau…"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="rounded-xl pl-9 bg-white/80 dark:bg-neutral-900/80"
+                className="h-10 rounded-xl border-neutral-200/80 bg-white pl-9 dark:border-neutral-700 dark:bg-neutral-950"
               />
             </div>
-            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
-              <SelectTrigger className="w-full sm:w-44 rounded-xl bg-white/80 dark:bg-neutral-900/80">
-                <ArrowUpDown className="mr-2 h-4 w-4 text-neutral-400" />
-                <SelectValue placeholder="Trier" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="updated">Modifié récemment</SelectItem>
-                <SelectItem value="created">Créé récemment</SelectItem>
-                <SelectItem value="title">Titre A–Z</SelectItem>
-              </SelectContent>
-            </Select>
-            {folders.length > 0 && (
-              <Select value={folderFilter} onValueChange={setFolderFilter}>
-                <SelectTrigger className="w-full sm:w-40 rounded-xl bg-white/80 dark:bg-neutral-900/80">
-                  <SelectValue placeholder="Dossier" />
+            <div className="flex gap-2">
+              <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+                <SelectTrigger className="h-10 w-full rounded-xl bg-white sm:w-44 dark:bg-neutral-950">
+                  <ArrowUpDown className="mr-2 h-4 w-4 shrink-0 text-neutral-400" />
+                  <SelectValue placeholder="Trier" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Tous les dossiers</SelectItem>
-                  {folders.map((folder) => (
-                    <SelectItem key={folder} value={folder}>{folder}</SelectItem>
-                  ))}
+                  <SelectItem value="updated">Modifié récemment</SelectItem>
+                  <SelectItem value="created">Créé récemment</SelectItem>
+                  <SelectItem value="title">Titre A–Z</SelectItem>
                 </SelectContent>
               </Select>
-            )}
+              {folders.length > 0 && (
+                <Select value={folderFilter} onValueChange={setFolderFilter}>
+                  <SelectTrigger className="h-10 w-full rounded-xl bg-white sm:w-40 dark:bg-neutral-950">
+                    <SelectValue placeholder="Dossier" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Tous</SelectItem>
+                    {folders.map((folder) => (
+                      <SelectItem key={folder} value={folder}>{folder}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
           </div>
         )}
 
         {isLoading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
             {Array.from({ length: 4 }).map((_, i) => (
               <BoardCardSkeleton key={i} />
             ))}
           </div>
         ) : boards.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-3xl border-2 border-dashed border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/40 px-6 py-20 text-center">
-            <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50 dark:bg-blue-950/40">
-              <Layout className="h-8 w-8 text-blue-600" />
+          <div className="flex flex-col items-center justify-center rounded-3xl border border-neutral-200/70 bg-white/60 px-6 py-24 text-center dark:border-neutral-800 dark:bg-neutral-900/40">
+            <div className="mb-5 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-100 to-indigo-100 dark:from-blue-950/60 dark:to-indigo-950/40">
+              <Layout className="h-8 w-8 text-blue-600 dark:text-blue-400" />
             </div>
-            <h2 className="text-xl font-semibold">Votre premier tableau vous attend</h2>
-            <p className="mt-2 max-w-md text-neutral-500">
-              Brainstormez, dessinez et organisez vos idées sur un canvas infini — sauvegardé automatiquement.
+            <h2 className="text-xl font-semibold tracking-tight">Ton premier moodboard t&apos;attend</h2>
+            <p className="mt-2 max-w-md text-sm text-neutral-500">
+              Colle des liens TikTok, des refs visuelles, des notes — tout sur un canvas infini.
             </p>
-            <div className="mt-6">
+            <div className="mt-8">
               <NewBoardDialog
+                open={createOpen}
+                onOpenChange={setCreateOpen}
                 onCreate={(title, template) => createMutation.mutate({ title, template })}
                 isLoading={createMutation.isPending}
                 triggerLabel="Créer mon premier tableau"
@@ -206,20 +244,23 @@ export function DashboardPage() {
             </div>
           </div>
         ) : !hasResults ? (
-          <div className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white/70 dark:bg-neutral-900/50 py-12 text-center">
-            <p className="text-neutral-500">Aucun tableau ne correspond à « {searchQuery} »</p>
+          <div className="rounded-2xl border border-neutral-200/70 bg-white/70 py-16 text-center dark:border-neutral-800 dark:bg-neutral-900/50">
+            <p className="text-neutral-500">Aucun tableau pour « {searchQuery} »</p>
           </div>
         ) : (
-          <div className="space-y-10">
+          <div className="space-y-12">
             <BoardSection
               title="Mes tableaux"
+              count={ownedBoards.length}
               boards={ownedBoards}
+              showCreate
+              onCreateClick={() => setCreateOpen(true)}
               onDelete={setBoardToDelete}
               onDuplicate={(board) => duplicateMutation.mutate(board.id)}
             />
             <BoardSection
               title="Partagés avec moi"
-              description="Tableaux auxquels vous avez été invité."
+              count={sharedBoards.length}
               boards={sharedBoards}
             />
           </div>
