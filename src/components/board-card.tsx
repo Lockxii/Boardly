@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Clock, Trash2, Users, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TemplatePreview, getTemplateLabel } from "@/components/template-preview";
+import { BoardMetaDialog } from "@/components/board-meta-dialog";
 import type { Board } from "@/lib/types";
 
 type BoardCardProps = {
@@ -49,6 +50,11 @@ export function BoardCard({ board, onDelete, onDuplicate }: BoardCardProps) {
             <Clock className="h-3.5 w-3.5" />
             Modifié le {new Date(board.updatedAt).toLocaleDateString("fr-FR")}
           </p>
+          {isOwner && (
+            <div className="mt-2" onClick={(e) => e.preventDefault()}>
+              <BoardMetaDialog board={board} />
+            </div>
+          )}
         </div>
       </article>
 

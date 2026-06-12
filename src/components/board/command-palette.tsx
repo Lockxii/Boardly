@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useNavigate } from "@tanstack/react-router";
+import { toast } from "sonner";
 import {
   MousePointer2, Square, Circle, Type, StickyNote, Pencil, Eraser,
   Layers, Grid3X3, Map, Keyboard, Home, Hand, Minus, Frame, Link2, Camera,
@@ -30,7 +31,7 @@ export function CommandPalette() {
     { id: "hand", label: "Main (pan)", shortcut: "H", icon: Hand, action: () => { setCanvasState({ mode: "panning" }); setConnectFromId(null); setShowCommandPalette(false); }, category: "Outils" },
     { id: "line", label: "Ligne", shortcut: "L", icon: Minus, action: () => { setCanvasState({ mode: "inserting", layerType: "Line" }); setConnectFromId(null); setShowCommandPalette(false); }, category: "Outils" },
     { id: "frame", label: "Cadre", shortcut: "Shift+F", icon: Frame, action: () => { setCanvasState({ mode: "inserting", layerType: "Frame" }); setConnectFromId(null); setShowCommandPalette(false); }, category: "Outils" },
-    { id: "connect", label: "Connecteur", icon: Link2, action: () => { const sel = useCanvasStore.getState().selection; setConnectFromId(sel[0] ?? null); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "connect", label: "Relier deux éléments", icon: Link2, action: () => { const sel = useCanvasStore.getState().selection; if (sel[0]) { setConnectFromId(sel[0]); toast.info("Cliquez sur l'élément à relier"); } else toast.info("Sélectionnez d'abord un élément de départ"); setShowCommandPalette(false); }, category: "Outils" },
     { id: "snapshot", label: "Créer un instantané", icon: Camera, action: () => { createVersion(); setShowCommandPalette(false); }, category: "Outils" },
     { id: "rect", label: "Rectangle", shortcut: "R", icon: Square, action: () => { setCanvasState({ mode: "inserting", layerType: "Rectangle" }); setShowCommandPalette(false); }, category: "Outils" },
     { id: "ellipse", label: "Ellipse", shortcut: "E", icon: Circle, action: () => { setCanvasState({ mode: "inserting", layerType: "Ellipse" }); setShowCommandPalette(false); }, category: "Outils" },
@@ -45,7 +46,8 @@ export function CommandPalette() {
     // View
     { id: "grid", label: "Basculer Grille", shortcut: "G", icon: Grid3X3, action: () => { toggleGrid(); setShowCommandPalette(false); }, category: "Vue" },
     { id: "minimap", label: "Basculer Minimap", shortcut: "M", icon: Map, action: () => { toggleMinimap(); setShowCommandPalette(false); }, category: "Vue" },
-    { id: "resetzoom", label: "Réinitialiser Zoom", shortcut: "Ctrl+0", icon: Search, action: () => { setCamera({ x: 0, y: 0, zoom: 1 }); setShowCommandPalette(false); }, category: "Vue" },
+    { id: "search", label: "Rechercher dans le board", shortcut: "Ctrl+F", icon: Search, action: () => { useCanvasStore.getState().setShowSearch(true); setShowCommandPalette(false); }, category: "Vue" },
+    { id: "resetzoom", label: "Réinitialiser Zoom", shortcut: "Ctrl+0", icon: Map, action: () => { setCamera({ x: 0, y: 0, zoom: 1 }); setShowCommandPalette(false); }, category: "Vue" },
     // Navigation
     { id: "home", label: "Accueil", icon: Home, action: () => { navigate({ to: "/" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "dashboard", label: "Dashboard", icon: Home, action: () => { navigate({ to: "/dashboard" }); setShowCommandPalette(false); }, category: "Navigation" },

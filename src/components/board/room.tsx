@@ -11,9 +11,10 @@ interface RoomProps {
   template: string;
   title: string;
   boardId?: string;
+  isPublic?: boolean;
 }
 
-export function Room({ roomId, template, title, boardId }: RoomProps) {
+export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) {
   const [ready, setReady] = useState(false);
   const queryClient = useQueryClient();
   const loadBoard = useCanvasStore((s) => s.loadBoard);
@@ -78,6 +79,9 @@ export function Room({ roomId, template, title, boardId }: RoomProps) {
           layerIds: remote.canvasData.layerIds,
           connections: remote.canvasData.connections || [],
           versions: remote.canvasData.versions || [],
+          layerComments: remote.canvasData.layerComments || {},
+          reactions: remote.canvasData.reactions || {},
+          brandColors: remote.canvasData.brandColors || useCanvasStore.getState().brandColors,
           selection: [],
         });
       } catch {}
@@ -91,5 +95,5 @@ export function Room({ roomId, template, title, boardId }: RoomProps) {
     return <RouteLoading label="Chargement du canvas..." />;
   }
 
-  return <Canvas template={template} title={title} boardId={boardId} />;
+  return <Canvas template={template} title={title} boardId={boardId} isPublic={isPublic} />;
 }

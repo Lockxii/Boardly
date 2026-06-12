@@ -6,6 +6,8 @@ import { useState, useRef, useEffect } from "react";
 import { InviteDialog } from "./invite-dialog";
 import { TeamDialog } from "./team-dialog";
 import { HistoryDialog } from "./history-dialog";
+import { ShareDialog } from "./share-dialog";
+import { TrashDialog } from "./trash-dialog";
 import { ChatPanel } from "./chat-panel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -16,9 +18,11 @@ import { useCanvasStore } from "@/store/canvas-store";
 interface NavbarProps {
   title: string;
   boardId?: string;
+  isPublic?: boolean;
+  readOnly?: boolean;
 }
 
-export function Navbar({ title, boardId }: NavbarProps) {
+export function Navbar({ title, boardId, isPublic = false, readOnly = false }: NavbarProps) {
   const [copied, setCopied] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [newTitle, setNewTitle] = useState(title);
@@ -185,12 +189,19 @@ export function Navbar({ title, boardId }: NavbarProps) {
             <MessageSquare className="h-5 w-5" />
           </Button>
           <HistoryDialog />
-          <TeamDialog boardId={actualBoardId} />
-          <InviteDialog boardId={actualBoardId} />
-          <Button variant="outline" size="sm" className={`h-9 gap-2 transition-all duration-300 ${copied ? "bg-green-500 text-white border-green-500" : "bg-white/10 text-blue-600 border-blue-200/50 dark:border-blue-800/50 dark:text-blue-400"}`} onClick={onCopy}>
-            {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
-            <span className="hidden sm:inline">{copied ? "Copié !" : "Lien"}</span>
-          </Button>
+          {!readOnly && <TrashDialog />}
+          {!readOnly && <TeamDialog boardId={actualBoardId} />}
+          {!readOnly && <InviteDialog boardId={actualBoardId} />}
+          {!readOnly && actualBoardId && <ShareDialog boardId={actualBoardId} isPublic={isPublic} />}
+          {!readOnly && (
+            <Button variant="outline" size="sm" className={`h-9 gap-2 transition-all duration-300 ${copied ? "bg-green-500 text-white border-green-500" : "bg-white/10 text-blue-600 border-blue-200/50 dark:border-blue-800/50 dark:text-blue-400"}`} onClick={onCopy}>
+              {copied ? <Check className="h-4 w-4" /> : <Share2 className="h-4 w-4" />}
+              <span className="hidden sm:inline">{copied ? "Copié !" : "Lien"}</span>
+            </Button>
+          )}
+          {readOnly && (
+            <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-1 rounded-full">Lecture seule</span>
+          )}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-9 w-9 hover:bg-white/20 dark:hover:bg-neutral-700/20"><MoreHorizontal className="h-5 w-5 text-neutral-600 dark:text-neutral-400" /></Button>

@@ -93,6 +93,18 @@ const boardRoute = createRoute({
   ),
 });
 
+const LazyShare = lazy(() => import("./routes/share").then((m) => ({ default: m.SharePage })));
+
+const shareRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/share/$boardId",
+  component: () => (
+    <Suspense fallback={<RouteLoading />}>
+      <LazyShare />
+    </Suspense>
+  ),
+});
+
 // 404
 import { NotFoundPage } from "./routes/not-found";
 
@@ -108,6 +120,7 @@ const routeTree = rootRoute.addChildren([
   authRoute.addChildren([signInRoute]),
   dashboardRoute,
   boardRoute,
+  shareRoute,
   notFoundRoute,
 ]);
 

@@ -3,6 +3,10 @@ export const BOARD_TEMPLATES = {
   blank: { label: "Vide" },
   grid: { label: "Grille" },
   blueprint: { label: "Plan" },
+  moodboard: { label: "Moodboard" },
+  storyboard: { label: "Storyboard" },
+  brief: { label: "Brief client" },
+  columns: { label: "Colonnes" },
 } as const;
 
 export type BoardTemplateKey = keyof typeof BOARD_TEMPLATES;

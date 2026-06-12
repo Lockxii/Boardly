@@ -10,7 +10,35 @@ export type LayerType =
   | "Diamond"
   | "Star"
   | "Line"
-  | "Frame";
+  | "Frame"
+  | "Link"
+  | "Column";
+
+export type ChecklistItem = {
+  id: string;
+  text: string;
+  done: boolean;
+};
+
+export type LayerComment = {
+  id: string;
+  userId: string;
+  userName: string;
+  text: string;
+  createdAt: number;
+};
+
+export type LayerReaction = {
+  emoji: string;
+  userIds: string[];
+};
+
+export type TrashEntry = {
+  id: string;
+  deletedAt: number;
+  layerIds: string[];
+  layers: Record<string, Layer>;
+};
 
 export type BoardConnection = {
   id: string;
@@ -43,6 +71,12 @@ export type Layer = {
   strokeWidth?: number;
   value?: string;
   src?: string;
+  url?: string;
+  linkTitle?: string;
+  linkDescription?: string;
+  linkImage?: string;
+  checklist?: ChecklistItem[];
+  groupId?: string;
   textColor?: string;
   fontFamily?: string;
   fontSize?: number;
@@ -81,8 +115,6 @@ export type ChatMessage = {
   linkedLayerIds?: string[];
 };
 
-// Liveblocks types removed — using pure Zustand store now.
-
 export type User = {
   id: string;
   name: string;
@@ -97,6 +129,10 @@ export type BoardCanvasData = {
   chatMessages: ChatMessage[];
   connections?: BoardConnection[];
   versions?: CanvasVersion[];
+  layerComments?: Record<string, LayerComment[]>;
+  reactions?: Record<string, LayerReaction[]>;
+  trash?: TrashEntry[];
+  brandColors?: string[];
 };
 
 export type Board = {
@@ -121,4 +157,11 @@ export type BoardMember = {
   email: string;
   role: string;
   createdAt: string;
+};
+
+export type LinkPreview = {
+  url: string;
+  title: string;
+  description: string;
+  image: string;
 };

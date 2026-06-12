@@ -4,6 +4,8 @@ import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth.js";
 import { prisma } from "./prisma.js";
 import { ensureBoardSchema } from "./schema-sync.js";
+import { fetchLinkPreview } from "./og-preview.js";
+import { buildTemplateCanvas } from "./board-seeds.js";
 
 function getAppOrigin() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
@@ -164,11 +166,58 @@ export function createApp() {
 
   app.post("/api/boards", requireAuth(async (req, res, user) => {
     const { title = "Untitled Board", template = "blank" } = req.body;
+    const seed = buildTemplateCanvas(template);
     const board = await prisma.board.create({
-      data: { title, template, authorId: user.id },
+      data: {
+        title,
+        template,
+        authorId: user.id,
+        canvasData: seed ?? undefined,
+      },
     });
     res.json(serializeBoard(board, { role: "owner", isOwner: true }));
   }));
+
+  app.get("/api/link-preview", requireAuth(async (req, res) => {
+    const url = String(req.query.url || "");
+    if (!url) return res.status(400).json({ error: "URL requise" });
+    try {
+      const preview = await fetchLinkPreview(url);
+      res.json(preview);
+    } catch (error) {
+      res.status(400).json({ error: error instanceof Error ? error.message : "Preview impossible" });
+    }
+  }));
+
+  app.get("/api/public/boards/:id", async (req, res) => {
+    const boardId = String(req.params.id);
+    await ensureBoardSchema();
+    const board = await prisma.board.findUnique({
+      where: { id: boardId },
+      include: { author: { select: { name: true } } },
+    });
+    if (!board?.isPublic) return res.status(404).json({ error: "Tableau non public" });
+    res.json({
+      id: board.id,
+      title: board.title,
+      template: board.template,
+      thumbnail: board.thumbnail,
+      authorName: board.author?.name ?? null,
+      updatedAt: board.updatedAt,
+    });
+  });
+
+  app.get("/api/public/boards/:id/content", async (req, res) => {
+    const boardId = String(req.params.id);
+    await ensureBoardSchema();
+    const board = await prisma.board.findUnique({ where: { id: boardId } });
+    if (!board?.isPublic) return res.status(404).json({ error: "Tableau non public" });
+    res.json({
+      canvasData: board.canvasData ?? null,
+      thumbnail: board.thumbnail,
+      updatedAt: board.updatedAt,
+    });
+  });
 
   app.delete("/api/boards/:id", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);

@@ -1,6 +1,7 @@
 import { memo, useState, useRef, useEffect } from "react";
-import { Lock } from "lucide-react";
+import { Lock, ExternalLink } from "lucide-react";
 import type { Layer } from "@/lib/types";
+import { useCanvasStore } from "@/store/canvas-store";
 
 interface LayerPreviewProps {
   id: string;
@@ -35,6 +36,10 @@ function getSvgPathFromPoints(points: number[][]) {
 export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResizePointerDown, onLayerRotatePointerDown, onChange, selectionColor }: LayerPreviewProps) => {
   const [isEditing, setIsEditing] = useState(false);
   const editableRef = useRef<HTMLDivElement>(null);
+  const layerComments = useCanvasStore((s) => s.layerComments[id]?.length || 0);
+  const reactions = useCanvasStore((s) => s.reactions[id] || []);
+  const toggleChecklistItem = useCanvasStore((s) => s.toggleChecklistItem);
+  const readOnly = useCanvasStore((s) => s.readOnly);
 
   useEffect(() => {
     if (isEditing && editableRef.current) editableRef.current.focus();
@@ -129,6 +134,38 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           </foreignObject>
         </>
       )}
+      {(layer.type === "Column") && (
+        <>
+          <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill="rgba(59,130,246,0.04)" stroke={stroke || "#93C5FD"} strokeWidth={strokeWidth || 2} />
+          <foreignObject width={layer.width} height={32} style={{ overflow: "visible", pointerEvents: "none" }}>
+            <div style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
+              <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 700, fontSize: "12px", color: "#3B82F6", textTransform: "uppercase", letterSpacing: "0.05em" }} />
+            </div>
+          </foreignObject>
+        </>
+      )}
+      {layer.type === "Link" && (
+        <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible" }}>
+          <div
+            className="w-full h-full overflow-hidden shadow-md border border-neutral-200 dark:border-neutral-700 bg-white dark:bg-neutral-900 flex flex-col"
+            style={{ borderRadius: cornerRadius || 10 }}
+          >
+            {layer.linkImage && (
+              <img src={layer.linkImage} alt="" className="w-full h-24 object-cover" />
+            )}
+            <div className="p-3 flex-1 flex flex-col gap-1 pointer-events-none">
+              <div className="flex items-start gap-1.5">
+                <ExternalLink className="h-3.5 w-3.5 text-blue-600 shrink-0 mt-0.5" />
+                <p className="text-sm font-semibold text-neutral-900 dark:text-white line-clamp-2">{layer.linkTitle || layer.url}</p>
+              </div>
+              {layer.linkDescription && (
+                <p className="text-xs text-neutral-500 line-clamp-2">{layer.linkDescription}</p>
+              )}
+              <p className="text-[10px] text-blue-600 truncate mt-auto">{layer.url}</p>
+            </div>
+          </div>
+        </foreignObject>
+      )}
       {layer.type === "Rectangle" && (
         <>
           <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill={layer.fill} stroke={stroke} strokeWidth={strokeWidth} className="drop-shadow-sm" />
@@ -168,7 +205,25 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
       {layer.type === "Note" && (
         <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible" }}>
           <div className="w-full h-full relative shadow-md flex flex-col" style={{ backgroundColor: layer.fill || "#fef3c7", borderRadius: cornerRadius }}>
-            <div style={wrapperStyle}><div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px", fontFamily: layer.fontFamily ? fontMap[layer.fontFamily] : fontMap["font-handwriting"], color: layer.textColor || "#1f2937" }} /></div>
+            <div style={{ ...wrapperStyle, flex: layer.checklist?.length ? "0 0 auto" : 1 }}>
+              <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px", fontFamily: layer.fontFamily ? fontMap[layer.fontFamily] : fontMap["font-handwriting"], color: layer.textColor || "#1f2937", minHeight: layer.checklist?.length ? 48 : undefined }} />
+            </div>
+            {layer.checklist && layer.checklist.length > 0 && (
+              <div className="px-2 pb-2 space-y-1 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()}>
+                {layer.checklist.map((item) => (
+                  <label key={item.id} className="flex items-center gap-2 text-xs text-neutral-800 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={item.done}
+                      disabled={readOnly}
+                      onChange={() => toggleChecklistItem(id, item.id)}
+                      className="rounded"
+                    />
+                    <span className={item.done ? "line-through opacity-60" : ""}>{item.text}</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         </foreignObject>
       )}
@@ -184,6 +239,17 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           <defs><clipPath id={`clip-${id}`}><rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} /></clipPath></defs>
           <image href={layer.src} width={layer.width} height={layer.height} preserveAspectRatio="none" clipPath={`url(#clip-${id})`} />
         </>
+      )}
+
+      {(layerComments > 0 || reactions.length > 0) && (
+        <g transform={`translate(${layer.width - 8}, -8)`} className="pointer-events-none">
+          {layerComments > 0 && (
+            <circle r={8} fill="#2563EB" />
+          )}
+          {reactions.length > 0 && (
+            <text x={layerComments > 0 ? 14 : 0} y={4} fontSize={10}>{reactions[0].emoji}</text>
+          )}
+        </g>
       )}
 
       {isSelected && (

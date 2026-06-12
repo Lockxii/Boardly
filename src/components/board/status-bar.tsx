@@ -29,7 +29,7 @@ export function StatusBar() {
   }, []);
 
   const modeLabel = (() => {
-    if (connectFromId) return "Connecteur — cliquez la cible";
+    if (connectFromId) return "Relier — cliquez sur l'élément d'arrivée";
     switch (canvasState.mode) {
       case "none": return "Sélection";
       case "translating": return "Déplacement";

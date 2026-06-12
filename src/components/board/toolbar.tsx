@@ -1,5 +1,5 @@
 import { useCanvasStore } from "@/store/canvas-store";
-import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil, Triangle as TriangleIcon, MoveRight, Diamond, Star, Layers, Eraser, GripHorizontal, ChevronLeft, Shapes, PenTool, Plus, Hand, Minus, Frame, Link2 } from "lucide-react";
+import { MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil, Triangle as TriangleIcon, MoveRight, Diamond, Star, Layers, Eraser, GripHorizontal, ChevronLeft, Shapes, PenTool, Plus, Hand, Minus, Frame, Link2, Columns3 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { nanoid } from "nanoid";
 import { useRef, useState } from "react";
@@ -7,6 +7,9 @@ import { LayersPanel } from "./layers-panel";
 import { motion } from "framer-motion";
 import type { Layer, LayerType } from "@/lib/types";
 import { compressImageFile } from "@/lib/canvas-utils";
+import { toast } from "sonner";
+import { apiFetch } from "@/lib/utils";
+import type { LinkPreview } from "@/lib/types";
 
 export function Toolbar() {
   const canvasState = useCanvasStore((s) => s.canvasState);
@@ -20,9 +23,13 @@ export function Toolbar() {
   const canRedo = useCanvasStore((s) => s.canRedo);
   const setConnectFromId = useCanvasStore((s) => s.setConnectFromId);
   const connectFromId = useCanvasStore((s) => s.connectFromId);
+  const insertLinkLayer = useCanvasStore((s) => s.insertLinkLayer);
+  const readOnly = useCanvasStore((s) => s.readOnly);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
+
+  if (readOnly) return null;
 
   const isShapeActive = canvasState.mode === "inserting" && ["Rectangle", "Ellipse", "Triangle", "Arrow", "Diamond", "Star"].includes(canvasState.layerType);
   const isDrawingActive = canvasState.mode === "pencil";
@@ -56,6 +63,42 @@ export function Toolbar() {
     e.target.value = "";
   };
 
+  const startConnectMode = () => {
+    if (connectFromId) {
+      setConnectFromId(null);
+      toast.message("Relier annulé");
+      return;
+    }
+    const sel = useCanvasStore.getState().selection;
+    if (sel.length === 0) {
+      toast.info("Relier deux éléments", {
+        description: "1. Sélectionnez un élément de départ · 2. Cliquez sur Relier · 3. Cliquez sur l'élément d'arrivée",
+      });
+      return;
+    }
+    setConnectFromId(sel[0]);
+    setOpenMenu(null);
+    toast.info("Cliquez sur l'élément à relier");
+  };
+
+  const addLinkCard = async () => {
+    const url = window.prompt("URL à ajouter (article, Pinterest, etc.)");
+    if (!url?.trim()) return;
+    try {
+      toast.loading("Récupération de l'aperçu…");
+      const preview = await apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(url.trim())}`);
+      toast.dismiss();
+      const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom - 140;
+      const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom - 80;
+      insertLinkLayer(preview, centerX, centerY);
+      toast.success("Lien ajouté");
+      setOpenMenu(null);
+    } catch {
+      toast.dismiss();
+      toast.error("Impossible de récupérer ce lien");
+    }
+  };
+
   return (
     <motion.div drag dragMomentum={false} layout initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} className="absolute top-1/2 left-4 -translate-y-1/2 flex flex-col gap-1 pointer-events-none z-[30]">
       <div className="flex flex-col gap-1 bg-white dark:bg-neutral-800 p-1.5 rounded-xl shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto items-center min-w-[44px]">
@@ -69,7 +112,8 @@ export function Toolbar() {
             <ToolButton isActive={canvasState.mode === "panning"} onClick={() => { setCanvasState({ mode: "panning" }); setConnectFromId(null); setOpenMenu(null); }} icon={Hand} title="Main (H)" />
             <ToolButton isActive={canvasState.mode === "inserting" && canvasState.layerType === "Line"} onClick={() => { setCanvasState({ mode: "inserting", layerType: "Line" }); setConnectFromId(null); setOpenMenu(null); }} icon={Minus} title="Ligne (L)" />
             <ToolButton isActive={canvasState.mode === "inserting" && canvasState.layerType === "Frame"} onClick={() => { setCanvasState({ mode: "inserting", layerType: "Frame" }); setConnectFromId(null); setOpenMenu(null); }} icon={Frame} title="Cadre (Shift+F)" />
-            <ToolButton isActive={!!connectFromId} onClick={() => { const sel = useCanvasStore.getState().selection; setConnectFromId(sel[0] ?? null); setOpenMenu(null); }} icon={Link2} title="Connecteur (Ctrl+C sur 2 éléments)" />
+            <ToolButton isActive={canvasState.mode === "inserting" && canvasState.layerType === "Column"} onClick={() => { setCanvasState({ mode: "inserting", layerType: "Column" }); setConnectFromId(null); setOpenMenu(null); }} icon={Columns3} title="Colonne Kanban" />
+            <ToolButton isActive={!!connectFromId} onClick={startConnectMode} icon={Link2} title="Relier — tracer une flèche entre 2 éléments" />
 
             <div className="h-[1px] bg-neutral-100 dark:bg-neutral-700 w-full my-0.5" />
 
@@ -98,6 +142,7 @@ export function Toolbar() {
                   <ToolButton isActive={canvasState.mode === "inserting" && canvasState.layerType === "Note"} onClick={() => { setCanvasState({ mode: "inserting", layerType: "Note" }); setOpenMenu(null); }} icon={StickyNote} title="Note" />
                   <ToolButton isActive={canvasState.mode === "inserting" && canvasState.layerType === "Text"} onClick={() => { setCanvasState({ mode: "inserting", layerType: "Text" }); setOpenMenu(null); }} icon={Type} title="Texte" />
                   <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700" onClick={() => { fileInputRef.current?.click(); setOpenMenu(null); }} title="Image"><ImageIcon className="h-4.5 w-4.5" /></Button>
+                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-lg hover:bg-neutral-100 dark:hover:bg-neutral-700" onClick={addLinkCard} title="Carte lien"><Link2 className="h-4.5 w-4.5" /></Button>
                 </motion.div>
               )}
             </div>

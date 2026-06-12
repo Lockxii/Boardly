@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { nanoid } from "nanoid";
-import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData, BoardConnection, CanvasVersion } from "@/lib/types";
+import type { Layer, LayerType, AuditEntry, ChatMessage, BoardCanvasData, BoardConnection, CanvasVersion, LayerComment, LayerReaction, TrashEntry, LinkPreview } from "@/lib/types";
 import { apiFetch } from "@/lib/utils";
 import { generateBoardThumbnail } from "@/lib/board-thumbnail";
 import {
@@ -24,6 +24,15 @@ interface CanvasStore {
   versions: CanvasVersion[];
   auditLog: AuditEntry[];
   chatMessages: ChatMessage[];
+  layerComments: Record<string, LayerComment[]>;
+  reactions: Record<string, LayerReaction[]>;
+  trash: TrashEntry[];
+  brandColors: string[];
+
+  readOnly: boolean;
+  setReadOnly: (readOnly: boolean) => void;
+  showSearch: boolean;
+  setShowSearch: (show: boolean) => void;
 
   // Save state
   saveStatus: "idle" | "saving" | "saved" | "error";
@@ -91,8 +100,19 @@ interface CanvasStore {
 
   // Layer mutations
   insertLayer: (type: LayerType, x: number, y: number, width?: number, height?: number) => string | null;
+  insertLinkLayer: (preview: LinkPreview, x: number, y: number) => string | null;
   deleteLayers: (ids?: string[]) => void;
+  restoreTrashEntry: (entryId: string) => void;
+  purgeTrash: () => void;
   duplicateLayers: (ids?: string[]) => void;
+  groupSelection: () => void;
+  ungroupSelection: () => void;
+  addLayerComment: (layerId: string, text: string) => void;
+  deleteLayerComment: (layerId: string, commentId: string) => void;
+  toggleChecklistItem: (layerId: string, itemId: string) => void;
+  addChecklistItem: (layerId: string, text?: string) => void;
+  toggleReaction: (layerId: string, emoji: string) => void;
+  setBrandColors: (colors: string[]) => void;
   updateLayer: (id: string, updates: Partial<Layer>) => void;
   updateLayerText: (id: string, value: string) => void;
   reorderLayers: (newOrder: string[]) => void;
@@ -145,6 +165,15 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   versions: [],
   auditLog: [],
   chatMessages: [],
+  layerComments: {},
+  reactions: {},
+  trash: [],
+  brandColors: ["#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"],
+
+  readOnly: false,
+  setReadOnly: (readOnly) => set({ readOnly }),
+  showSearch: false,
+  setShowSearch: (showSearch) => set({ showSearch }),
 
   saveStatus: "idle",
   lastSavedAt: null,
@@ -268,19 +297,19 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       fill:
         type === "Note"
           ? "#FEF3C7"
-          : type === "Frame"
+          : type === "Frame" || type === "Column"
             ? "transparent"
             : state.lastUsedColor,
-      stroke: type === "Frame" ? "#94A3B8" : undefined,
-      strokeWidth: type === "Frame" ? 2 : undefined,
-      cornerRadius: type === "Frame" ? 12 : type === "Note" ? 8 : undefined,
-      value: type === "Frame" ? "Section" : undefined,
+      stroke: type === "Column" ? "#93C5FD" : type === "Frame" ? "#94A3B8" : undefined,
+      strokeWidth: type === "Frame" || type === "Column" ? 2 : undefined,
+      cornerRadius: type === "Frame" || type === "Column" ? 12 : type === "Note" ? 8 : undefined,
+      value: type === "Frame" ? "Section" : type === "Column" ? "Colonne" : undefined,
     };
     // Save pre-mutation state BEFORE the insert
     get().pushHistory();
     set((s) => ({
       layers: { ...s.layers, [id]: layer },
-      layerIds: type === "Frame" ? [id, ...s.layerIds] : [...s.layerIds, id],
+      layerIds: type === "Frame" || type === "Column" ? [id, ...s.layerIds] : [...s.layerIds, id],
       selection: [id],
       canvasState: { mode: "none" },
     }));
@@ -292,23 +321,184 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const state = get();
     const toDelete = ids || state.selection;
     if (toDelete.length === 0) return;
-    // Save pre-mutation state BEFORE the delete
     get().pushHistory();
     for (const id of toDelete) {
       const layer = state.layers[id];
       if (layer) state.addAuditEntry("deleted", layer.type);
     }
     set((s) => {
+      const trashedLayers: Record<string, Layer> = {};
+      for (const id of toDelete) {
+        if (s.layers[id]) trashedLayers[id] = s.layers[id];
+      }
       const newLayers = { ...s.layers };
       for (const id of toDelete) delete newLayers[id];
+      const entry: TrashEntry = {
+        id: nanoid(),
+        deletedAt: Date.now(),
+        layerIds: toDelete.filter((id) => trashedLayers[id]),
+        layers: trashedLayers,
+      };
+      const trash = [entry, ...s.trash].slice(0, 50);
       return {
         layers: newLayers,
         layerIds: s.layerIds.filter((id) => !toDelete.includes(id)),
         connections: s.connections.filter((c) => !toDelete.includes(c.fromId) && !toDelete.includes(c.toId)),
         selection: [],
+        trash,
       };
     });
   },
+
+  restoreTrashEntry: (entryId) => {
+    const state = get();
+    const entry = state.trash.find((t) => t.id === entryId);
+    if (!entry) return;
+    get().pushHistory();
+    set((s) => ({
+      layers: { ...s.layers, ...entry.layers },
+      layerIds: [...s.layerIds, ...entry.layerIds.filter((id) => !s.layerIds.includes(id))],
+      trash: s.trash.filter((t) => t.id !== entryId),
+      selection: entry.layerIds,
+    }));
+  },
+
+  purgeTrash: () => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    set((s) => ({ trash: s.trash.filter((t) => t.deletedAt > cutoff) }));
+  },
+
+  insertLinkLayer: (preview, x, y) => {
+    const id = nanoid();
+    get().pushHistory();
+    const layer: Layer = {
+      type: "Link",
+      x,
+      y,
+      width: 280,
+      height: preview.image ? 200 : 120,
+      fill: "#ffffff",
+      url: preview.url,
+      linkTitle: preview.title,
+      linkDescription: preview.description,
+      linkImage: preview.image,
+      cornerRadius: 10,
+      stroke: "#E2E8F0",
+      strokeWidth: 1,
+    };
+    set((s) => ({
+      layers: { ...s.layers, [id]: layer },
+      layerIds: [...s.layerIds, id],
+      selection: [id],
+      canvasState: { mode: "none" },
+    }));
+    get().addAuditEntry("created", "Link");
+    return id;
+  },
+
+  groupSelection: () => {
+    const state = get();
+    if (state.selection.length < 2) return;
+    const groupId = nanoid();
+    get().pushHistory();
+    set((s) => {
+      const newLayers = { ...s.layers };
+      for (const id of s.selection) {
+        if (newLayers[id]) newLayers[id] = { ...newLayers[id], groupId };
+      }
+      return { layers: newLayers };
+    });
+    get().addAuditEntry("modified", "Groupe");
+  },
+
+  ungroupSelection: () => {
+    const state = get();
+    if (state.selection.length === 0) return;
+    get().pushHistory();
+    const groupIds = new Set(state.selection.map((id) => state.layers[id]?.groupId).filter(Boolean));
+    set((s) => {
+      const newLayers = { ...s.layers };
+      for (const [id, layer] of Object.entries(newLayers)) {
+        if (layer.groupId && groupIds.has(layer.groupId)) {
+          newLayers[id] = { ...layer, groupId: undefined };
+        }
+      }
+      return { layers: newLayers };
+    });
+  },
+
+  addLayerComment: (layerId, text) => {
+    if (!text.trim()) return;
+    const comment: LayerComment = {
+      id: nanoid(),
+      userId: "local",
+      userName: "Vous",
+      text: text.trim(),
+      createdAt: Date.now(),
+    };
+    set((s) => ({
+      layerComments: {
+        ...s.layerComments,
+        [layerId]: [...(s.layerComments[layerId] || []), comment],
+      },
+    }));
+  },
+
+  deleteLayerComment: (layerId, commentId) => {
+    set((s) => ({
+      layerComments: {
+        ...s.layerComments,
+        [layerId]: (s.layerComments[layerId] || []).filter((c) => c.id !== commentId),
+      },
+    }));
+  },
+
+  toggleChecklistItem: (layerId, itemId) => {
+    set((s) => {
+      const layer = s.layers[layerId];
+      if (!layer?.checklist) return s;
+      return {
+        layers: {
+          ...s.layers,
+          [layerId]: {
+            ...layer,
+            checklist: layer.checklist.map((item) =>
+              item.id === itemId ? { ...item, done: !item.done } : item
+            ),
+          },
+        },
+      };
+    });
+  },
+
+  addChecklistItem: (layerId, text = "Nouvelle tâche") => {
+    get().pushHistory();
+    set((s) => {
+      const layer = s.layers[layerId];
+      if (!layer) return s;
+      const checklist = [...(layer.checklist || []), { id: nanoid(), text, done: false }];
+      return { layers: { ...s.layers, [layerId]: { ...layer, checklist } } };
+    });
+  },
+
+  toggleReaction: (layerId, emoji) => {
+    set((s) => {
+      const list = [...(s.reactions[layerId] || [])];
+      const idx = list.findIndex((r) => r.emoji === emoji);
+      if (idx >= 0) {
+        const users = list[idx].userIds.includes("local")
+          ? list[idx].userIds.filter((u) => u !== "local")
+          : [...list[idx].userIds, "local"];
+        if (users.length === 0) list.splice(idx, 1);
+        else list[idx] = { emoji, userIds: users };
+      } else {
+        list.push({ emoji, userIds: ["local"] });
+      }
+      return { reactions: { ...s.reactions, [layerId]: list } };
+    });
+  },
+
+  setBrandColors: (brandColors) => set({ brandColors }),
 
   duplicateLayers: (ids) => {
     const state = get();
@@ -510,6 +700,12 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       versions: [],
       auditLog: [],
       chatMessages: [],
+      layerComments: {},
+      reactions: {},
+      trash: [],
+      brandColors: ["#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"],
+      readOnly: false,
+      showSearch: false,
       undoStack: [],
       redoStack: [],
       canUndo: false,
@@ -529,6 +725,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         versions: data.versions || [],
         auditLog: data.auditLog || [],
         chatMessages: data.chatMessages || [],
+        layerComments: data.layerComments || {},
+        reactions: data.reactions || {},
+        trash: data.trash || [],
+        brandColors: data.brandColors || ["#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"],
         undoStack: [],
         redoStack: [],
         canUndo: false,
@@ -598,6 +798,10 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       versions: state.versions,
       auditLog: state.auditLog,
       chatMessages: state.chatMessages,
+      layerComments: state.layerComments,
+      reactions: state.reactions,
+      trash: state.trash,
+      brandColors: state.brandColors,
     };
 
     try {

@@ -15,26 +15,36 @@ import { StatusBar } from "./status-bar";
 import { ShortcutsHelp } from "./shortcuts-help";
 import { ConnectionsLayer } from "./connections-layer";
 import { CursorsPresence } from "./cursors-presence";
+import { BoardSearchDialog } from "./board-search-dialog";
+import { LayerCommentsPanel } from "./layer-comments-panel";
+import { BrandPaletteBar } from "./brand-palette-bar";
 import { toast } from "sonner";
-import type { Layer, LayerType } from "@/lib/types";
+import { apiFetch } from "@/lib/utils";
+import type { Layer, LayerType, LinkPreview } from "@/lib/types";
 import { BLUEPRINT } from "@/lib/template-styles";
 import { compressDataUrl, compressImageFile } from "@/lib/canvas-utils";
 
-export function Canvas({ template, title, boardId }: { template: string; title: string; boardId?: string }) {
+export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
     camera, setCamera, canvasState, setCanvasState,
     pencilTool,
     showGrid, showMinimap, showCommandPalette, setShowCommandPalette,
+    setShowSearch,
     snapToGrid, toggleSnapToGrid,
     layerIds, layers, selection, setSelection, setCursor,
-    insertLayer, deleteLayers, duplicateLayers, updateLayer, updateLayerText, nudgeLayers,
+    insertLayer, insertLinkLayer, deleteLayers, duplicateLayers, updateLayer, updateLayerText, nudgeLayers,
     pushHistory, undo, redo, canUndo, canRedo,
-    addAuditEntry,
+    addAuditEntry, setReadOnly,
   } = useCanvasStore();
 
   const pencilDraft = React.useRef<string | null>(null);
   const clipboardRef = React.useRef<Layer[]>([]);
   const [showShortcuts, setShowShortcuts] = useState(false);
+
+  useEffect(() => {
+    setReadOnly(readOnly);
+    return () => setReadOnly(false);
+  }, [readOnly, setReadOnly]);
 
   const pencilThickness = useCanvasStore((s) => s.pencilThickness);
   const lastUsedColor = useCanvasStore((s) => s.lastUsedColor);
@@ -98,22 +108,37 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
 
   useEffect(() => {
     const onPaste = async (e: ClipboardEvent) => {
+      if (readOnly) return;
       const ae = document.activeElement as HTMLElement;
       if (ae?.tagName === "TEXTAREA" || ae?.tagName === "INPUT" || ae?.isContentEditable) return;
       const items = e.clipboardData?.items;
-      if (!items) return;
-      for (const item of items) {
-        if (item.type.startsWith("image/")) {
-          e.preventDefault();
-          const file = item.getAsFile();
-          if (file) await insertImageAt(file);
-          return;
+      if (items) {
+        for (const item of items) {
+          if (item.type.startsWith("image/")) {
+            e.preventDefault();
+            const file = item.getAsFile();
+            if (file) await insertImageAt(file);
+            return;
+          }
+        }
+      }
+      const text = e.clipboardData?.getData("text/plain")?.trim();
+      if (text && /^https?:\/\//i.test(text)) {
+        e.preventDefault();
+        try {
+          const preview = await apiFetch<LinkPreview>(`/api/link-preview?url=${encodeURIComponent(text)}`);
+          const centerX = (window.innerWidth / 2 - camera.x) / camera.zoom - 140;
+          const centerY = (window.innerHeight / 2 - camera.y) / camera.zoom - 80;
+          insertLinkLayer(preview, centerX, centerY);
+          toast.success("Lien collé");
+        } catch {
+          toast.error("Impossible de coller ce lien");
         }
       }
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [insertImageAt]);
+  }, [insertImageAt, insertLinkLayer, camera, readOnly]);
 
   // Drawing
   const startDrawing = useCallback((point: { x: number; y: number }, pressure: number) => {
@@ -229,7 +254,16 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
     }
     useCanvasStore.setState((s) => {
       const newLayers = { ...s.layers };
+      const moving = new Set(s.selection);
       for (const id of s.selection) {
+        const g = s.layers[id]?.groupId;
+        if (g) {
+          for (const [lid, layer] of Object.entries(s.layers)) {
+            if (layer.groupId === g) moving.add(lid);
+          }
+        }
+      }
+      for (const id of moving) {
         const layer = newLayers[id];
         if (layer) newLayers[id] = { ...layer, x: layer.x + offsetX, y: layer.y + offsetY };
       }
@@ -363,7 +397,13 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
     if (layer?.locked) return;
 
     if (state.connectFromId) {
+      if (state.connectFromId === layerId) {
+        state.setConnectFromId(null);
+        toast.message("Relier annulé");
+        return;
+      }
       state.addConnection(state.connectFromId, layerId);
+      toast.success("Éléments reliés");
       return;
     }
 
@@ -403,6 +443,12 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         useCanvasStore.getState().setShowCommandPalette(!useCanvasStore.getState().showCommandPalette);
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && e.key === "f") {
+        e.preventDefault();
+        useCanvasStore.getState().setShowSearch(true);
         return;
       }
 
@@ -531,14 +577,17 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
 
   return (
     <main className={`h-full w-full relative touch-none overflow-hidden ${bgClass}`} style={{ cursor: cursorStyle }}>
-      <Navbar title={title} boardId={boardId} />
-      <Toolbar />
-      <PencilToolbar />
-      <SelectionTools camera={camera} />
+      <Navbar title={title} boardId={boardId} isPublic={isPublic} readOnly={readOnly} />
+      {!readOnly && <Toolbar />}
+      {!readOnly && <PencilToolbar />}
+      {!readOnly && <SelectionTools camera={camera} />}
       <ZoomControls />
-      <BrushPreview />
+      {!readOnly && <BrushPreview />}
       {showMinimap && <Minimap />}
-      {showCommandPalette && <CommandPalette />}
+      {!readOnly && showCommandPalette && <CommandPalette />}
+      <BoardSearchDialog />
+      {!readOnly && <LayerCommentsPanel />}
+      {!readOnly && <BrandPaletteBar />}
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <StatusBar />
       {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
@@ -601,7 +650,7 @@ export function Canvas({ template, title, boardId }: { template: string; title: 
             const w = Math.abs(canvasState.origin.x - canvasState.current.x);
             const h = Math.abs(canvasState.origin.y - canvasState.current.y);
             if (canvasState.layerType === "Line") return <line className="stroke-blue-500 stroke-1" x1={canvasState.origin.x} y1={canvasState.origin.y} x2={canvasState.current.x} y2={canvasState.current.y} strokeWidth={3} strokeLinecap="round" />;
-            if (canvasState.layerType === "Frame") return <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" strokeDasharray="8 4" x={x} y={y} width={w} height={h} rx={12} />;
+            if (canvasState.layerType === "Frame" || canvasState.layerType === "Column") return <rect className="fill-blue-500/5 stroke-blue-500 stroke-1" strokeDasharray={canvasState.layerType === "Frame" ? "8 4" : undefined} x={x} y={y} width={w} height={h} rx={12} />;
             if (canvasState.layerType === "Ellipse") return <ellipse className="fill-blue-500/5 stroke-blue-500 stroke-1" cx={(canvasState.origin.x + canvasState.current.x) / 2} cy={(canvasState.origin.y + canvasState.current.y) / 2} rx={w / 2} ry={h / 2} />;
             if (canvasState.layerType === "Triangle") return <polygon className="fill-blue-500/5 stroke-blue-500 stroke-1" points={`${x + w / 2},${y} ${x + w},${y + h} ${x},${y + h}`} />;
             if (canvasState.layerType === "Diamond") return <polygon className="fill-blue-500/5 stroke-blue-500 stroke-1" points={`${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}`} />;

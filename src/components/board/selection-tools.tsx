@@ -5,6 +5,7 @@ import {
   Bold, Italic, Underline, Ban, Copy, Lock, Unlock,
   Highlighter, Palette, Type, GripVertical,
   AlignHorizontalDistributeCenter, AlignVerticalDistributeCenter,
+  Group, Ungroup, ListChecks,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +33,11 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const deleteLayers = useCanvasStore((s) => s.deleteLayers);
   const alignSelection = useCanvasStore((s) => s.alignSelection);
   const distributeSelection = useCanvasStore((s) => s.distributeSelection);
+  const groupSelection = useCanvasStore((s) => s.groupSelection);
+  const ungroupSelection = useCanvasStore((s) => s.ungroupSelection);
+  const addChecklistItem = useCanvasStore((s) => s.addChecklistItem);
+  const toggleReaction = useCanvasStore((s) => s.toggleReaction);
+  const readOnly = useCanvasStore((s) => s.readOnly);
 
   const selectionInfo = useMemo(() => {
     if (!selection || selection.length === 0) return null;
@@ -83,6 +89,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const hasNoteLayer = selectionInfo?.hasNote;
   const multiSelect = selection.length >= 2;
   const canDistribute = selection.length >= 3;
+  const REACTIONS = ["👍", "❤️", "🔥", "✅"];
   const showFill = !selectionInfo?.onlyText && !selectionInfo?.allImages;
   const currentFontSize = selectionInfo?.fontSize || 16;
   const currentFontFamily = selectionInfo?.fontFamily || "font-sans";
@@ -299,6 +306,29 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
                 </div>
               </DropdownMenuContent>
             </DropdownMenu>
+          )}
+
+          {hasNoteLayer && !readOnly && (
+            <Button variant="ghost" size="icon" className="h-8 w-8" title="Ajouter une tâche" onClick={() => selection.forEach((id) => addChecklistItem(id))}>
+              <ListChecks className="h-4 w-4" />
+            </Button>
+          )}
+
+          {!readOnly && multiSelect && (
+            <div className="flex items-center gap-0.5">
+              <Button variant="ghost" size="icon" className="h-8 w-8" title="Grouper" onClick={() => groupSelection()}><Group className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" className="h-8 w-8" title="Dégrouper" onClick={() => ungroupSelection()}><Ungroup className="h-4 w-4" /></Button>
+            </div>
+          )}
+
+          {!readOnly && selection.length === 1 && (
+            <div className="flex items-center gap-0.5 px-1">
+              {REACTIONS.map((emoji) => (
+                <button key={emoji} type="button" className="text-sm hover:scale-125 transition-transform" title="Réagir" onClick={() => toggleReaction(selection[0], emoji)}>
+                  {emoji}
+                </button>
+              ))}
+            </div>
           )}
 
           {hasNoteLayer && (
