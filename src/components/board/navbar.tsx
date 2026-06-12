@@ -137,11 +137,14 @@ export function Navbar({ title, boardId, isPublic = false, readOnly = false }: N
       <FloatingDock
         id="navbar"
         defaultAnchor="top-center"
+        defaultCompact
+        toggleMode="compact"
+        allowCenterSnap
         zIndex={30}
         collapsedContent={
           <>
-            <BoardlyBrand to="/dashboard" showName={false} size={20} />
-            <span className="max-w-[120px] truncate">{title}</span>
+            <BoardlyBrand to="/dashboard" showName={false} size={18} />
+            <span className="max-w-[100px] truncate">{title}</span>
           </>
         }
       >
@@ -210,70 +213,98 @@ function NavbarContent({
   handleExportPNG: () => void;
   handleExportSVG: () => void;
 }) {
-  const { vertical } = useFloatingDock();
+  const { vertical, compact } = useFloatingDock();
+  const iconOnly = vertical || compact;
+  const btnSize = vertical ? "h-8 w-8" : compact ? "h-8 w-8" : "h-9 w-9";
+  const iconSize = vertical ? "h-4 w-4" : "h-5 w-5";
 
   return (
     <nav
-      className={`flex min-w-0 items-center gap-1 sm:gap-2 px-0.5 ${
-        vertical ? "h-auto flex-col py-1" : "h-12 flex-row flex-1"
+      className={`flex min-w-0 items-center ${
+        vertical ? "flex-col gap-0.5 py-0.5" : `flex-row ${compact ? "gap-0.5" : "gap-1.5"}`
       }`}
     >
-        <div className={`flex min-w-0 items-center gap-2 sm:gap-3 ${vertical ? "flex-col" : "flex-1 flex-row"}`}>
-          <Button variant="ghost" size="icon" asChild className="h-9 w-9 shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-800">
-            <Link to="/dashboard" title="Retour au dashboard">
-              <ChevronLeft className="h-5 w-5 text-neutral-600 dark:text-neutral-400" />
-            </Link>
-          </Button>
-          <BoardlyBrand to="/dashboard" showName={false} size={28} className="hidden sm:flex shrink-0" />
-          {!vertical && <div className="h-6 w-px bg-neutral-200 dark:bg-neutral-700 shrink-0" />}
-          {isEditing ? (
-            <input
-              ref={inputRef}
-              autoFocus
-              value={newTitle}
-              onChange={(e) => setNewTitle(e.target.value)}
-              onBlur={onSubmit}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") onSubmit();
-                if (e.key === "Escape") { setIsEditing(false); setNewTitle(title); }
-              }}
-              className="text-sm font-semibold bg-white/20 dark:bg-black/20 outline-none px-2 py-1 rounded border border-blue-500/50 dark:text-white"
-            />
-          ) : (
-            <div onClick={() => setIsEditing(true)} className="flex items-center gap-2 cursor-pointer hover:bg-white/10 dark:hover:bg-black/10 px-2 py-1 rounded transition group">
-              <h1 className="text-sm font-semibold truncate max-w-[200px] dark:text-white">{title}</h1>
-              <Pencil className="h-3 w-3 text-neutral-400 opacity-0 group-hover:opacity-100 transition" />
-            </div>
-          )}
-        </div>
+      <div className={`flex shrink-0 items-center ${vertical ? "flex-col gap-0.5" : "gap-1"}`}>
+        <Button variant="ghost" size="icon" asChild className={`${btnSize} shrink-0 hover:bg-neutral-100 dark:hover:bg-neutral-800`}>
+          <Link to="/dashboard" title="Retour au dashboard">
+            <ChevronLeft className={`${iconSize} text-neutral-600 dark:text-neutral-400`} />
+          </Link>
+        </Button>
+        <span title={vertical ? title : undefined} className="shrink-0">
+          <BoardlyBrand
+            to="/dashboard"
+            showName={false}
+            size={vertical ? 22 : compact ? 24 : 28}
+          />
+        </span>
+        {!vertical && (
+          <>
+            <div className="h-4 w-px shrink-0 bg-neutral-200 dark:bg-neutral-700" />
+            {isEditing ? (
+              <input
+                ref={inputRef}
+                autoFocus
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                onBlur={onSubmit}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") onSubmit();
+                  if (e.key === "Escape") { setIsEditing(false); setNewTitle(title); }
+                }}
+                className="max-w-[140px] rounded border border-blue-500/50 bg-white/20 px-2 py-0.5 text-sm font-semibold outline-none dark:bg-black/20 dark:text-white"
+              />
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsEditing(true)}
+                className="group flex max-w-[160px] items-center gap-1 rounded px-1.5 py-0.5 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                title={title}
+              >
+                <span className="truncate text-sm font-semibold dark:text-white">{title}</span>
+                {!compact && (
+                  <Pencil className="h-3 w-3 shrink-0 text-neutral-400 opacity-0 transition group-hover:opacity-100" />
+                )}
+              </button>
+            )}
+          </>
+        )}
+      </div>
 
-        <div className="hidden lg:flex items-center bg-white/10 dark:bg-black/10 px-3 py-1.5 rounded-full gap-3 mr-4 border border-neutral-200/20 dark:border-neutral-700/20">
-          <div className="flex items-center gap-1.5">
-            <div className="h-1.5 w-1.5 bg-green-500 rounded-full animate-pulse" />
-            <span className="text-[11px] font-medium text-neutral-700 dark:text-neutral-200">Vous</span>
-          </div>
+      {!vertical && !compact && (
+        <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-neutral-200/20 bg-white/10 px-2.5 py-1 dark:border-neutral-700/20 dark:bg-black/10">
+          <div className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+          <span className="text-[10px] font-medium text-neutral-700 dark:text-neutral-200">Vous</span>
         </div>
+      )}
 
-        <div className={`flex items-center gap-1 sm:gap-2 ${vertical ? "flex-col" : "flex-row flex-wrap justify-end"}`}>
-          <NavIconButton onClick={toggleDarkMode} title={darkMode ? "Mode clair" : "Mode sombre"}>
-            {darkMode ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-          </NavIconButton>
-          <NavIconButton onClick={() => setShowCommandPalette(true)} title="Commandes (Ctrl+K)">
-            <Keyboard className="h-5 w-5" />
-          </NavIconButton>
-          <NavIconButton active={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion">
-            <MessageSquare className="h-5 w-5" />
-          </NavIconButton>
-          <HistoryDialog />
-          {!readOnly && <TrashDialog />}
-          {!readOnly && actualBoardId && <ShareDialog boardId={actualBoardId} isPublic={isPublic} />}
-          {readOnly && (
-            <span className="text-xs font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/40 px-3 py-1 rounded-full">Lecture seule</span>
-          )}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <NavIconButton title="Plus d'options"><MoreHorizontal className="h-5 w-5" /></NavIconButton>
-            </DropdownMenuTrigger>
+      {!vertical && !compact && <div className="h-4 w-px shrink-0 bg-neutral-200 dark:bg-neutral-700" />}
+
+      <div className={`flex items-center ${vertical ? "flex-col gap-0.5" : "gap-0.5"}`}>
+        <NavIconButton onClick={toggleDarkMode} title={darkMode ? "Mode clair" : "Mode sombre"} className={btnSize}>
+          {darkMode ? <Sun className={iconSize} /> : <Moon className={iconSize} />}
+        </NavIconButton>
+        <NavIconButton onClick={() => setShowCommandPalette(true)} title="Commandes (Ctrl+K)" className={btnSize}>
+          <Keyboard className={iconSize} />
+        </NavIconButton>
+        <NavIconButton active={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion" className={btnSize}>
+          <MessageSquare className={iconSize} />
+        </NavIconButton>
+        <HistoryDialog />
+        {!readOnly && <TrashDialog />}
+        {!readOnly && actualBoardId && (
+          <ShareDialog boardId={actualBoardId} isPublic={isPublic} iconOnly={iconOnly} />
+        )}
+        {readOnly && !vertical && (
+          <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">
+            Lecture seule
+          </span>
+        )}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <NavIconButton title="Plus d'options" className={btnSize}>
+              <MoreHorizontal className={iconSize} />
+            </NavIconButton>
+          </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-48">
               <DropdownMenuLabel>Exporter</DropdownMenuLabel>
               <DropdownMenuItem onClick={handleExport} className="gap-2 cursor-pointer"><FileImage className="h-4 w-4" /> JPEG</DropdownMenuItem>

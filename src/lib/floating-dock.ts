@@ -10,7 +10,10 @@ export type DockAnchor =
 
 export type DockState = {
   anchor: DockAnchor;
+  /** Minimal pill (zoom bar) */
   collapsed: boolean;
+  /** Tight layout — logo + tools grouped (navbar) */
+  compact: boolean;
 };
 
 export function isVerticalDock(anchor: DockAnchor) {
@@ -22,13 +25,13 @@ export function dockAnchorClasses(anchor: DockAnchor) {
     case "top-left":
       return "top-4 left-4";
     case "top-center":
-      return "top-4 left-1/2 -translate-x-1/2 w-[min(100%,calc(100vw-2rem))]";
+      return "top-4 left-1/2 -translate-x-1/2 max-w-[calc(100vw-2rem)]";
     case "top-right":
       return "top-4 right-4";
     case "bottom-left":
       return "bottom-4 left-4";
     case "bottom-center":
-      return "bottom-4 left-1/2 -translate-x-1/2";
+      return "bottom-4 left-1/2 -translate-x-1/2 max-w-[calc(100vw-2rem)]";
     case "bottom-right":
       return "bottom-4 right-4";
     case "left-center":
@@ -36,6 +39,12 @@ export function dockAnchorClasses(anchor: DockAnchor) {
     case "right-center":
       return "right-4 top-1/2 -translate-y-1/2";
   }
+}
+
+export function centerAnchor(anchor: DockAnchor): DockAnchor {
+  if (anchor.startsWith("bottom")) return "bottom-center";
+  if (anchor === "left-center" || anchor === "right-center") return "top-center";
+  return "top-center";
 }
 
 export function snapPointerToAnchor(x: number, y: number, width: number, height: number): DockAnchor {
@@ -60,17 +69,32 @@ export function snapPointerToAnchor(x: number, y: number, width: number, height:
   return yRatio < 0.5 ? "top-center" : "bottom-center";
 }
 
-export function loadDockState(id: string, defaultAnchor: DockAnchor): DockState {
+export function loadDockState(
+  id: string,
+  defaultAnchor: DockAnchor,
+  defaults?: { compact?: boolean },
+): DockState {
   try {
     const raw = localStorage.getItem(`boardly-dock-${id}`);
-    if (!raw) return { anchor: defaultAnchor, collapsed: false };
-    const parsed = JSON.parse(raw) as Partial<DockState>;
+    if (!raw) {
+      return {
+        anchor: defaultAnchor,
+        collapsed: false,
+        compact: defaults?.compact ?? false,
+      };
+    }
+    const parsed = JSON.parse(raw) as Partial<DockState & { collapsed?: boolean }>;
     return {
       anchor: parsed.anchor || defaultAnchor,
-      collapsed: !!parsed.collapsed,
+      collapsed: !!parsed.collapsed && !parsed.compact,
+      compact: parsed.compact ?? defaults?.compact ?? !!parsed.collapsed,
     };
   } catch {
-    return { anchor: defaultAnchor, collapsed: false };
+    return {
+      anchor: defaultAnchor,
+      collapsed: false,
+      compact: defaults?.compact ?? false,
+    };
   }
 }
 

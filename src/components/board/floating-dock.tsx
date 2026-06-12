@@ -1,9 +1,20 @@
 import { memo, useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, ChevronUp, ChevronLeft, ChevronRight, GripVertical, GripHorizontal } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  GripVertical,
+  GripHorizontal,
+  AlignCenter,
+  Minimize2,
+  Maximize2,
+} from "lucide-react";
 import {
   type DockAnchor,
   type DockState,
+  centerAnchor,
   dockAnchorClasses,
   isVerticalDock,
   loadDockState,
@@ -11,7 +22,17 @@ import {
   snapPointerToAnchor,
 } from "@/lib/floating-dock";
 
-const FloatingDockContext = createContext({ vertical: false });
+type FloatingDockContextValue = {
+  vertical: boolean;
+  compact: boolean;
+  anchor: DockAnchor;
+};
+
+const FloatingDockContext = createContext<FloatingDockContextValue>({
+  vertical: false,
+  compact: true,
+  anchor: "top-center",
+});
 
 export function useFloatingDock() {
   return useContext(FloatingDockContext);
@@ -25,6 +46,10 @@ type FloatingDockProps = {
   className?: string;
   innerClassName?: string;
   zIndex?: number;
+  /** compact = resserrer le contenu ; collapse = pill minimal */
+  toggleMode?: "compact" | "collapse";
+  defaultCompact?: boolean;
+  allowCenterSnap?: boolean;
 };
 
 export const FloatingDock = memo(function FloatingDock({
@@ -35,8 +60,13 @@ export const FloatingDock = memo(function FloatingDock({
   className = "",
   innerClassName = "",
   zIndex = 20,
+  toggleMode = "collapse",
+  defaultCompact = false,
+  allowCenterSnap = false,
 }: FloatingDockProps) {
-  const [state, setState] = useState<DockState>(() => loadDockState(id, defaultAnchor));
+  const [state, setState] = useState<DockState>(() =>
+    loadDockState(id, defaultAnchor, { compact: defaultCompact }),
+  );
   const [dragging, setDragging] = useState(false);
   const [dragPoint, setDragPoint] = useState({ x: 0, y: 0 });
   const dragOffset = useRef({ x: 0, y: 0 });
@@ -47,6 +77,8 @@ export const FloatingDock = memo(function FloatingDock({
   }, [id, state]);
 
   const vertical = isVerticalDock(state.anchor);
+  const isCompactMode = toggleMode === "compact";
+  const hidden = !isCompactMode && state.collapsed;
 
   const startDrag = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
@@ -87,12 +119,27 @@ export const FloatingDock = memo(function FloatingDock({
     [dragging],
   );
 
-  const toggleCollapsed = useCallback(() => {
-    setState((prev) => ({ ...prev, collapsed: !prev.collapsed }));
+  const togglePanel = useCallback(() => {
+    if (isCompactMode) {
+      setState((prev) => ({ ...prev, compact: !prev.compact }));
+    } else {
+      setState((prev) => ({ ...prev, collapsed: !prev.collapsed }));
+    }
+  }, [isCompactMode]);
+
+  const snapToCenter = useCallback(() => {
+    setState((prev) => ({ ...prev, anchor: centerAnchor(prev.anchor) }));
   }, []);
 
-  const collapseIcon = (() => {
-    if (state.collapsed) {
+  const toggleIcon = (() => {
+    if (isCompactMode) {
+      return state.compact ? (
+        <Maximize2 className="h-3.5 w-3.5" />
+      ) : (
+        <Minimize2 className="h-3.5 w-3.5" />
+      );
+    }
+    if (hidden) {
       if (state.anchor.startsWith("top")) return <ChevronDown className="h-3.5 w-3.5" />;
       if (state.anchor.startsWith("bottom")) return <ChevronUp className="h-3.5 w-3.5" />;
       if (state.anchor === "left-center") return <ChevronRight className="h-3.5 w-3.5" />;
@@ -118,78 +165,99 @@ export const FloatingDock = memo(function FloatingDock({
     : { zIndex };
 
   return (
-    <FloatingDockContext.Provider value={{ vertical }}>
-    <motion.div
-      ref={panelRef}
-      layout
-      transition={{ type: "spring", stiffness: 420, damping: 32 }}
-      className={`absolute pointer-events-auto ${dragging ? "" : dockPositionClass} ${className}`}
-      style={panelStyle}
+    <FloatingDockContext.Provider
+      value={{ vertical, compact: state.compact, anchor: state.anchor }}
     >
-      <div
-        className={`flex items-center gap-1 rounded-xl border border-neutral-200/70 bg-white/90 shadow-sm shadow-black/[0.06] backdrop-blur-md dark:border-neutral-700/70 dark:bg-neutral-900/90 ${
-          vertical ? "flex-col py-1.5 px-1" : "flex-row px-1.5 py-1"
-        } ${state.collapsed ? "" : innerClassName}`}
+      <motion.div
+        ref={panelRef}
+        layout
+        transition={{ type: "spring", stiffness: 420, damping: 32 }}
+        className={`absolute pointer-events-auto w-max ${dragging ? "" : dockPositionClass} ${className}`}
+        style={panelStyle}
       >
-        <button
-          type="button"
-          className={`flex shrink-0 cursor-grab items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:cursor-grabbing dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
-            vertical ? "h-6 w-8" : "h-8 w-6"
-          }`}
-          title="Déplacer"
-          onPointerDown={startDrag}
-          onPointerMove={onDragMove}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
+        <div
+          className={`flex items-center gap-0.5 rounded-xl border border-neutral-200/70 bg-white/90 shadow-sm shadow-black/[0.06] backdrop-blur-md dark:border-neutral-700/70 dark:bg-neutral-900/90 ${
+            vertical ? "flex-col py-1 px-0.5" : "flex-row py-0.5 px-1"
+          } ${hidden ? "" : innerClassName}`}
         >
-          {vertical ? <GripHorizontal className="h-4 w-4" /> : <GripVertical className="h-4 w-4" />}
-        </button>
+          <button
+            type="button"
+            className={`flex shrink-0 cursor-grab items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 active:cursor-grabbing dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+              vertical ? "h-5 w-7" : "h-7 w-5"
+            }`}
+            title="Déplacer"
+            onPointerDown={startDrag}
+            onPointerMove={onDragMove}
+            onPointerUp={endDrag}
+            onPointerCancel={endDrag}
+          >
+            {vertical ? <GripHorizontal className="h-3.5 w-3.5" /> : <GripVertical className="h-3.5 w-3.5" />}
+          </button>
 
-        <AnimatePresence mode="wait" initial={false}>
-          {state.collapsed ? (
-            <motion.button
-              key="collapsed"
+          {allowCenterSnap && !hidden && (
+            <button
               type="button"
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.96 }}
-              transition={{ duration: 0.12 }}
-              className={`flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800 ${
-                vertical ? "flex-col" : "flex-row"
+              className={`flex shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+                vertical ? "h-5 w-7" : "h-7 w-5"
               }`}
-              onClick={toggleCollapsed}
-              title="Déplier"
+              title="Centrer"
+              onClick={snapToCenter}
             >
-              {collapsedContent}
-            </motion.button>
-          ) : (
-            <motion.div
-              key="expanded"
-              initial={{ opacity: 0, scale: 0.98 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.98 }}
-              transition={{ duration: 0.12 }}
-              className={`flex min-w-0 items-center gap-1 ${vertical ? "flex-col" : "flex-row"} ${
-                state.anchor === "top-center" && !vertical ? "w-full flex-1" : ""
-              }`}
-            >
-              {children}
-            </motion.div>
+              <AlignCenter className="h-3.5 w-3.5" />
+            </button>
           )}
-        </AnimatePresence>
 
-        <button
-          type="button"
-          className={`flex shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
-            vertical ? "h-6 w-8" : "h-8 w-6"
-          }`}
-          title={state.collapsed ? "Déplier" : "Replier"}
-          onClick={toggleCollapsed}
-        >
-          {collapseIcon}
-        </button>
-      </div>
-    </motion.div>
+          <AnimatePresence mode="wait" initial={false}>
+            {hidden ? (
+              <motion.button
+                key="collapsed"
+                type="button"
+                initial={{ opacity: 0, scale: 0.96 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.96 }}
+                transition={{ duration: 0.12 }}
+                className={`flex items-center gap-1.5 rounded-lg px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100 dark:text-neutral-200 dark:hover:bg-neutral-800 ${
+                  vertical ? "flex-col" : "flex-row"
+                }`}
+                onClick={togglePanel}
+                title="Déplier"
+              >
+                {collapsedContent}
+              </motion.button>
+            ) : (
+              <motion.div
+                key="expanded"
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.98 }}
+                transition={{ duration: 0.12 }}
+                className={`flex min-w-0 items-center ${vertical ? "flex-col gap-0.5" : "flex-row gap-0.5"}`}
+              >
+                {children}
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <button
+            type="button"
+            className={`flex shrink-0 items-center justify-center rounded-md text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600 dark:hover:bg-neutral-800 dark:hover:text-neutral-200 ${
+              vertical ? "h-5 w-7" : "h-7 w-5"
+            }`}
+            title={
+              isCompactMode
+                ? state.compact
+                  ? "Élargir"
+                  : "Resserrer"
+                : hidden
+                  ? "Déplier"
+                  : "Replier"
+            }
+            onClick={togglePanel}
+          >
+            {toggleIcon}
+          </button>
+        </div>
+      </motion.div>
     </FloatingDockContext.Provider>
   );
 });

@@ -10,7 +10,15 @@ import { toast } from "sonner";
 import type { Board, BoardMember } from "@/lib/types";
 import { NavIconButton } from "./nav-icon-button";
 
-export function ShareDialog({ boardId, isPublic = false }: { boardId: string; isPublic?: boolean }) {
+export function ShareDialog({
+  boardId,
+  isPublic = false,
+  iconOnly = false,
+}: {
+  boardId: string;
+  isPublic?: boolean;
+  iconOnly?: boolean;
+}) {
   const [open, setOpen] = useState(false);
   const [publicEnabled, setPublicEnabled] = useState(isPublic);
   const [copiedInvite, setCopiedInvite] = useState(false);
@@ -78,14 +86,20 @@ export function ShareDialog({ boardId, isPublic = false }: { boardId: string; is
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-9 gap-2 bg-white/10 text-blue-600 border-blue-200/50 dark:border-blue-800/50 dark:text-blue-400 transition-colors duration-150 active:bg-blue-50 dark:active:bg-blue-950/30"
-        >
-          <Globe className="h-4 w-4" />
-          <span className="hidden sm:inline">Partager</span>
-        </Button>
+        {iconOnly ? (
+          <NavIconButton title="Partager" className="text-blue-600 dark:text-blue-400">
+            <Globe className="h-5 w-5" />
+          </NavIconButton>
+        ) : (
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-9 gap-2 bg-white/10 text-blue-600 border-blue-200/50 dark:border-blue-800/50 dark:text-blue-400 transition-colors duration-150 active:bg-blue-50 dark:active:bg-blue-950/30"
+          >
+            <Globe className="h-4 w-4" />
+            <span className="hidden sm:inline">Partager</span>
+          </Button>
+        )}
       </DialogTrigger>
       <DialogContent className="sm:max-w-md max-h-[85vh] flex flex-col">
         <DialogHeader>
