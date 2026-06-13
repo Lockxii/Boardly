@@ -7,7 +7,7 @@ import { ensureBoardSchema } from "./schema-sync.js";
 import { fetchLinkPreview } from "./link-preview.js";
 import { fetchMusicPreviewHandler } from "./music-preview.js";
 import { buildTemplateCanvas } from "./board-seeds.js";
-import { chatWithFred, isFredConfigured } from "./fred-ai.js";
+import { chatWithFred, isFredConfigured, streamChatWithFred } from "./fred-ai.js";
 
 function getAppOrigin() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
@@ -240,6 +240,51 @@ export function createApp() {
       const msg = error instanceof Error ? error.message : "Erreur Fred AI";
       const status = msg.includes("GOOGLE_AI_API_KEY") ? 503 : 500;
       res.status(status).json({ error: msg });
+    }
+  }));
+
+  app.post("/api/fred/chat/stream", requireAuth(async (req, res, user) => {
+    const { message, history, boardContext, boardId, visionAssets, toolMode } = req.body as {
+      message?: string;
+      history?: { role: "user" | "assistant"; content: string }[];
+      boardContext?: Record<string, unknown>;
+      boardId?: string;
+      visionAssets?: { label: string; mimeType?: string; data?: string; src?: string }[];
+      toolMode?: Parameters<typeof chatWithFred>[0]["toolMode"];
+    };
+
+    if (!message?.trim()) return res.status(400).json({ error: "Message requis" });
+
+    if (boardId) {
+      const access = await getBoardAccess(boardId, user as { id: string; email: string });
+      if (!access) return res.status(403).json({ error: "Accès refusé" });
+    }
+
+    res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.flushHeaders?.();
+
+    try {
+      for await (const event of streamChatWithFred({
+        message: message.trim(),
+        history,
+        boardContext: boardContext as Parameters<typeof chatWithFred>[0]["boardContext"],
+        visionAssets,
+        toolMode,
+      })) {
+        res.write(`event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`);
+      }
+      res.end();
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : "Erreur Fred AI";
+      const status = msg.includes("GOOGLE_AI_API_KEY") ? 503 : 500;
+      if (!res.headersSent) {
+        res.status(status).json({ error: msg });
+      } else {
+        res.write(`event: error\ndata: ${JSON.stringify({ error: msg })}\n\n`);
+        res.end();
+      }
     }
   }));
 
@@ -482,45 +527,6 @@ export function createApp() {
     } else {
       res.setHeader("Content-Type", attachment.type);
       res.send(Buffer.from(base64, "base64"));
-    }
-  });
-
-  // --- LIVEBLOCKS AUTH ---
-
-  app.post("/api/liveblocks-auth", async (req, res) => {
-    const user = await getSessionUser(req);
-    if (!user) return res.status(401).json({ error: "Non autorisé" });
-
-    const room = req.body?.room;
-    if (!room) return res.status(400).json({ error: "Room required" });
-
-    const LIVEBLOCKS_SECRET = process.env.LIVEBLOCKS_SECRET_KEY || "";
-    if (!LIVEBLOCKS_SECRET) {
-      return res.json({
-        token: "dev-token",
-        actor: user.id,
-        userInfo: { name: user.name, picture: user.image },
-      });
-    }
-
-    try {
-      const response = await fetch("https://api.liveblocks.io/v2/rooms/" + room + "/authorize", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LIVEBLOCKS_SECRET}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId: user.id,
-          userInfo: { name: user.name, picture: user.image },
-        }),
-      });
-      const data = await response.json();
-      res.json(data);
-    } catch (e: unknown) {
-      const message = e instanceof Error ? e.message : "Liveblocks error";
-      console.error("Liveblocks auth error:", e);
-      res.status(500).json({ error: message });
     }
   });
 

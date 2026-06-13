@@ -7,6 +7,7 @@ export type FredStoredMessage = {
   actions?: FredAction[];
   linkedLayerIds?: string[];
   meta?: { visionUsed?: number };
+  pending?: boolean;
 };
 
 export type FredChatSession = {

@@ -21,7 +21,6 @@ export default defineConfig({
       output: {
         manualChunks: {
           "vendor-react": ["react", "react-dom"],
-          "vendor-liveblocks": ["@liveblocks/client", "@liveblocks/react"],
           "vendor-tanstack": ["@tanstack/react-router", "@tanstack/react-query"],
           "vendor-motion": ["framer-motion"],
           "vendor-emoji": ["emoji-picker-react"],

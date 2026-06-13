@@ -14,9 +14,8 @@ Créez un fichier `.env` à la racine du projet :
 ```env
 DATABASE_URL="postgresql://..."  # Votre URL NeonDB
 BETTER_AUTH_SECRET="votre-secret-genere"
-BETTER_AUTH_URL="http://localhost:3000"
-NEXT_PUBLIC_APP_URL="http://localhost:3000"
-LIVEBLOCKS_SECRET_KEY="sk_..."   # Obtenez votre clé sur liveblocks.io
+BETTER_AUTH_URL="http://localhost:5173"
+GOOGLE_AI_API_KEY=""
 ```
 
 ### 2. Base de Données
@@ -39,8 +38,8 @@ Rendez-vous sur `http://localhost:3000`.
 
 - **Auth** : BetterAuth (Email/Mot de passe) avec Adaptateur Prisma.
 - **Base de données** : NeonDB (PostgreSQL) via Prisma ORM.
-- **Temps Réel** : Liveblocks (Presence & Storage) pour la collaboration instantanée.
-- **État** : Zustand (État UI local) + Liveblocks (État partagé).
+- **Temps Réel** : Présence HTTP + auto-save (WebSocket à venir via Socket.io).
+- **État** : Zustand (canvas local) + Prisma (persistance board).
 - **Canvas** : Moteur SVG performant avec transformations matricielles (Zoom/Pan).
 - **Styling** : Tailwind CSS + shadcn/ui.
 

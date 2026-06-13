@@ -38,7 +38,7 @@ import {
 import { toast } from "sonner";
 import { useCanvasStore } from "@/store/canvas-store";
 import { buildBoardSummary, buildLinkedLayersSummary } from "@/lib/board-context";
-import { sendFredMessage, fetchFredStatus, type FredChatMessage, type FredToolMode } from "@/lib/fred-ai";
+import { streamFredMessage, fetchFredStatus, type FredChatMessage, type FredToolMode } from "@/lib/fred-ai";
 import { applyFredActions } from "@/lib/fred-actions";
 import { buildVisionFromLinked, countLinkedImages } from "@/lib/fred-vision";
 import {
@@ -321,33 +321,66 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
         .slice(-8)
         .map((m) => ({ role: m.role, content: m.content }));
 
-      const response = await sendFredMessage({
-        message: trimmed || "Analyse les éléments liés et réponds en fonction du contexte.",
-        history: history.slice(0, -1),
-        boardContext: { ...getBoardContext(currentLinked), memory: activeSession?.memory },
-        boardId,
-        linkedLayerIds: currentLinked.length ? currentLinked : undefined,
-        visionAssets: assets.length ? assets : undefined,
-        toolMode,
-      });
-
+      const assistantId = crypto.randomUUID();
       updateActiveSession((session) => ({
         ...session,
-        memory: response.memory || session.memory,
         updatedAt: Date.now(),
         messages: [
           ...session.messages,
           {
-            id: crypto.randomUUID(),
+            id: assistantId,
             role: "assistant",
-            content: response.reply,
-            actions: response.actions?.length ? response.actions : undefined,
+            content: "",
+            pending: true,
             linkedLayerIds: currentLinked.length ? currentLinked : undefined,
-            meta: response.meta,
           },
         ],
       }));
+
+      await streamFredMessage(
+        {
+          message: trimmed || "Analyse les éléments liés et réponds en fonction du contexte.",
+          history: history.slice(0, -1),
+          boardContext: { ...getBoardContext(currentLinked), memory: activeSession?.memory },
+          boardId,
+          linkedLayerIds: currentLinked.length ? currentLinked : undefined,
+          visionAssets: assets.length ? assets : undefined,
+          toolMode,
+        },
+        {
+          onDelta: (text) => {
+            updateActiveSession((session) => ({
+              ...session,
+              messages: session.messages.map((m) =>
+                m.id === assistantId ? { ...m, content: m.content + text } : m
+              ),
+            }));
+          },
+          onDone: (response) => {
+            updateActiveSession((session) => ({
+              ...session,
+              memory: response.memory || session.memory,
+              updatedAt: Date.now(),
+              messages: session.messages.map((m) =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      content: response.reply || m.content,
+                      actions: response.actions?.length ? response.actions : undefined,
+                      meta: response.meta,
+                      pending: false,
+                    }
+                  : m
+              ),
+            }));
+          },
+        }
+      );
     } catch (error) {
+      updateActiveSession((session) => ({
+        ...session,
+        messages: session.messages.filter((m) => !(m.pending && m.role === "assistant")),
+      }));
       toast.error(error instanceof Error ? error.message : "Fred n'a pas pu répondre");
     } finally {
       setLoading(false);
@@ -664,7 +697,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
             </div>
           );
         })}
-        {(loading || preparingVision) && (
+        {(preparingVision || (loading && !messages.some((m) => m.pending && m.role === "assistant"))) && (
           <div className="flex items-center gap-2 text-xs text-neutral-500">
             <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
             {preparingVision ? "Préparation des images liées…" : "Fred réfléchit…"}

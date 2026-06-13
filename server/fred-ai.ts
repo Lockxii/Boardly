@@ -144,6 +144,19 @@ Actions autorisées :
 Ne invente pas d'autres types d'actions.
 Pour add_comments, utilise les ids exacts [id:...] présents dans le contexte si possible.`;
 
+const STREAM_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
+
+FORMAT STREAMING :
+- Écris d'abord ta réponse visible en markdown français.
+- Si des actions canvas sont pertinentes, termine par exactement ce bloc (rien après <<<END>>>) :
+<<<ACTIONS>>>
+{"actions":[...],"memory":"résumé court ou mémoire actualisée"}
+<<<END>>>
+- Si aucune action : pas de bloc <<<ACTIONS>>>.`;
+
+const ACTIONS_MARKER = "<<<ACTIONS>>>";
+const ACTIONS_END_MARKER = "<<<END>>>";
+
 const MODE_INSTRUCTIONS: Record<FredToolMode, string> = {
   chat: "Mode libre : réponds et propose des actions seulement si utile.",
   critique: "Mode critique créa : évalue cohérence, hiérarchie, lisibilité, direction artistique, risques et prochaines décisions. Sois direct.",
@@ -278,22 +291,37 @@ function parseFredResponse(raw: string) {
   return FredResponseSchema.parse(parsed);
 }
 
-function buildVisionParts(assets: { label: string; mimeType: string; data: string }[]): Part[] {
-  const parts: Part[] = [];
-  for (const asset of assets) {
-    parts.push({ text: `[Image: ${asset.label}]` });
-    parts.push({ inlineData: { mimeType: asset.mimeType, data: asset.data } });
+function parseStreamFredResponse(full: string) {
+  const markerIdx = full.indexOf(ACTIONS_MARKER);
+  const reply = (markerIdx >= 0 ? full.slice(0, markerIdx) : full).trim();
+  let actions: FredAction[] = [];
+  let memory: string | undefined;
+
+  if (markerIdx >= 0) {
+    const after = full.slice(markerIdx + ACTIONS_MARKER.length);
+    const endIdx = after.indexOf(ACTIONS_END_MARKER);
+    const jsonBlock = (endIdx >= 0 ? after.slice(0, endIdx) : after).trim();
+    try {
+      const parsed = JSON.parse(jsonBlock) as { actions?: unknown; memory?: string };
+      actions = z.array(FredActionSchema).max(5).parse(parsed.actions ?? []);
+      memory = parsed.memory;
+    } catch {
+      /* actions block invalid — reply still usable */
+    }
   }
-  return parts;
+
+  return { reply: reply || "Je n'ai pas pu formuler une réponse claire. Réessaie.", actions, memory };
 }
 
-export async function chatWithFred(input: {
+type FredChatInput = {
   message: string;
   history?: FredChatMessage[];
   boardContext?: BoardContextPayload;
   visionAssets?: VisionAssetInput[];
   toolMode?: FredToolMode;
-}) {
+};
+
+async function prepareFredChat(input: FredChatInput) {
   const mode = input.toolMode ?? "chat";
   const { assets: resolvedVision, skipped } = await resolveVisionAssets(input.visionAssets);
   const webResults = shouldSearchWeb(mode, input.message) ? await searchWeb(buildSearchQuery(input)) : [];
@@ -307,17 +335,6 @@ export async function chatWithFred(input: {
     : resolvedVision.length > 0
       ? { visionAttached: true, visionCount: resolvedVision.length }
       : undefined;
-
-  const genAI = getClient();
-  const model = genAI.getGenerativeModel({
-    model: FRED_MODEL,
-    systemInstruction: SYSTEM_PROMPT,
-    generationConfig: {
-      temperature: 0.65,
-      maxOutputTokens: 2048,
-      responseMimeType: "application/json",
-    },
-  });
 
   const contextBlock = buildContextBlock(enrichedContext);
   const modeBlock = `--- Mode Fred ---\n${MODE_INSTRUCTIONS[mode]}\n--- Fin mode ---`;
@@ -339,28 +356,101 @@ export async function chatWithFred(input: {
     .join("\n\n");
 
   const userParts: Part[] = [{ text: userText }, ...buildVisionParts(resolvedVision)];
-
   contents.push({ role: "user", parts: userParts });
+
+  return {
+    contents,
+    meta: { visionUsed: resolvedVision.length, visionSkipped: skipped },
+  };
+}
+
+function buildVisionParts(assets: { label: string; mimeType: string; data: string }[]): Part[] {
+  const parts: Part[] = [];
+  for (const asset of assets) {
+    parts.push({ text: `[Image: ${asset.label}]` });
+    parts.push({ inlineData: { mimeType: asset.mimeType, data: asset.data } });
+  }
+  return parts;
+}
+
+export type FredStreamEvent =
+  | { type: "delta"; text: string }
+  | {
+      type: "done";
+      reply: string;
+      actions: FredAction[];
+      memory?: string;
+      meta: { visionUsed: number; visionSkipped: number };
+    };
+
+export async function chatWithFred(input: FredChatInput) {
+  const { contents, meta } = await prepareFredChat(input);
+
+  const genAI = getClient();
+  const model = genAI.getGenerativeModel({
+    model: FRED_MODEL,
+    systemInstruction: SYSTEM_PROMPT,
+    generationConfig: {
+      temperature: 0.65,
+      maxOutputTokens: 2048,
+      responseMimeType: "application/json",
+    },
+  });
 
   const result = await model.generateContent({ contents });
   const text = result.response.text();
 
   try {
     const parsed = parseFredResponse(text);
-    return {
-      ...parsed,
-      meta: {
-        visionUsed: resolvedVision.length,
-        visionSkipped: skipped,
-      },
-    };
+    return { ...parsed, meta };
   } catch {
     return {
       reply: text || "Je n'ai pas pu formuler une réponse claire. Réessaie.",
       actions: [] as FredAction[],
-      meta: { visionUsed: resolvedVision.length, visionSkipped: skipped },
+      meta,
     };
   }
+}
+
+export async function* streamChatWithFred(input: FredChatInput): AsyncGenerator<FredStreamEvent> {
+  const { contents, meta } = await prepareFredChat(input);
+
+  const genAI = getClient();
+  const model = genAI.getGenerativeModel({
+    model: FRED_MODEL,
+    systemInstruction: STREAM_SYSTEM_PROMPT,
+    generationConfig: {
+      temperature: 0.65,
+      maxOutputTokens: 2048,
+    },
+  });
+
+  const result = await model.generateContentStream({ contents });
+  let full = "";
+  let visibleEnd = 0;
+
+  for await (const chunk of result.stream) {
+    const text = chunk.text();
+    if (!text) continue;
+    full += text;
+
+    const markerIdx = full.indexOf(ACTIONS_MARKER);
+    const visibleFull = markerIdx >= 0 ? full.slice(0, markerIdx) : full;
+    const delta = visibleFull.slice(visibleEnd);
+    if (delta) {
+      visibleEnd = visibleFull.length;
+      yield { type: "delta", text: delta };
+    }
+  }
+
+  const parsed = parseStreamFredResponse(full);
+  yield {
+    type: "done",
+    reply: parsed.reply,
+    actions: parsed.actions,
+    memory: parsed.memory,
+    meta,
+  };
 }
 
 export function isFredConfigured() {
