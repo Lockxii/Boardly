@@ -9,13 +9,22 @@ import {
   Plus,
   ChevronDown,
   GripHorizontal,
+  Pencil,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -85,6 +94,8 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   const [layout, setLayout] = useState<FredPanelLayout>(
     () => loadFredPanelLayout(boardId) ?? DEFAULT_LAYOUT
   );
+  const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ startX: number; startY: number; origX: number; origY: number } | null>(null);
@@ -301,6 +312,32 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
     setInput("");
   };
 
+  const handleRenameSession = (id: string, title: string) => {
+    const trimmed = title.trim() || "Nouveau chat";
+    persistSessions(
+      sessions.map((s) => (s.id === id ? { ...s, title: trimmed, updatedAt: Date.now() } : s))
+    );
+    setRenameTarget(null);
+    toast.success("Chat renommé");
+  };
+
+  const handleDeleteSession = (id: string) => {
+    if (sessions.length <= 1) {
+      const fresh = createFredSession();
+      persistSessions([fresh]);
+      setActiveId(fresh.id);
+      setDeleteTarget(null);
+      toast.success("Chat supprimé");
+      return;
+    }
+
+    const next = sessions.filter((s) => s.id !== id);
+    persistSessions(next);
+    if (activeId === id) setActiveId(next[0].id);
+    setDeleteTarget(null);
+    toast.success("Chat supprimé");
+  };
+
   const onHeaderPointerDown = (e: React.PointerEvent) => {
     if ((e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
@@ -365,6 +402,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   const linkedImageCount = countLinkedImages(linkedIds, layers);
 
   return (
+    <>
     <div
       className="pointer-events-auto fixed z-50 flex flex-col overflow-hidden rounded-2xl border border-neutral-200/80 bg-[#FDFCF8]/95 shadow-2xl shadow-black/10 backdrop-blur-md dark:border-neutral-700/80 dark:bg-neutral-950/95"
       style={{ left: layout.x, top: layout.y, width: layout.width, height: layout.height }}
@@ -381,7 +419,17 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
           <FredAvatar className="h-7 w-7 text-xs" />
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold tracking-tight">Fred AI</h3>
-            <p className="truncate text-[10px] text-neutral-500">{activeSession?.title ?? "Chat"}</p>
+            <button
+              type="button"
+              onClick={() =>
+                activeSession &&
+                setRenameTarget({ id: activeSession.id, title: activeSession.title })
+              }
+              className="block max-w-full truncate text-left text-[10px] text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-300"
+              title="Renommer ce chat"
+            >
+              {activeSession?.title ?? "Chat"}
+            </button>
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-0.5" onPointerDown={(e) => e.stopPropagation()}>
@@ -391,15 +439,49 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
                 <ChevronDown className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="max-h-64 w-56 overflow-y-auto">
+            <DropdownMenuContent align="end" className="max-h-72 w-64 overflow-y-auto p-1">
               {sessions.map((s) => (
-                <DropdownMenuItem
+                <div
                   key={s.id}
-                  className={cn("cursor-pointer truncate", s.id === activeId && "bg-neutral-100 dark:bg-neutral-800")}
-                  onClick={() => handleSelectChat(s.id)}
+                  className={cn(
+                    "group flex items-center gap-0.5 rounded-md",
+                    s.id === activeId && "bg-neutral-100 dark:bg-neutral-800"
+                  )}
                 >
-                  {s.title}
-                </DropdownMenuItem>
+                  <button
+                    type="button"
+                    onClick={() => handleSelectChat(s.id)}
+                    className="min-w-0 flex-1 truncate px-2 py-1.5 text-left text-sm hover:text-blue-600 dark:hover:text-blue-400"
+                  >
+                    {s.title}
+                  </button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 opacity-60 group-hover:opacity-100"
+                    title="Renommer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRenameTarget({ id: s.id, title: s.title });
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 text-red-500 opacity-60 hover:text-red-600 group-hover:opacity-100"
+                    title="Supprimer"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDeleteTarget({ id: s.id, title: s.title });
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
               ))}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -547,6 +629,67 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
         </svg>
       </div>
     </div>
+
+    <Dialog open={!!renameTarget} onOpenChange={(open) => !open && setRenameTarget(null)}>
+      <DialogContent className="max-w-sm rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Renommer le chat</DialogTitle>
+        </DialogHeader>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (renameTarget) handleRenameSession(renameTarget.id, renameTarget.title);
+          }}
+          className="space-y-3"
+        >
+          <div className="space-y-2">
+            <Label htmlFor="fred-chat-title">Nom</Label>
+            <Input
+              id="fred-chat-title"
+              value={renameTarget?.title ?? ""}
+              onChange={(e) =>
+                setRenameTarget((prev) => (prev ? { ...prev, title: e.target.value } : null))
+              }
+              autoFocus
+              className="rounded-xl"
+            />
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" className="rounded-xl" onClick={() => setRenameTarget(null)}>
+              Annuler
+            </Button>
+            <Button type="submit" className="rounded-xl">
+              Enregistrer
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+
+    <Dialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+      <DialogContent className="max-w-sm rounded-2xl">
+        <DialogHeader>
+          <DialogTitle>Supprimer ce chat ?</DialogTitle>
+        </DialogHeader>
+        <p className="text-sm text-neutral-500">
+          « {deleteTarget?.title} » sera supprimé définitivement.
+        </p>
+        <DialogFooter>
+          <Button type="button" variant="outline" className="rounded-xl" onClick={() => setDeleteTarget(null)}>
+            Annuler
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            className="rounded-xl"
+            onClick={() => deleteTarget && handleDeleteSession(deleteTarget.id)}
+          >
+            Supprimer
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
 
