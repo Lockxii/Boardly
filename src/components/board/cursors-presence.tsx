@@ -4,12 +4,13 @@ import { applyLiveBoardPatch, applyRemoteBoardUpdate, createBoardLivePatch, type
 import { apiFetch } from "@/lib/utils";
 import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
-import type { BoardCanvasData } from "@/lib/types";
+import type { BoardCanvasData, Layer } from "@/lib/types";
 
 const CURSOR_EMIT_INTERVAL_MS = 16;
 const CANVAS_EMIT_INTERVAL_MS = 32;
 const PEER_TIMEOUT_MS = 30_000;
 const CURSOR_LERP = 0.82;
+const REMOTE_LAYER_ANIMATION_MS = 96;
 
 type Peer = {
   connectionId: string;
@@ -21,6 +22,22 @@ type Peer = {
   screenY: number | null;
   lastSeen: number;
   el: HTMLDivElement | null;
+};
+
+type LayerGeometry = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+};
+
+type RemoteLayerAnimation = {
+  startedAt: number;
+  duration: number;
+  from: LayerGeometry;
+  to: LayerGeometry;
+  target: Layer;
 };
 
 function normalizePresence(user: Partial<RemotePresence> & { userId: string }): RemotePresence {
@@ -77,6 +94,48 @@ function canvasDataFromStore(): BoardCanvasData {
   };
 }
 
+function layerGeometry(layer: Layer): LayerGeometry {
+  return {
+    x: Number(layer.x) || 0,
+    y: Number(layer.y) || 0,
+    width: Number(layer.width) || 0,
+    height: Number(layer.height) || 0,
+    rotation: Number(layer.rotation) || 0,
+  };
+}
+
+function withLayerGeometry(layer: Layer, geometry: LayerGeometry): Layer {
+  return {
+    ...layer,
+    x: geometry.x,
+    y: geometry.y,
+    width: geometry.width,
+    height: geometry.height,
+    rotation: geometry.rotation,
+  };
+}
+
+function shouldAnimateLayer(from: Layer | undefined, to: Layer) {
+  if (!from || from.type !== to.type) return false;
+  const a = layerGeometry(from);
+  const b = layerGeometry(to);
+  return (
+    Math.abs(a.x - b.x) > 0.5 ||
+    Math.abs(a.y - b.y) > 0.5 ||
+    Math.abs(a.width - b.width) > 0.5 ||
+    Math.abs(a.height - b.height) > 0.5 ||
+    Math.abs(a.rotation - b.rotation) > 0.5
+  );
+}
+
+function lerp(from: number, to: number, amount: number) {
+  return from + (to - from) * amount;
+}
+
+function easeOutCubic(t: number) {
+  return 1 - Math.pow(1 - t, 3);
+}
+
 export function CursorsPresence({
   boardId,
   readOnly = false,
@@ -98,6 +157,8 @@ export function CursorsPresence({
   const queuedPatchRef = useRef<BoardLivePatch | null>(null);
   const canvasRevisionRef = useRef(0);
   const remoteRevisionRef = useRef(new Map<string, number>());
+  const remoteLayerAnimationsRef = useRef(new Map<string, RemoteLayerAnimation>());
+  const remoteLayerAnimationFrameRef = useRef(0);
   const lastCanvasEmitAtRef = useRef(0);
   const canvasEmitTimerRef = useRef(0);
 
@@ -207,6 +268,49 @@ export function CursorsPresence({
       }
     };
 
+    const animateRemoteLayers = () => {
+      if (remoteLayerAnimationFrameRef.current) return;
+
+      const step = () => {
+        remoteLayerAnimationFrameRef.current = 0;
+        if (cancelled || remoteLayerAnimationsRef.current.size === 0) return;
+
+        const now = performance.now();
+        const layerUpdates: Record<string, Layer> = {};
+
+        for (const [id, animation] of remoteLayerAnimationsRef.current) {
+          const progress = Math.min(1, Math.max(0, (now - animation.startedAt) / animation.duration));
+          const amount = easeOutCubic(progress);
+          layerUpdates[id] = withLayerGeometry(animation.target, {
+            x: lerp(animation.from.x, animation.to.x, amount),
+            y: lerp(animation.from.y, animation.to.y, amount),
+            width: lerp(animation.from.width, animation.to.width, amount),
+            height: lerp(animation.from.height, animation.to.height, amount),
+            rotation: lerp(animation.from.rotation, animation.to.rotation, amount),
+          });
+          if (progress >= 1) remoteLayerAnimationsRef.current.delete(id);
+        }
+
+        if (Object.keys(layerUpdates).length > 0) {
+          applyingRemoteCanvasRef.current = true;
+          useCanvasStore.setState((state) => ({
+            layers: {
+              ...state.layers,
+              ...layerUpdates,
+            },
+          }));
+          if (!queuedPatchRef.current) publishedCanvasRef.current = canvasDataFromStore();
+          applyingRemoteCanvasRef.current = false;
+        }
+
+        if (remoteLayerAnimationsRef.current.size > 0) {
+          remoteLayerAnimationFrameRef.current = requestAnimationFrame(step);
+        }
+      };
+
+      remoteLayerAnimationFrameRef.current = requestAnimationFrame(step);
+    };
+
     presenceRef.current = createPresenceConnection(boardId, {
       onOpen: () => {
         presenceLiveRef.current = true;
@@ -233,10 +337,45 @@ export function CursorsPresence({
         const isEditingText = activeElement instanceof HTMLElement && activeElement.isContentEditable;
         const protectSelection = isEditingText || (state.canvasState.mode !== "none" && state.canvasState.mode !== "panning");
         const protectedLayerIds = protectSelection ? state.selection : [];
+        const protectedLayerSet = new Set(protectedLayerIds);
         applyingRemoteCanvasRef.current = true;
         try {
           if (update.patch) {
-            applyLiveBoardPatch(update.patch, {
+            let patch = update.patch;
+            if (patch.deletedLayerIds?.length) {
+              for (const id of patch.deletedLayerIds) remoteLayerAnimationsRef.current.delete(id);
+            }
+            if (patch.layers) {
+              const animatedLayers: Record<string, Layer> = {};
+              let hasAnimatedLayer = false;
+
+              for (const [id, targetLayer] of Object.entries(patch.layers)) {
+                const currentLayer = state.layers[id];
+                if (protectedLayerSet.has(id) || !shouldAnimateLayer(currentLayer, targetLayer)) {
+                  animatedLayers[id] = targetLayer;
+                  continue;
+                }
+
+                const from = layerGeometry(currentLayer);
+                const to = layerGeometry(targetLayer);
+                remoteLayerAnimationsRef.current.set(id, {
+                  startedAt: performance.now(),
+                  duration: REMOTE_LAYER_ANIMATION_MS,
+                  from,
+                  to,
+                  target: targetLayer,
+                });
+                animatedLayers[id] = withLayerGeometry(targetLayer, from);
+                hasAnimatedLayer = true;
+              }
+
+              if (hasAnimatedLayer) {
+                patch = { ...patch, layers: animatedLayers };
+                animateRemoteLayers();
+              }
+            }
+
+            applyLiveBoardPatch(patch, {
               userId: update.userId,
               userName: update.userName,
               notify: false,
@@ -301,6 +440,9 @@ export function CursorsPresence({
       cancelled = true;
       clearInterval(httpInterval);
       window.clearTimeout(canvasEmitTimerRef.current);
+      cancelAnimationFrame(remoteLayerAnimationFrameRef.current);
+      remoteLayerAnimationFrameRef.current = 0;
+      remoteLayerAnimationsRef.current.clear();
       unsubscribeCanvas();
       presenceRef.current?.close();
       presenceRef.current = null;
