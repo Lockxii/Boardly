@@ -8,7 +8,7 @@ function truncate(text: string, max = 120) {
   return `${clean.slice(0, max - 1)}…`;
 }
 
-function describeLayer(layer: Layer, id?: string): string {
+function describeLayer(layer: Layer): string {
   switch (layer.type) {
     case "Note":
     case "Text":
@@ -76,4 +76,13 @@ export function buildBoardSummary(input: {
     visionCount,
     summary: parts.join("\n") || "Tableau vide.",
   };
+}
+
+export function buildLinkedLayersSummary(linkedIds: string[], layers: Record<string, Layer>) {
+  if (!linkedIds.length) return "";
+  const lines = linkedIds
+    .map((id) => layers[id])
+    .filter(Boolean)
+    .map((layer, i) => `${i + 1}. ${describeLayer(layer!)}`);
+  return lines.length ? `Éléments liés au message :\n${lines.join("\n")}` : "";
 }

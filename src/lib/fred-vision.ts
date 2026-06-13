@@ -1,7 +1,5 @@
 import type { Layer } from "@/lib/types";
 
-export type FredVisionMode = "auto" | "selection" | "off";
-
 export type FredVisionAssetPayload = {
   label: string;
   mimeType?: string;
@@ -9,11 +7,8 @@ export type FredVisionAssetPayload = {
   src?: string;
 };
 
-const MAX_IMAGES = 3;
-const MAX_DIMENSION = 768;
-const MAX_BYTES = 380_000;
-const IMAGE_INTENT =
-  /\b(analys|image|photo|visuel|visuelle|ref|réf|moodboard|couleur|palette|décris|regarde|screenshot|aperçu|thumbnail|miniature|inspir)\b/i;
+const MAX_DIMENSION = 1024;
+const MAX_BYTES = 500_000;
 
 function layerImageSrc(layer: Layer): string | null {
   if (layer.type === "Image" && layer.src) return layer.src;
@@ -25,34 +20,6 @@ function layerVisionLabel(layer: Layer, id: string): string {
   if (layer.type === "Image") return "Image";
   if (layer.type === "Link") return layer.linkTitle || layer.url || "Carte lien";
   return id.slice(0, 6);
-}
-
-export function listVisionLayerIds(
-  layers: Record<string, Layer>,
-  layerIds: string[],
-  selection: string[]
-) {
-  const selected = selection.filter((id) => layerImageSrc(layers[id]));
-  if (selected.length) return selected.slice(0, MAX_IMAGES);
-
-  return layerIds.filter((id) => layerImageSrc(layers[id])).slice(-MAX_IMAGES);
-}
-
-export function shouldAttachVision(
-  mode: FredVisionMode,
-  message: string,
-  layers: Record<string, Layer>,
-  layerIds: string[],
-  selection: string[]
-) {
-  if (mode === "off") return false;
-  const selectedVision = selection.filter((id) => layerImageSrc(layers[id]));
-  if (mode === "selection") return selectedVision.length > 0;
-  if (selectedVision.length > 0) return true;
-  if (IMAGE_INTENT.test(message)) {
-    return layerIds.some((id) => layerImageSrc(layers[id]));
-  }
-  return false;
 }
 
 async function blobToDataUrl(blob: Blob): Promise<string> {
@@ -89,8 +56,7 @@ async function compressToPayload(label: string, src: string): Promise<FredVision
     const resolved = await resolveFetchableSrc(src);
 
     if (resolved.startsWith("data:") || resolved.startsWith("/")) {
-      const dataUrl =
-        resolved.startsWith("data:") ? resolved : await resolveFetchableSrc(resolved);
+      const dataUrl = resolved.startsWith("data:") ? resolved : await resolveFetchableSrc(resolved);
       const img = await loadImage(dataUrl);
       const canvas = document.createElement("canvas");
       const scale = Math.min(1, MAX_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight, 1));
@@ -102,7 +68,7 @@ async function compressToPayload(label: string, src: string): Promise<FredVision
 
       let quality = 0.85;
       let dataUrlOut = canvas.toDataURL("image/jpeg", quality);
-      while (dataUrlOut.length > MAX_BYTES * 1.4 && quality > 0.45) {
+      while (dataUrlOut.length > MAX_BYTES * 1.4 && quality > 0.4) {
         quality -= 0.08;
         dataUrlOut = canvas.toDataURL("image/jpeg", quality);
       }
@@ -120,27 +86,16 @@ async function compressToPayload(label: string, src: string): Promise<FredVision
   }
 }
 
-export async function buildVisionPayload(input: {
-  mode: FredVisionMode;
-  message: string;
+/** Vision uniquement à partir des éléments liés explicitement au message. */
+export async function buildVisionFromLinked(input: {
+  linkedIds: string[];
   layers: Record<string, Layer>;
-  layerIds: string[];
-  selection: string[];
-}): Promise<{ assets: FredVisionAssetPayload[]; skipped: number; attached: boolean }> {
-  const { mode, message, layers, layerIds, selection } = input;
-  if (!shouldAttachVision(mode, message, layers, layerIds, selection)) {
-    return { assets: [], skipped: 0, attached: false };
-  }
-
-  const ids =
-    mode === "selection" || selection.some((id) => layerImageSrc(layers[id]))
-      ? selection.filter((id) => layerImageSrc(layers[id])).slice(0, MAX_IMAGES)
-      : listVisionLayerIds(layers, layerIds, selection);
-
+}): Promise<{ assets: FredVisionAssetPayload[]; skipped: number }> {
+  const { linkedIds, layers } = input;
   const assets: FredVisionAssetPayload[] = [];
   let skipped = 0;
 
-  for (const id of ids) {
+  for (const id of linkedIds) {
     const layer = layers[id];
     const src = layer ? layerImageSrc(layer) : null;
     if (!layer || !src) continue;
@@ -150,16 +105,9 @@ export async function buildVisionPayload(input: {
     else skipped += 1;
   }
 
-  return { assets, skipped, attached: assets.length > 0 };
+  return { assets, skipped };
 }
 
-export function describeVisionMode(mode: FredVisionMode) {
-  switch (mode) {
-    case "auto":
-      return "Auto";
-    case "selection":
-      return "Sélection";
-    case "off":
-      return "Off";
-  }
+export function countLinkedImages(linkedIds: string[], layers: Record<string, Layer>) {
+  return linkedIds.filter((id) => layerImageSrc(layers[id])).length;
 }

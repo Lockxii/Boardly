@@ -1,5 +1,5 @@
 import { apiFetch } from "@/lib/utils";
-import type { FredVisionAssetPayload, FredVisionMode } from "@/lib/fred-vision";
+import type { FredVisionAssetPayload } from "@/lib/fred-vision";
 
 export type FredNoteItem = string | { text: string; color?: string };
 
@@ -13,6 +13,7 @@ export type FredChatMessage = {
   role: "user" | "assistant";
   content: string;
   actions?: FredAction[];
+  linkedLayerIds?: string[];
   pending?: boolean;
   meta?: { visionUsed?: number };
 };
@@ -24,6 +25,7 @@ export type BoardContextPayload = {
   selectionCount?: number;
   visionCount?: number;
   summary?: string;
+  linkedSummary?: string;
 };
 
 export type FredChatResponse = {
@@ -37,7 +39,7 @@ export async function sendFredMessage(input: {
   history: { role: "user" | "assistant"; content: string }[];
   boardContext?: BoardContextPayload;
   boardId?: string;
-  visionMode?: FredVisionMode;
+  linkedLayerIds?: string[];
   visionAssets?: FredVisionAssetPayload[];
 }) {
   return apiFetch<FredChatResponse>("/api/fred/chat", {

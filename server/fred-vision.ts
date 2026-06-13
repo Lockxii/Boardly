@@ -13,7 +13,7 @@ export type ResolvedVisionAsset = {
   data: string;
 };
 
-const MAX_IMAGES = 3;
+const MAX_IMAGES = 20;
 const MAX_BYTES = 450_000;
 const FETCH_TIMEOUT_MS = 8_000;
 

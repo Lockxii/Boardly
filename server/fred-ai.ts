@@ -48,6 +48,7 @@ export type BoardContextPayload = {
   layerCount?: number;
   selectionCount?: number;
   summary?: string;
+  linkedSummary?: string;
   visionAttached?: boolean;
   visionCount?: number;
 };
@@ -62,7 +63,7 @@ RÈGLES DE CONTEXTE (important) :
 - Si tu n'as pas assez d'info, pose une question courte ou propose une action prudente.
 - Ne répète pas tout le résumé du board : va à l'essentiel.
 
-VISION : quand des images sont jointes, décris palette, style, composition, mood, éléments utiles pour un moodboard.
+VISION : analyse uniquement les images explicitement jointes au message (éléments liés). N'invente rien sur les images absentes.
 
 GÉNÉRATION SUR LE CANVAS : quand l'utilisateur demande des idées, post-its, sections ou titres, propose des actions JSON.
 Sinon laisse "actions" vide.
@@ -101,6 +102,7 @@ function buildContextBlock(context?: BoardContextPayload) {
     lines.push(`Images jointes à ce message : ${context.visionCount ?? 1} (analyse visuelle disponible)`);
   }
   if (context.summary) lines.push(`Contenu :\n${context.summary}`);
+  if (context.linkedSummary) lines.push(context.linkedSummary);
   lines.push("--- Fin contexte ---");
   return lines.join("\n");
 }
