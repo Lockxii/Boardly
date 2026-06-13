@@ -1,15 +1,15 @@
 import { useEffect, useRef } from "react";
-import { serializeCanvasDataSnapshot, useCanvasStore } from "@/store/canvas-store";
-import { applyRemoteBoardUpdate } from "@/lib/board-remote-sync";
+import { useCanvasStore } from "@/store/canvas-store";
+import { applyLiveBoardPatch, applyRemoteBoardUpdate, createBoardLivePatch, type BoardLivePatch } from "@/lib/board-remote-sync";
 import { apiFetch } from "@/lib/utils";
 import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
 import type { BoardCanvasData } from "@/lib/types";
 
 const CURSOR_EMIT_INTERVAL_MS = 16;
-const CANVAS_EMIT_INTERVAL_MS = 90;
+const CANVAS_EMIT_INTERVAL_MS = 32;
 const PEER_TIMEOUT_MS = 30_000;
-const CURSOR_LERP = 0.58;
+const CURSOR_LERP = 0.82;
 
 type Peer = {
   connectionId: string;
@@ -93,9 +93,12 @@ export function CursorsPresence({
   const presenceLiveRef = useRef(false);
   const presenceRef = useRef<ReturnType<typeof createPresenceConnection> | null>(null);
   const applyingRemoteCanvasRef = useRef(false);
-  const lastCanvasSnapshotRef = useRef("");
+  const publishedCanvasRef = useRef<BoardCanvasData | null>(null);
+  const queuedCanvasDataRef = useRef<BoardCanvasData | null>(null);
+  const queuedPatchRef = useRef<BoardLivePatch | null>(null);
+  const canvasRevisionRef = useRef(0);
+  const remoteRevisionRef = useRef(new Map<string, number>());
   const lastCanvasEmitAtRef = useRef(0);
-  const queuedCanvasRef = useRef<BoardCanvasData | null>(null);
   const canvasEmitTimerRef = useRef(0);
 
   useEffect(() => {
@@ -171,16 +174,28 @@ export function CursorsPresence({
     const flushQueuedCanvas = () => {
       window.clearTimeout(canvasEmitTimerRef.current);
       canvasEmitTimerRef.current = 0;
-      const canvasData = queuedCanvasRef.current;
-      queuedCanvasRef.current = null;
-      if (!canvasData || readOnly) return;
+      const patch = queuedPatchRef.current;
+      const canvasData = queuedCanvasDataRef.current;
+      if (!patch || !canvasData || readOnly) return;
+      const sent = presenceRef.current?.sendCanvasPatch(patch) ?? false;
+      if (!sent) return;
+      queuedPatchRef.current = null;
+      queuedCanvasDataRef.current = null;
+      publishedCanvasRef.current = canvasData;
       lastCanvasEmitAtRef.current = performance.now();
-      presenceRef.current?.sendCanvas(canvasData);
     };
 
     const queueCanvas = (canvasData: BoardCanvasData) => {
       if (readOnly) return;
-      queuedCanvasRef.current = canvasData;
+      const previous = publishedCanvasRef.current;
+      if (!previous) {
+        publishedCanvasRef.current = canvasData;
+        return;
+      }
+      const patch = createBoardLivePatch(previous, canvasData, ++canvasRevisionRef.current);
+      if (!patch) return;
+      queuedPatchRef.current = patch;
+      queuedCanvasDataRef.current = canvasData;
       const now = performance.now();
       const elapsed = now - lastCanvasEmitAtRef.current;
       if (elapsed >= CANVAS_EMIT_INTERVAL_MS) {
@@ -195,6 +210,7 @@ export function CursorsPresence({
     presenceRef.current = createPresenceConnection(boardId, {
       onOpen: () => {
         presenceLiveRef.current = true;
+        flushQueuedCanvas();
       },
       onClose: () => {
         presenceLiveRef.current = false;
@@ -204,23 +220,43 @@ export function CursorsPresence({
       onCursor: onPresenceCursor,
       onLeave: removePeer,
       onCanvas: async (update) => {
-        if (cancelled || !update.canvasData) return;
-        const mode = useCanvasStore.getState().canvasState.mode;
-        if (mode !== "none" && mode !== "panning") return;
+        if (cancelled) return;
+        const incomingRevision = update.patch?.revision ?? 0;
+        if (incomingRevision) {
+          const previousRevision = remoteRevisionRef.current.get(update.connectionId) ?? 0;
+          if (incomingRevision <= previousRevision) return;
+          remoteRevisionRef.current.set(update.connectionId, incomingRevision);
+        }
+
+        const state = useCanvasStore.getState();
+        const activeElement = document.activeElement;
+        const isEditingText = activeElement instanceof HTMLElement && activeElement.isContentEditable;
+        const protectSelection = isEditingText || (state.canvasState.mode !== "none" && state.canvasState.mode !== "panning");
+        const protectedLayerIds = protectSelection ? state.selection : [];
         applyingRemoteCanvasRef.current = true;
-        lastCanvasSnapshotRef.current = serializeCanvasDataSnapshot(update.canvasData);
         try {
-          await applyRemoteBoardUpdate(
-            { canvasData: update.canvasData, updatedAt: update.updatedAt },
-            { userId: update.userId, userName: update.userName, notify: false, preserveSelection: true }
-          );
+          if (update.patch) {
+            applyLiveBoardPatch(update.patch, {
+              userId: update.userId,
+              userName: update.userName,
+              notify: false,
+              preserveSelection: true,
+              protectedLayerIds,
+            });
+          } else if (update.canvasData) {
+            await applyRemoteBoardUpdate(
+              { canvasData: update.canvasData, updatedAt: update.updatedAt },
+              { userId: update.userId, userName: update.userName, notify: false, preserveSelection: true }
+            );
+          }
+          if (!queuedPatchRef.current) publishedCanvasRef.current = canvasDataFromStore();
         } finally {
           applyingRemoteCanvasRef.current = false;
         }
       },
     });
 
-    lastCanvasSnapshotRef.current = serializeCanvasDataSnapshot(canvasDataFromStore());
+    publishedCanvasRef.current = canvasDataFromStore();
     const unsubscribeCanvas = useCanvasStore.subscribe((state) => {
       if (cancelled || readOnly || applyingRemoteCanvasRef.current) return;
       const canvasData: BoardCanvasData = {
@@ -235,9 +271,6 @@ export function CursorsPresence({
         trash: state.trash,
         brandColors: state.brandColors,
       };
-      const snapshot = serializeCanvasDataSnapshot(canvasData);
-      if (snapshot === lastCanvasSnapshotRef.current) return;
-      lastCanvasSnapshotRef.current = snapshot;
       queueCanvas(canvasData);
     });
 

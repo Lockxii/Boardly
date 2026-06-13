@@ -1,4 +1,5 @@
 import { getRealtimeToken, type RemotePresence } from "@/lib/board-socket";
+import type { BoardLivePatch } from "@/lib/board-remote-sync";
 import type { BoardCanvasData } from "@/lib/types";
 
 export type LiveCanvasUpdate = {
@@ -6,7 +7,8 @@ export type LiveCanvasUpdate = {
   userId: string;
   userName: string;
   updatedAt: string;
-  canvasData: BoardCanvasData;
+  canvasData?: BoardCanvasData;
+  patch?: BoardLivePatch;
 };
 
 type PresenceHandlers = {
@@ -83,6 +85,9 @@ export function createPresenceConnection(boardId: string, handlers: PresenceHand
       case "canvas:live":
         handlers.onCanvas?.(message.payload as LiveCanvasUpdate);
         break;
+      case "canvas:patch":
+        handlers.onCanvas?.(message.payload as LiveCanvasUpdate);
+        break;
     }
   };
 
@@ -133,6 +138,11 @@ export function createPresenceConnection(boardId: string, handlers: PresenceHand
     sendCanvas: (canvasData: BoardCanvasData, updatedAt = new Date().toISOString()) => {
       if (socket?.readyState !== WebSocket.OPEN) return false;
       socket.send(JSON.stringify({ type: "canvas", canvasData, updatedAt }));
+      return true;
+    },
+    sendCanvasPatch: (patch: BoardLivePatch) => {
+      if (socket?.readyState !== WebSocket.OPEN) return false;
+      socket.send(JSON.stringify({ type: "canvas:patch", patch }));
       return true;
     },
     close: () => {

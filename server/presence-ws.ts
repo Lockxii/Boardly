@@ -31,6 +31,14 @@ type LiveCanvasPayload = {
   canvasData: unknown;
 };
 
+type LiveCanvasPatchPayload = {
+  connectionId: string;
+  userId: string;
+  userName: string;
+  updatedAt: string;
+  patch: unknown;
+};
+
 const rooms = new Map<string, Map<string, PresenceClient>>();
 
 function presencePath(pathname: string) {
@@ -151,7 +159,7 @@ export function initPresenceWebSocketServer(httpServer: HttpServer) {
       broadcast(client.boardId, "presence:join", presencePayload(client), client.connectionId);
 
       ws.on("message", (raw: RawData) => {
-        let message: { type?: string; cursorX?: unknown; cursorY?: unknown; updatedAt?: unknown; canvasData?: unknown };
+        let message: { type?: string; cursorX?: unknown; cursorY?: unknown; updatedAt?: unknown; canvasData?: unknown; patch?: unknown };
         try {
           message = JSON.parse(String(raw));
         } catch {
@@ -183,6 +191,20 @@ export function initPresenceWebSocketServer(httpServer: HttpServer) {
             canvasData: message.canvasData,
           };
           broadcast(client.boardId, "canvas:live", payload, client.connectionId);
+          return;
+        }
+
+        if (message.type === "canvas:patch" && message.patch && typeof message.patch === "object") {
+          const patch = message.patch as { updatedAt?: unknown };
+          const updatedAt = typeof patch.updatedAt === "string" ? patch.updatedAt : new Date().toISOString();
+          const payload: LiveCanvasPatchPayload = {
+            connectionId: client.connectionId,
+            userId: client.user.id,
+            userName: client.user.name,
+            updatedAt,
+            patch: message.patch,
+          };
+          broadcast(client.boardId, "canvas:patch", payload, client.connectionId);
         }
       });
 
