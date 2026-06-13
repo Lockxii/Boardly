@@ -23,6 +23,14 @@ type PresencePayload = {
   cursorY: number | null;
 };
 
+type LiveCanvasPayload = {
+  connectionId: string;
+  userId: string;
+  userName: string;
+  updatedAt: string;
+  canvasData: unknown;
+};
+
 const rooms = new Map<string, Map<string, PresenceClient>>();
 
 function presencePath(pathname: string) {
@@ -143,7 +151,7 @@ export function initPresenceWebSocketServer(httpServer: HttpServer) {
       broadcast(client.boardId, "presence:join", presencePayload(client), client.connectionId);
 
       ws.on("message", (raw: RawData) => {
-        let message: { type?: string; cursorX?: unknown; cursorY?: unknown };
+        let message: { type?: string; cursorX?: unknown; cursorY?: unknown; updatedAt?: unknown; canvasData?: unknown };
         try {
           message = JSON.parse(String(raw));
         } catch {
@@ -156,11 +164,26 @@ export function initPresenceWebSocketServer(httpServer: HttpServer) {
           return;
         }
 
-        if (message.type !== "cursor") return;
         client.lastSeen = Date.now();
-        client.cursorX = typeof message.cursorX === "number" && Number.isFinite(message.cursorX) ? message.cursorX : null;
-        client.cursorY = typeof message.cursorY === "number" && Number.isFinite(message.cursorY) ? message.cursorY : null;
-        broadcast(client.boardId, "presence:cursor", presencePayload(client), client.connectionId);
+
+        if (message.type === "cursor") {
+          client.cursorX = typeof message.cursorX === "number" && Number.isFinite(message.cursorX) ? message.cursorX : null;
+          client.cursorY = typeof message.cursorY === "number" && Number.isFinite(message.cursorY) ? message.cursorY : null;
+          broadcast(client.boardId, "presence:cursor", presencePayload(client), client.connectionId);
+          return;
+        }
+
+        if (message.type === "canvas" && message.canvasData && typeof message.canvasData === "object") {
+          const updatedAt = typeof message.updatedAt === "string" ? message.updatedAt : new Date().toISOString();
+          const payload: LiveCanvasPayload = {
+            connectionId: client.connectionId,
+            userId: client.user.id,
+            userName: client.user.name,
+            updatedAt,
+            canvasData: message.canvasData,
+          };
+          broadcast(client.boardId, "canvas:live", payload, client.connectionId);
+        }
       });
 
       ws.on("close", () => removeClient(client));

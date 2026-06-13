@@ -83,6 +83,11 @@ function HtmlLayerItem({
     onChange(id, e.currentTarget.innerHTML);
   };
 
+  const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
+    if (!isEditing) return;
+    onChange(id, e.currentTarget.innerHTML);
+  };
+
   const onTextPointerDown = (e: React.PointerEvent) => e.stopPropagation();
 
   const fontFamily = layer.fontFamily ? fontMap[layer.fontFamily] : fontMap["font-sans"];
@@ -196,6 +201,7 @@ function HtmlLayerItem({
           <div
             ref={editableRef}
             contentEditable={isEditing}
+            onInput={handleInput}
             onBlur={handleBlur}
             onPointerDown={onTextPointerDown}
             style={{
@@ -225,7 +231,7 @@ function HtmlLayerItem({
       )}
 
       {layer.type === "Text" && (
-        <div ref={editableRef} contentEditable={isEditing} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{
+        <div ref={editableRef} contentEditable={isEditing} onInput={handleInput} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{
           ...editableStyle,
           padding: layer.textBackground ? "2px 6px" : "0",
           borderRadius: 4,

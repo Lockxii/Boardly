@@ -101,6 +101,11 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
     onChange(e.currentTarget.innerHTML);
   };
 
+  const handleInput = (e: React.FormEvent<HTMLDivElement>) => {
+    if (!isEditing) return;
+    onChange(e.currentTarget.innerHTML);
+  };
+
   const justify = layer.alignY === "top" ? "flex-start" : layer.alignY === "bottom" ? "flex-end" : "center";
   const align = layer.alignX || "center";
   const fontFamily = layer.fontFamily ? fontMap[layer.fontFamily] : fontMap["font-sans"];
@@ -185,7 +190,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           </g>
           <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
             <XhtmlDiv style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
-              <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 600, fontSize: "13px", color: "#64748B" }} />
+              <div ref={editableRef} contentEditable={isEditing as any} onInput={handleInput} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 600, fontSize: "13px", color: "#64748B" }} />
             </XhtmlDiv>
           </foreignObject>
         </>
@@ -197,7 +202,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           </g>
           <foreignObject x={x} y={y} width={layer.width} height={32} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
             <XhtmlDiv style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
-              <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 700, fontSize: "12px", color: "#3B82F6", textTransform: "uppercase", letterSpacing: "0.05em" }} />
+              <div ref={editableRef} contentEditable={isEditing as any} onInput={handleInput} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 700, fontSize: "12px", color: "#3B82F6", textTransform: "uppercase", letterSpacing: "0.05em" }} />
             </XhtmlDiv>
           </foreignObject>
         </>
@@ -248,7 +253,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill={layer.fill} stroke={stroke} strokeWidth={strokeWidth} className="drop-shadow-sm" />
           </g>
           <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
-            <XhtmlDiv style={wrapperStyle}><div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px" }} /></XhtmlDiv>
+            <XhtmlDiv style={wrapperStyle}><div ref={editableRef} contentEditable={isEditing as any} onInput={handleInput} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px" }} /></XhtmlDiv>
           </foreignObject>
         </>
       )}
@@ -286,7 +291,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           <ellipse cx={layer.width / 2} cy={layer.height / 2} rx={layer.width / 2} ry={layer.height / 2} fill={layer.fill} stroke={stroke} strokeWidth={strokeWidth} />
           </g>
           <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
-            <XhtmlDiv style={{ ...wrapperStyle, alignItems: "center" }}><div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, width: "80%", padding: "4px" }} /></XhtmlDiv>
+            <XhtmlDiv style={{ ...wrapperStyle, alignItems: "center" }}><div ref={editableRef} contentEditable={isEditing as any} onInput={handleInput} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, width: "80%", padding: "4px" }} /></XhtmlDiv>
           </foreignObject>
         </>
       )}
@@ -294,7 +299,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
         <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible" }}>
           <XhtmlDiv className="w-full h-full relative shadow-md flex flex-col" style={{ backgroundColor: layer.fill || "#fef3c7", borderRadius: cornerRadius }}>
             <div style={{ ...wrapperStyle, flex: layer.checklist?.length ? "0 0 auto" : 1 }}>
-              <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px", fontFamily: layer.fontFamily ? fontMap[layer.fontFamily] : fontMap["font-handwriting"], color: layer.textColor || "#1f2937", minHeight: layer.checklist?.length ? 48 : undefined }} />
+              <div ref={editableRef} contentEditable={isEditing as any} onInput={handleInput} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px", fontFamily: layer.fontFamily ? fontMap[layer.fontFamily] : fontMap["font-handwriting"], color: layer.textColor || "#1f2937", minHeight: layer.checklist?.length ? 48 : undefined }} />
             </div>
             {layer.checklist && layer.checklist.length > 0 && (
               <div className="px-2 pb-2 space-y-1 pointer-events-auto" onPointerDown={(e) => e.stopPropagation()}>
@@ -318,7 +323,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
       {layer.type === "Text" && (
         <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible" }}>
           <XhtmlDiv style={wrapperStyle}>
-            <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: layer.textBackground ? "2px 6px" : "0px", borderRadius: "4px", fontWeight: "bold", color: layer.textColor || layer.fill || "#000000", display: "inline-block", width: "auto", maxWidth: "100%" }} />
+            <div ref={editableRef} contentEditable={isEditing as any} onInput={handleInput} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: layer.textBackground ? "2px 6px" : "0px", borderRadius: "4px", fontWeight: "bold", color: layer.textColor || layer.fill || "#000000", display: "inline-block", width: "auto", maxWidth: "100%" }} />
           </XhtmlDiv>
         </foreignObject>
       )}

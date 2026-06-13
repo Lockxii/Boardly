@@ -4,12 +4,12 @@ import type { BoardCanvasData } from "@/lib/types";
 
 export async function applyRemoteBoardUpdate(
   remote: { canvasData: BoardCanvasData | null; updatedAt: string },
-  options: { userId?: string; userName?: string; notify?: boolean } = {}
+  options: { userId?: string; userName?: string; notify?: boolean; preserveSelection?: boolean } = {}
 ) {
   const updatedAt = new Date(remote.updatedAt).getTime();
   const state = useCanvasStore.getState();
   if (state.saveStatus === "saving") return false;
-  if (!remote.canvasData?.layerIds?.length) return false;
+  if (!remote.canvasData || !Array.isArray(remote.canvasData.layerIds)) return false;
 
   const prevLayers = state.layers;
   const nextLayers = remote.canvasData.layers;
@@ -30,10 +30,13 @@ export async function applyRemoteBoardUpdate(
     layerIds: remote.canvasData.layerIds,
     connections: remote.canvasData.connections || [],
     versions: remote.canvasData.versions || [],
+    auditLog: remote.canvasData.auditLog || [],
+    chatMessages: remote.canvasData.chatMessages || [],
     layerComments: remote.canvasData.layerComments || {},
     reactions: remote.canvasData.reactions || {},
+    trash: remote.canvasData.trash || [],
     brandColors: remote.canvasData.brandColors || useCanvasStore.getState().brandColors,
-    selection: [],
+    selection: options.preserveSelection ? state.selection.filter((id) => !!nextLayers[id]) : [],
     saveStatus: "saved",
     lastSavedAt: updatedAt,
     lastPersistedSnapshot: serializeCanvasDataSnapshot(remote.canvasData),

@@ -1,12 +1,15 @@
 import { useEffect, useRef } from "react";
-import { useCanvasStore } from "@/store/canvas-store";
+import { serializeCanvasDataSnapshot, useCanvasStore } from "@/store/canvas-store";
+import { applyRemoteBoardUpdate } from "@/lib/board-remote-sync";
 import { apiFetch } from "@/lib/utils";
 import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
+import type { BoardCanvasData } from "@/lib/types";
 
-const CURSOR_EMIT_INTERVAL_MS = 50;
+const CURSOR_EMIT_INTERVAL_MS = 16;
+const CANVAS_EMIT_INTERVAL_MS = 90;
 const PEER_TIMEOUT_MS = 30_000;
-const CURSOR_LERP = 0.32;
+const CURSOR_LERP = 0.58;
 
 type Peer = {
   connectionId: string;
@@ -58,6 +61,22 @@ function createCursorElement(peer: Peer) {
   return root;
 }
 
+function canvasDataFromStore(): BoardCanvasData {
+  const state = useCanvasStore.getState();
+  return {
+    layers: state.layers,
+    layerIds: state.layerIds,
+    connections: state.connections,
+    versions: state.versions,
+    auditLog: state.auditLog,
+    chatMessages: state.chatMessages,
+    layerComments: state.layerComments,
+    reactions: state.reactions,
+    trash: state.trash,
+    brandColors: state.brandColors,
+  };
+}
+
 export function CursorsPresence({
   boardId,
   readOnly = false,
@@ -73,6 +92,11 @@ export function CursorsPresence({
   const lastEmitAtRef = useRef(0);
   const presenceLiveRef = useRef(false);
   const presenceRef = useRef<ReturnType<typeof createPresenceConnection> | null>(null);
+  const applyingRemoteCanvasRef = useRef(false);
+  const lastCanvasSnapshotRef = useRef("");
+  const lastCanvasEmitAtRef = useRef(0);
+  const queuedCanvasRef = useRef<BoardCanvasData | null>(null);
+  const canvasEmitTimerRef = useRef(0);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -144,6 +168,30 @@ export function CursorsPresence({
       upsertPeer(user);
     };
 
+    const flushQueuedCanvas = () => {
+      window.clearTimeout(canvasEmitTimerRef.current);
+      canvasEmitTimerRef.current = 0;
+      const canvasData = queuedCanvasRef.current;
+      queuedCanvasRef.current = null;
+      if (!canvasData || readOnly) return;
+      lastCanvasEmitAtRef.current = performance.now();
+      presenceRef.current?.sendCanvas(canvasData);
+    };
+
+    const queueCanvas = (canvasData: BoardCanvasData) => {
+      if (readOnly) return;
+      queuedCanvasRef.current = canvasData;
+      const now = performance.now();
+      const elapsed = now - lastCanvasEmitAtRef.current;
+      if (elapsed >= CANVAS_EMIT_INTERVAL_MS) {
+        flushQueuedCanvas();
+        return;
+      }
+      if (!canvasEmitTimerRef.current) {
+        canvasEmitTimerRef.current = window.setTimeout(flushQueuedCanvas, CANVAS_EMIT_INTERVAL_MS - elapsed);
+      }
+    };
+
     presenceRef.current = createPresenceConnection(boardId, {
       onOpen: () => {
         presenceLiveRef.current = true;
@@ -155,6 +203,42 @@ export function CursorsPresence({
       onJoin: onPresenceJoin,
       onCursor: onPresenceCursor,
       onLeave: removePeer,
+      onCanvas: async (update) => {
+        if (cancelled || !update.canvasData) return;
+        const mode = useCanvasStore.getState().canvasState.mode;
+        if (mode !== "none" && mode !== "panning") return;
+        applyingRemoteCanvasRef.current = true;
+        lastCanvasSnapshotRef.current = serializeCanvasDataSnapshot(update.canvasData);
+        try {
+          await applyRemoteBoardUpdate(
+            { canvasData: update.canvasData, updatedAt: update.updatedAt },
+            { userId: update.userId, userName: update.userName, notify: false, preserveSelection: true }
+          );
+        } finally {
+          applyingRemoteCanvasRef.current = false;
+        }
+      },
+    });
+
+    lastCanvasSnapshotRef.current = serializeCanvasDataSnapshot(canvasDataFromStore());
+    const unsubscribeCanvas = useCanvasStore.subscribe((state) => {
+      if (cancelled || readOnly || applyingRemoteCanvasRef.current) return;
+      const canvasData: BoardCanvasData = {
+        layers: state.layers,
+        layerIds: state.layerIds,
+        connections: state.connections,
+        versions: state.versions,
+        auditLog: state.auditLog,
+        chatMessages: state.chatMessages,
+        layerComments: state.layerComments,
+        reactions: state.reactions,
+        trash: state.trash,
+        brandColors: state.brandColors,
+      };
+      const snapshot = serializeCanvasDataSnapshot(canvasData);
+      if (snapshot === lastCanvasSnapshotRef.current) return;
+      lastCanvasSnapshotRef.current = snapshot;
+      queueCanvas(canvasData);
     });
 
     const syncHttpFallback = async () => {
@@ -183,6 +267,8 @@ export function CursorsPresence({
     return () => {
       cancelled = true;
       clearInterval(httpInterval);
+      window.clearTimeout(canvasEmitTimerRef.current);
+      unsubscribeCanvas();
       presenceRef.current?.close();
       presenceRef.current = null;
       for (const peer of peersRef.current.values()) peer.el?.remove();
@@ -193,7 +279,8 @@ export function CursorsPresence({
   useEffect(() => {
     if (readOnly) return;
 
-    const onPointerMove = (e: PointerEvent) => {
+    const onPointerMove = (event: Event) => {
+      const e = event as PointerEvent;
       const cam = useCanvasStore.getState().camera;
       pointerRef.current = {
         x: (e.clientX - cam.x) / cam.zoom,
@@ -202,7 +289,11 @@ export function CursorsPresence({
     };
 
     window.addEventListener("pointermove", onPointerMove, { passive: true });
-    return () => window.removeEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerrawupdate", onPointerMove, { passive: true });
+    return () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerrawupdate", onPointerMove);
+    };
   }, [readOnly]);
 
   useEffect(() => {
@@ -237,7 +328,7 @@ export function CursorsPresence({
         }
         const targetSx = peer.targetX * cam.zoom + cam.x;
         const targetSy = peer.targetY * cam.zoom + cam.y;
-        const frameScale = Math.min(1, Math.max(0.18, (now - lastFrameAt) / 16.7));
+        const frameScale = Math.min(2.4, Math.max(0.18, (now - lastFrameAt) / 16.7));
         const amount = Math.min(1, CURSOR_LERP * frameScale);
         const sx = peer.screenX == null ? targetSx : peer.screenX + (targetSx - peer.screenX) * amount;
         const sy = peer.screenY == null ? targetSy : peer.screenY + (targetSy - peer.screenY) * amount;
