@@ -116,6 +116,14 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   }, []);
 
   useEffect(() => {
+    const loaded = loadFredSessions(boardId);
+    setSessions(loaded);
+    const stored = loadActiveSessionId(boardId);
+    setActiveId(stored && loaded.some((s) => s.id === stored) ? stored : loaded[0]?.id);
+    setLayout(loadFredPanelLayout(boardId) ?? DEFAULT_LAYOUT);
+  }, [boardId]);
+
+  useEffect(() => {
     saveActiveSessionId(boardId, activeId);
   }, [activeId, boardId]);
 
