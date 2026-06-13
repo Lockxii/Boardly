@@ -25,6 +25,7 @@ export type LinkPreviewResult = {
 type OEmbedPayload = {
   title?: string;
   author_name?: string;
+  author_url?: string;
   thumbnail_url?: string;
   thumbnail_width?: number;
   thumbnail_height?: number;
@@ -71,6 +72,57 @@ function bestYoutubeThumbnail(url: URL, fallback?: string) {
   return `https://img.youtube.com/vi/${id}/maxresdefault.jpg`;
 }
 
+function decodeHtmlEntities(value: string) {
+  const named: Record<string, string> = {
+    amp: "&",
+    apos: "'",
+    gt: ">",
+    lt: "<",
+    nbsp: " ",
+    quot: '"',
+  };
+  return value
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([a-f0-9]+);/gi, (_, code) => String.fromCodePoint(Number.parseInt(code, 16)))
+    .replace(/&([a-z]+);/gi, (match, name) => named[name.toLowerCase()] ?? match);
+}
+
+function stripHtml(value: string) {
+  return decodeHtmlEntities(
+    value
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n")
+      .replace(/<[^>]+>/g, " ")
+      .replace(/[ \t]+/g, " ")
+      .replace(/\n\s+/g, "\n")
+      .trim(),
+  );
+}
+
+function extractTweetTextFromOEmbedHtml(html = "") {
+  const paragraph = html.match(/<blockquote[^>]*>[\s\S]*?<p[^>]*>([\s\S]*?)<\/p>/i)
+    || html.match(/<p[^>]*>([\s\S]*?)<\/p>/i);
+  if (!paragraph?.[1]) return "";
+  return stripHtml(paragraph[1]);
+}
+
+function twitterHandleFromAuthorUrl(authorUrl?: string) {
+  if (!authorUrl) return "";
+  try {
+    const parsed = new URL(authorUrl);
+    return parsed.pathname.split("/").filter(Boolean)[0] || "";
+  } catch {
+    return "";
+  }
+}
+
+function normalizeTwitterOEmbedUrl(url: URL) {
+  if (!["x.com", "www.x.com"].includes(url.hostname)) return url.toString();
+  const copy = new URL(url.toString());
+  copy.hostname = "twitter.com";
+  return copy.toString();
+}
+
 async function fetchOEmbed(endpoint: string, targetUrl: string): Promise<OEmbedPayload | null> {
   const sep = endpoint.includes("?") ? "&" : "?";
   const res = await fetch(`${endpoint}${sep}url=${encodeURIComponent(targetUrl)}&format=json`, {
@@ -93,6 +145,7 @@ const OEMBED_ENDPOINTS: Partial<Record<Exclude<LinkProviderId, "generic">, strin
   youtube: "https://www.youtube.com/oembed",
   spotify: "https://open.spotify.com/oembed",
   tiktok: "https://www.tiktok.com/oembed",
+  twitter: "https://publish.twitter.com/oembed?omit_script=true&dnt=true",
   soundcloud: "https://soundcloud.com/oembed",
   vimeo: "https://vimeo.com/api/oembed.json",
 };
@@ -100,8 +153,10 @@ const OEMBED_ENDPOINTS: Partial<Record<Exclude<LinkProviderId, "generic">, strin
 async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "generic">): Promise<LinkPreviewResult | null> {
   const endpoint = OEMBED_ENDPOINTS[provider];
   if (!endpoint) return null;
-  const data = await fetchOEmbed(endpoint, url.toString());
-  if (!data?.title && !data?.thumbnail_url) return null;
+  const data = await fetchOEmbed(endpoint, provider === "twitter" ? normalizeTwitterOEmbedUrl(url) : url.toString());
+  if (!data) return null;
+  const tweetText = provider === "twitter" ? extractTweetTextFromOEmbedHtml(data?.html) : "";
+  if (!data?.title && !data?.thumbnail_url && !tweetText) return null;
 
   let image = data.thumbnail_url || "";
   if (provider === "youtube") {
@@ -116,7 +171,7 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "g
   }
 
   const author = data.author_name?.trim();
-  let title = data.title?.trim() || url.hostname;
+  let title = provider === "twitter" ? tweetText || data.title?.trim() || "Tweet" : data.title?.trim() || url.hostname;
   title = cleanMusicLinkTitle(title, provider);
   let description = "";
 
@@ -126,6 +181,9 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "g
     description = author;
   } else if (provider === "tiktok" && author) {
     description = `@${author.replace(/^@/, "")}`;
+  } else if (provider === "twitter") {
+    const handle = twitterHandleFromAuthorUrl(data.author_url);
+    description = handle ? `@${handle}` : "X / Twitter";
   } else if (author) {
     description = author;
   }
@@ -145,18 +203,18 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "g
     description,
     image,
     provider,
-    author: author || undefined,
+    author: provider === "twitter" && author && description.startsWith("@") ? `${author} ${description}` : author || undefined,
     imageWidth,
     imageHeight,
     videoId,
   };
 }
 
-async function fetchOpenGraphPreview(url: URL): Promise<LinkPreviewResult> {
+async function fetchOpenGraphPreview(url: URL, timeoutMs = 8000): Promise<LinkPreviewResult> {
   const res = await fetch(url.toString(), {
     headers: { "User-Agent": "BoardlyBot/1.0 (+https://boardly.app)" },
     redirect: "follow",
-    signal: AbortSignal.timeout(8000),
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!res.ok) throw new Error("Impossible de récupérer la page");
 
@@ -198,7 +256,20 @@ export async function fetchLinkPreview(rawUrl: string): Promise<LinkPreviewResul
 
   if (provider !== "generic") {
     const oembed = await fetchOEmbedPreview(url, provider);
-    if (oembed) return oembed;
+    if (oembed) {
+      if (provider !== "twitter" || oembed.image) return oembed;
+      try {
+        const og = await fetchOpenGraphPreview(url, 3000);
+        return {
+          ...oembed,
+          image: og.image || oembed.image,
+          imageWidth: og.imageWidth || oembed.imageWidth,
+          imageHeight: og.imageHeight || oembed.imageHeight,
+        };
+      } catch {
+        return oembed;
+      }
+    }
   }
 
   const og = await fetchOpenGraphPreview(url);

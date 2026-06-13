@@ -4,6 +4,7 @@ export const LINK_PROVIDER_ACCENT: Record<LinkProvider, string> = {
   youtube: "#FF0000",
   spotify: "#1DB954",
   tiktok: "#FFFFFF",
+  twitter: "#111111",
   soundcloud: "#FF5500",
   vimeo: "#1AB7EA",
   "apple-music": "#FA243C",

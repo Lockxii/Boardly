@@ -2,6 +2,7 @@ export const LINK_PROVIDER_VALUES = [
   "youtube",
   "spotify",
   "tiktok",
+  "twitter",
   "soundcloud",
   "vimeo",
   "apple-music",
@@ -14,7 +15,7 @@ export type LinkProviderId = (typeof LINK_PROVIDER_VALUES)[number];
 export type LinkProvider = Exclude<LinkProviderId, "generic">;
 
 export function normalizeLinkHost(hostname: string) {
-  return hostname.replace(/^www\./, "").replace(/^m\./, "");
+  return hostname.replace(/^www\./, "").replace(/^m\./, "").replace(/^mobile\./, "");
 }
 
 export function detectLinkProviderFromUrl(rawUrl: string): LinkProviderId {
@@ -25,6 +26,7 @@ export function detectLinkProviderFromUrl(rawUrl: string): LinkProviderId {
     if (host === "youtube.com" || host === "youtu.be") return "youtube";
     if (host === "open.spotify.com") return "spotify";
     if (host === "tiktok.com" || host === "vm.tiktok.com") return "tiktok";
+    if (host === "twitter.com" || host === "x.com") return "twitter";
     if (host === "soundcloud.com" || host === "on.soundcloud.com") return "soundcloud";
     if (host === "vimeo.com" || host === "player.vimeo.com") return "vimeo";
     if (host === "music.apple.com") return "apple-music";

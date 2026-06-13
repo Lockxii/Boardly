@@ -15,6 +15,7 @@ export const LINK_PROVIDER_META: Record<
   deezer: { label: "Deezer", slug: "deezer", variant: "default", badgeClass: "bg-[#A238FF]", logoOnBadge: "color" },
   "amazon-music": { label: "Amazon Music", slug: "amazon-music", variant: "default", badgeClass: "bg-[#232F3E]", logoOnBadge: "color" },
   tiktok: { label: "TikTok", slug: "tiktok", variant: "light", badgeClass: "bg-black", logoOnBadge: "color" },
+  twitter: { label: "X", slug: "x", variant: "default", badgeClass: "bg-black", logoOnBadge: "mono" },
   soundcloud: { label: "SoundCloud", slug: "soundcloud", variant: "default", badgeClass: "bg-[#FF5500]", logoOnBadge: "mono" },
   vimeo: { label: "Vimeo", slug: "vimeo", variant: "default", badgeClass: "bg-[#1AB7EA]", logoOnBadge: "mono" },
 };
@@ -37,6 +38,7 @@ export const LINK_CARD_GAP = 4;
 
 function defaultCardWidth(provider?: LinkProviderId) {
   if (provider === "tiktok") return 220;
+  if (provider === "twitter") return 320;
   if (isMusicLinkProvider(provider)) return 240;
   return 280;
 }
@@ -44,15 +46,17 @@ function defaultCardWidth(provider?: LinkProviderId) {
 function fallbackImageAspect(provider?: LinkProviderId) {
   if (provider === "tiktok") return 9 / 16;
   if (isMusicLinkProvider(provider)) return 1;
-  if (provider === "youtube" || provider === "vimeo") return 16 / 9;
+  if (provider === "youtube" || provider === "vimeo" || provider === "twitter") return 16 / 9;
   return 16 / 10;
 }
 
-export function estimateLinkBodyHeight(title: string, hasSubtitle: boolean) {
-  const titleLines = Math.min(3, Math.max(1, Math.ceil(title.length / 30)));
+export function estimateLinkBodyHeight(title: string, hasSubtitle: boolean, provider?: LinkProviderId) {
+  const maxLines = provider === "twitter" ? 6 : 3;
+  const minHeight = provider === "twitter" ? 116 : 52;
+  const titleLines = Math.min(maxLines, Math.max(1, Math.ceil(title.length / 30)));
   const titleHeight = titleLines * 19;
   const subtitleHeight = hasSubtitle ? 18 : 0;
-  return Math.max(52, titleHeight + subtitleHeight + 26);
+  return Math.max(minHeight, titleHeight + subtitleHeight + 26);
 }
 
 export function getLinkImageHeight(
@@ -81,7 +85,7 @@ export function getLinkLayerDimensions(preview: {
   const provider = preview.provider;
   const width = defaultCardWidth(provider);
   const hasSubtitle = !!(preview.author || preview.description);
-  const bodyHeight = estimateLinkBodyHeight(preview.title || (preview.image ? "Link" : ""), hasSubtitle);
+  const bodyHeight = estimateLinkBodyHeight(preview.title || (preview.image ? "Link" : ""), hasSubtitle, provider);
   const chrome = bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;
 
   if (!hasImage) {
@@ -96,7 +100,7 @@ export function getLinkLayerHeightFromLayer(layer: Pick<Layer, "type" | "width" 
   if (layer.type !== "Link") return layer.width;
   const provider = resolveLinkProvider(layer.linkProvider, layer.url);
   const hasSubtitle = !!(layer.linkAuthor || layer.linkDescription);
-  const bodyHeight = estimateLinkBodyHeight(layer.linkTitle || "", hasSubtitle);
+  const bodyHeight = estimateLinkBodyHeight(layer.linkTitle || "", hasSubtitle, provider);
   const chrome = bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;
   if (!layer.linkImage) return bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;
   const imageHeight = getLinkImageHeight(provider, layer.width, layer.linkImageWidth, layer.linkImageHeight);

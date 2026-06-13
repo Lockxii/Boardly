@@ -1,11 +1,11 @@
 import { memo, useMemo, useRef, useEffect, useState } from "react";
-import { Lock, ExternalLink } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { getViewportCanvasBounds, isLayerInViewport } from "@/lib/motion-utils";
 import { isHtmlLayerType } from "@/lib/html-layer-types";
 import type { Layer } from "@/lib/types";
 import { LinkCardBody, LinkCardImage, LinkUrlEdge } from "./link-card-parts";
-import { estimateLinkBodyHeight, LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT } from "@/lib/brand-icons";
+import { estimateLinkBodyHeight, LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT, resolveLinkProvider } from "@/lib/brand-icons";
 
 const fontMap: Record<string, string> = {
   "font-sans": "Inter, sans-serif",
@@ -116,7 +116,11 @@ function HtmlLayerItem({
     layer.type === "Link" ? Math.max(0, layer.height - LINK_URL_STRIP_HEIGHT - LINK_CARD_GAP) : 0;
   const linkBodyHeight =
     layer.type === "Link"
-      ? estimateLinkBodyHeight(layer.linkTitle || layer.url || "", !!(layer.linkAuthor || layer.linkDescription))
+      ? estimateLinkBodyHeight(
+          layer.linkTitle || layer.url || "",
+          !!(layer.linkAuthor || layer.linkDescription),
+          resolveLinkProvider(layer.linkProvider, layer.url),
+        )
       : 0;
   const linkImageHeight =
     layer.type === "Link" && layer.linkImage ? Math.max(1, linkCardHeight - linkBodyHeight) : undefined;
@@ -163,11 +167,7 @@ function HtmlLayerItem({
                 readOnly={readOnly || isLocked}
                 onNaturalSize={(w, h) => fitLinkLayerToImage(id, w, h)}
               />
-            ) : (
-              <div className="flex items-center gap-2 px-3 pt-3">
-                <ExternalLink className="h-4 w-4 shrink-0 text-blue-600" />
-              </div>
-            )}
+            ) : null}
             <LinkCardBody layer={layer} />
           </div>
           <LinkUrlEdge

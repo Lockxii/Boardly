@@ -116,10 +116,33 @@ export function LinkCardImage({
 }
 
 export function LinkCardBody({ layer }: { layer: Layer }) {
+  const resolved = resolveLinkProvider(layer.linkProvider, layer.url);
+  const isTweet = resolved === "twitter";
   const bodyHeight = estimateLinkBodyHeight(
     layer.linkTitle || layer.url || "",
     !!(layer.linkAuthor || layer.linkDescription),
+    resolved,
   );
+
+  if (isTweet) {
+    return (
+      <div
+        className="flex shrink-0 flex-col gap-2 pointer-events-none p-3"
+        style={{ minHeight: bodyHeight }}
+      >
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-[11px] font-semibold uppercase text-neutral-500 dark:text-neutral-400">Tweet</p>
+          <LinkProviderBadge provider={layer.linkProvider} url={layer.url} />
+        </div>
+        <p className="flex-1 whitespace-pre-wrap text-[13px] font-medium leading-snug text-neutral-900 line-clamp-6 dark:text-white">
+          {layer.linkTitle || layer.url}
+        </p>
+        {(layer.linkAuthor || layer.linkDescription) && (
+          <p className="text-xs text-neutral-500 line-clamp-1">{layer.linkAuthor || layer.linkDescription}</p>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div

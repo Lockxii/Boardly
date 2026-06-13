@@ -1,9 +1,9 @@
 import { memo, useState, useRef, useEffect, createElement } from "react";
-import { Lock, ExternalLink } from "lucide-react";
+import { Lock } from "lucide-react";
 import { LinkCardBody, LinkCardImage, LinkUrlEdge } from "./link-card-parts";
 import type { Layer, LayerReaction } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { estimateLinkBodyHeight, LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT } from "@/lib/brand-icons";
+import { estimateLinkBodyHeight, LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT, resolveLinkProvider } from "@/lib/brand-icons";
 
 const EMPTY_REACTIONS: LayerReaction[] = [];
 
@@ -145,7 +145,11 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
   const linkCardHeight = layer.type === "Link" ? Math.max(0, layer.height - LINK_URL_STRIP_HEIGHT - LINK_CARD_GAP) : 0;
   const linkBodyHeight =
     layer.type === "Link"
-      ? estimateLinkBodyHeight(layer.linkTitle || layer.url || "", !!(layer.linkAuthor || layer.linkDescription))
+      ? estimateLinkBodyHeight(
+          layer.linkTitle || layer.url || "",
+          !!(layer.linkAuthor || layer.linkDescription),
+          resolveLinkProvider(layer.linkProvider, layer.url),
+        )
       : 0;
   const linkImageHeight =
     layer.type === "Link" && layer.linkImage ? Math.max(1, linkCardHeight - linkBodyHeight) : undefined;
@@ -231,11 +235,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
                   readOnly={readOnly || isLocked}
                   onNaturalSize={(w, h) => fitLinkLayerToImage(id, w, h)}
                 />
-              ) : (
-                <div className="flex items-center gap-2 px-3 pt-3">
-                  <ExternalLink className="h-4 w-4 shrink-0 text-blue-600" />
-                </div>
-              )}
+              ) : null}
               <LinkCardBody layer={layer} />
             </div>
             <LinkUrlEdge
