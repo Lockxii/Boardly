@@ -5,11 +5,12 @@ import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
 import type { BoardCanvasData, Layer } from "@/lib/types";
 
-const CURSOR_EMIT_INTERVAL_MS = 80;
-const CANVAS_EMIT_INTERVAL_MS = 120;
+const CURSOR_EMIT_INTERVAL_MS = 33;
+const CANVAS_EMIT_ACTIVE_INTERVAL_MS = 33;
+const CANVAS_EMIT_IDLE_INTERVAL_MS = 120;
 const PEER_TIMEOUT_MS = 30_000;
 const CURSOR_LERP = 0.82;
-const REMOTE_LAYER_ANIMATION_MS = 96;
+const REMOTE_LAYER_ANIMATION_MS = 64;
 const SOLO_IDLE_DISCONNECT_MS = 45_000;
 const COLLAB_IDLE_DISCONNECT_MS = 5 * 60_000;
 const HIDDEN_DISCONNECT_MS = 5_000;
@@ -137,6 +138,19 @@ function lerp(from: number, to: number, amount: number) {
 
 function easeOutCubic(t: number) {
   return 1 - Math.pow(1 - t, 3);
+}
+
+function isHighFrequencyCanvasUpdate(state: ReturnType<typeof useCanvasStore.getState>) {
+  const activeElement = document.activeElement;
+  if (activeElement instanceof HTMLElement && activeElement.isContentEditable) return true;
+  return (
+    state.canvasState.mode === "translating" ||
+    state.canvasState.mode === "resizing" ||
+    state.canvasState.mode === "rotating" ||
+    state.canvasState.mode === "pencil" ||
+    state.canvasState.mode === "inserting" ||
+    state.canvasState.mode === "selectionNet"
+  );
 }
 
 export function CursorsPresence({
@@ -293,7 +307,7 @@ export function CursorsPresence({
       lastCanvasEmitAtRef.current = performance.now();
     };
 
-    const queueCanvas = (canvasData: BoardCanvasData) => {
+    const queueCanvas = (canvasData: BoardCanvasData, highFrequency: boolean) => {
       if (readOnly) return;
       const previous = publishedCanvasRef.current;
       if (!previous) {
@@ -306,14 +320,14 @@ export function CursorsPresence({
       queuedCanvasDataRef.current = canvasData;
       markRealtimeActivityRef.current();
       const now = performance.now();
+      const interval = highFrequency ? CANVAS_EMIT_ACTIVE_INTERVAL_MS : CANVAS_EMIT_IDLE_INTERVAL_MS;
       const elapsed = now - lastCanvasEmitAtRef.current;
-      if (elapsed >= CANVAS_EMIT_INTERVAL_MS) {
+      if (elapsed >= interval) {
         flushQueuedCanvas();
         return;
       }
-      if (!canvasEmitTimerRef.current) {
-        canvasEmitTimerRef.current = window.setTimeout(flushQueuedCanvas, CANVAS_EMIT_INTERVAL_MS - elapsed);
-      }
+      window.clearTimeout(canvasEmitTimerRef.current);
+      canvasEmitTimerRef.current = window.setTimeout(flushQueuedCanvas, interval - elapsed);
     };
 
     const currentPointerOrViewportCenter = () => {
@@ -497,7 +511,7 @@ export function CursorsPresence({
         trash: state.trash,
         brandColors: state.brandColors,
       };
-      queueCanvas(canvasData);
+      queueCanvas(canvasData, isHighFrequencyCanvasUpdate(state));
     });
 
     const onVisibilityChange = () => {
