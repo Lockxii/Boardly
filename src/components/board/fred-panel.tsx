@@ -92,20 +92,25 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   const messages = (activeSession?.messages ?? []) as FredChatMessage[];
 
   const persistSessions = useCallback(
-    (next: FredChatSession[]) => {
-      setSessions(next);
-      saveFredSessions(boardId, next);
+    (nextOrUpdater: FredChatSession[] | ((current: FredChatSession[]) => FredChatSession[])) => {
+      setSessions((current) => {
+        const next =
+          typeof nextOrUpdater === "function" ? nextOrUpdater(current) : nextOrUpdater;
+        saveFredSessions(boardId, next);
+        return next;
+      });
     },
     [boardId]
   );
 
   const updateActiveSession = useCallback(
     (updater: (session: FredChatSession) => FredChatSession) => {
-      persistSessions(
-        sessions.map((s) => (s.id === activeId ? updater(s) : s))
-      );
+      persistSessions((current) => {
+        const targetId = activeId ?? current[0]?.id;
+        return current.map((s) => (s.id === targetId ? updater(s) : s));
+      });
     },
-    [activeId, persistSessions, sessions]
+    [activeId, persistSessions]
   );
 
   useEffect(() => {
@@ -288,7 +293,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
 
   const handleNewChat = () => {
     const session = createFredSession();
-    persistSessions([session, ...sessions]);
+    persistSessions((current) => [session, ...current]);
     setActiveId(session.id);
     setLinkedIds([]);
     setInput("");
@@ -302,8 +307,8 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
 
   const handleRenameSession = (id: string, title: string) => {
     const trimmed = title.trim() || "Nouveau chat";
-    persistSessions(
-      sessions.map((s) => (s.id === id ? { ...s, title: trimmed, updatedAt: Date.now() } : s))
+    persistSessions((current) =>
+      current.map((s) => (s.id === id ? { ...s, title: trimmed, updatedAt: Date.now() } : s))
     );
     setRenameTarget(null);
     toast.success("Chat renommé");
