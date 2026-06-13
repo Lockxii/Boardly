@@ -35,6 +35,31 @@ export function getSelectionBounds(layers: Record<string, Layer>, ids: string[])
   return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
 }
 
+export function fitCameraToBoard(
+  layers: Record<string, Layer>,
+  layerIds: string[],
+  padding = 96
+) {
+  const bounds = getSelectionBounds(layers, layerIds);
+  if (!bounds || bounds.width <= 0 || bounds.height <= 0) return null;
+
+  const viewportW = window.innerWidth;
+  const viewportH = window.innerHeight;
+  const zoom = Math.min(
+    (viewportW - padding * 2) / bounds.width,
+    (viewportH - padding * 2) / bounds.height,
+    1.25
+  );
+  const cx = bounds.minX + bounds.width / 2;
+  const cy = bounds.minY + bounds.height / 2;
+
+  return {
+    x: viewportW / 2 - cx * zoom,
+    y: viewportH / 2 - cy * zoom,
+    zoom: Math.min(Math.max(zoom, 0.2), 1.5),
+  };
+}
+
 export type AlignKind = "left" | "center" | "right" | "top" | "middle" | "bottom";
 export type DistributeKind = "horizontal" | "vertical";
 

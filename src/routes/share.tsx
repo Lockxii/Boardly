@@ -7,6 +7,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { RouteLoading } from "@/components/route-loading";
 import { BoardlyBrand } from "@/components/boardly-brand";
 import { Button } from "@/components/ui/button";
+import { fitCameraToBoard } from "@/lib/canvas-utils";
 import type { BoardCanvasData } from "@/lib/types";
 
 type PublicBoard = {
@@ -43,6 +44,9 @@ export function SharePage() {
             brandColors: content.canvasData.brandColors || [],
             readOnly: true,
           });
+          const state = useCanvasStore.getState();
+          const camera = fitCameraToBoard(state.layers, state.layerIds);
+          if (camera) useCanvasStore.setState({ camera });
         }
         setReady(true);
       } catch {

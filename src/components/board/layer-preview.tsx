@@ -1,4 +1,4 @@
-import { memo, useState, useRef, useEffect } from "react";
+import { memo, useState, useRef, useEffect, createElement } from "react";
 import { Lock, ExternalLink } from "lucide-react";
 import { LinkCardBody, LinkCardImage, LinkUrlEdge } from "./link-card-parts";
 import type { Layer, LayerReaction } from "@/lib/types";
@@ -24,6 +24,29 @@ const fontMap: Record<string, string> = {
   "font-mono": "monospace",
   "font-handwriting": '"Comic Sans MS", "Chalkboard SE", sans-serif',
 };
+
+const XHTML_NS = "http://www.w3.org/1999/xhtml";
+
+function layerPos(layer: Layer) {
+  return {
+    x: Number(layer.x) || 0,
+    y: Number(layer.y) || 0,
+  };
+}
+
+function localLayerTransform(x: number, y: number, width: number, height: number, rotation: number) {
+  const rot = rotation ? ` rotate(${rotation} ${width / 2} ${height / 2})` : "";
+  return `translate(${x} ${y})${rot}`;
+}
+
+function foreignObjectRotation(width: number, height: number, rotation: number) {
+  if (!rotation) return undefined;
+  return `rotate(${rotation} ${width / 2} ${height / 2})`;
+}
+
+function XhtmlDiv(props: React.HTMLAttributes<HTMLDivElement>) {
+  return createElement("div", { xmlns: XHTML_NS, ...props });
+}
 
 function getSvgPathFromPoints(points: number[][]) {
   if (!points || points.length === 0) return "";
@@ -122,9 +145,12 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
   const linkImageHeight =
     layer.type === "Link" && layer.linkImage ? Math.max(1, linkCardHeight - linkBodyHeight) : undefined;
 
+  const { x, y } = layerPos(layer);
+  const layerTransform = localLayerTransform(x, y, layer.width, layer.height, rotation);
+  const foRotation = foreignObjectRotation(layer.width, layer.height, rotation);
+
   return (
     <g
-      transform={`translate(${layer.x} ${layer.y}) rotate(${rotation} ${layer.width / 2} ${layer.height / 2})`}
       onPointerDown={(e) => onLayerPointerDown(e, id)}
       onDoubleClick={handleDoubleClick}
       className={highlighted ? "layer-flash" : undefined}
@@ -133,6 +159,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
       }}
     >
       {layer.type === "Path" && (
+        <g transform={layerTransform}>
         <path
           d={getSvgPathFromPoints(layer.points || [])}
           stroke={layer.fill || "#000"}
@@ -144,33 +171,40 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           transform={isDrawing ? undefined : `scale(${pathScaleX}, ${pathScaleY})`}
           style={isDrawing ? undefined : { transformOrigin: "top left" }}
         />
+        </g>
       )}
       {layer.type === "Line" && (
+        <g transform={layerTransform}>
         <line x1={0} y1={0} x2={layer.width} y2={layer.height} stroke={layer.fill || "#111827"} strokeWidth={layer.strokeWidth || 3} strokeLinecap="round" />
+        </g>
       )}
       {layer.type === "Frame" && (
         <>
+          <g transform={layerTransform}>
           <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill="rgba(148,163,184,0.06)" stroke={stroke || "#94A3B8"} strokeWidth={strokeWidth || 2} strokeDasharray="8 6" />
-          <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible", pointerEvents: "none" }}>
-            <div style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
+          </g>
+          <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
+            <XhtmlDiv style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
               <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 600, fontSize: "13px", color: "#64748B" }} />
-            </div>
+            </XhtmlDiv>
           </foreignObject>
         </>
       )}
       {(layer.type === "Column") && (
         <>
+          <g transform={layerTransform}>
           <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill="rgba(59,130,246,0.04)" stroke={stroke || "#93C5FD"} strokeWidth={strokeWidth || 2} />
-          <foreignObject width={layer.width} height={32} style={{ overflow: "visible", pointerEvents: "none" }}>
-            <div style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
+          </g>
+          <foreignObject x={x} y={y} width={layer.width} height={32} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
+            <XhtmlDiv style={{ ...wrapperStyle, alignItems: "flex-start", justifyContent: "flex-start" }}>
               <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px 12px", fontWeight: 700, fontSize: "12px", color: "#3B82F6", textTransform: "uppercase", letterSpacing: "0.05em" }} />
-            </div>
+            </XhtmlDiv>
           </foreignObject>
         </>
       )}
       {layer.type === "Link" && (
-        <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible" }}>
-          <div
+        <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible" }}>
+          <XhtmlDiv
             className="flex flex-col"
             style={{ width: layer.width, height: layer.height, gap: LINK_CARD_GAP }}
           >
@@ -205,48 +239,60 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
               readOnly={readOnly || isLocked}
               onChange={(nextUrl) => updateLayer(id, { url: nextUrl })}
             />
-          </div>
+          </XhtmlDiv>
         </foreignObject>
       )}
       {layer.type === "Rectangle" && (
         <>
+          <g transform={layerTransform}>
           <rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} fill={layer.fill} stroke={stroke} strokeWidth={strokeWidth} className="drop-shadow-sm" />
-          <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible", pointerEvents: "none" }}>
-            <div style={wrapperStyle}><div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px" }} /></div>
+          </g>
+          <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
+            <XhtmlDiv style={wrapperStyle}><div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px" }} /></XhtmlDiv>
           </foreignObject>
         </>
       )}
       {layer.type === "Triangle" && (
+        <g transform={layerTransform}>
         <g transform={`translate(${layer.width / 2}, ${layer.height / 2}) scale(${shapeScale}) translate(${-layer.width / 2}, ${-layer.height / 2})`}>
           <polygon points={`0,${layer.height} ${layer.width / 2},0 ${layer.width},${layer.height}`} fill={layer.fill} stroke={strokeWidth > 0 ? stroke : layer.fill} strokeWidth={totalStrokeWidth} strokeLinejoin="round" className="drop-shadow-sm" />
         </g>
+        </g>
       )}
       {layer.type === "Diamond" && (
+        <g transform={layerTransform}>
         <g transform={`translate(${layer.width / 2}, ${layer.height / 2}) scale(${shapeScale}) translate(${-layer.width / 2}, ${-layer.height / 2})`}>
           <polygon points={`${layer.width / 2},0 ${layer.width},${layer.height / 2} ${layer.width / 2},${layer.height} 0,${layer.height / 2}`} fill={layer.fill} stroke={strokeWidth > 0 ? stroke : layer.fill} strokeWidth={totalStrokeWidth} strokeLinejoin="round" className="drop-shadow-sm" />
         </g>
+        </g>
       )}
       {layer.type === "Star" && (
+        <g transform={layerTransform}>
         <g transform={`translate(${layer.width / 2}, ${layer.height / 2}) scale(${shapeScale}) translate(${-layer.width / 2}, ${-layer.height / 2})`}>
           <polygon points={`${layer.width * 0.5},0 ${layer.width * 0.63},${layer.height * 0.38} ${layer.width},${layer.height * 0.38} ${layer.width * 0.69},${layer.height * 0.59} ${layer.width * 0.82},${layer.height} ${layer.width * 0.5},${layer.height * 0.75} ${layer.width * 0.18},${layer.height} ${layer.width * 0.31},${layer.height * 0.59} 0,${layer.height * 0.38} ${layer.width * 0.37},${layer.height * 0.38}`} fill={layer.fill} stroke={strokeWidth > 0 ? stroke : layer.fill} strokeWidth={totalStrokeWidth} strokeLinejoin="round" className="drop-shadow-sm" />
         </g>
+        </g>
       )}
       {layer.type === "Arrow" && (
+        <g transform={layerTransform}>
         <g transform={`translate(${layer.width / 2}, ${layer.height / 2}) scale(${shapeScale}) translate(${-layer.width / 2}, ${-layer.height / 2})`}>
           <path d={`M 0,${layer.height * 0.3} L ${layer.width * 0.6},${layer.height * 0.3} L ${layer.width * 0.6},0 L ${layer.width},${layer.height * 0.5} L ${layer.width * 0.6},${layer.height} L ${layer.width * 0.6},${layer.height * 0.7} L 0,${layer.height * 0.7} Z`} fill={layer.fill} stroke={strokeWidth > 0 ? stroke : layer.fill} strokeWidth={totalStrokeWidth} strokeLinejoin="round" className="drop-shadow-sm" />
+        </g>
         </g>
       )}
       {layer.type === "Ellipse" && (
         <>
+          <g transform={layerTransform}>
           <ellipse cx={layer.width / 2} cy={layer.height / 2} rx={layer.width / 2} ry={layer.height / 2} fill={layer.fill} stroke={stroke} strokeWidth={strokeWidth} />
-          <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible", pointerEvents: "none" }}>
-            <div style={{ ...wrapperStyle, alignItems: "center" }}><div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, width: "80%", padding: "4px" }} /></div>
+          </g>
+          <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible", pointerEvents: "none" }}>
+            <XhtmlDiv style={{ ...wrapperStyle, alignItems: "center" }}><div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, width: "80%", padding: "4px" }} /></XhtmlDiv>
           </foreignObject>
         </>
       )}
       {layer.type === "Note" && (
-        <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible" }}>
-          <div className="w-full h-full relative shadow-md flex flex-col" style={{ backgroundColor: layer.fill || "#fef3c7", borderRadius: cornerRadius }}>
+        <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible" }}>
+          <XhtmlDiv className="w-full h-full relative shadow-md flex flex-col" style={{ backgroundColor: layer.fill || "#fef3c7", borderRadius: cornerRadius }}>
             <div style={{ ...wrapperStyle, flex: layer.checklist?.length ? "0 0 auto" : 1 }}>
               <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: "8px", fontFamily: layer.fontFamily ? fontMap[layer.fontFamily] : fontMap["font-handwriting"], color: layer.textColor || "#1f2937", minHeight: layer.checklist?.length ? 48 : undefined }} />
             </div>
@@ -266,24 +312,25 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
                 ))}
               </div>
             )}
-          </div>
+          </XhtmlDiv>
         </foreignObject>
       )}
       {layer.type === "Text" && (
-        <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible" }}>
-          <div style={wrapperStyle}>
+        <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible" }}>
+          <XhtmlDiv style={wrapperStyle}>
             <div ref={editableRef} contentEditable={isEditing as any} onBlur={handleBlur} onPointerDown={onTextPointerDown} style={{ ...editableStyle, padding: layer.textBackground ? "2px 6px" : "0px", borderRadius: "4px", fontWeight: "bold", color: layer.textColor || layer.fill || "#000000", display: "inline-block", width: "auto", maxWidth: "100%" }} />
-          </div>
+          </XhtmlDiv>
         </foreignObject>
       )}
       {layer.type === "Image" && (
-        <>
+        <g transform={layerTransform}>
           <defs><clipPath id={`clip-${id}`}><rect width={layer.width} height={layer.height} rx={cornerRadius} ry={cornerRadius} /></clipPath></defs>
           <image href={layer.src} width={layer.width} height={layer.height} preserveAspectRatio="none" clipPath={`url(#clip-${id})`} />
-        </>
+        </g>
       )}
 
       {(layerComments > 0 || reactions.length > 0) && (
+        <g transform={layerTransform}>
         <g transform={`translate(${layer.width - 8}, -8)`} className="pointer-events-none">
           {layerComments > 0 && (
             <circle r={8} fill="#2563EB" />
@@ -292,10 +339,12 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
             <text x={layerComments > 0 ? 14 : 0} y={4} fontSize={10}>{reactions[0].emoji}</text>
           )}
         </g>
+        </g>
       )}
 
       {isSelected && (
-        <>
+        <g transform={layerTransform}>
+          <>
           <rect className={`stroke-blue-500 stroke-2 fill-transparent pointer-events-none ${isLocked ? "stroke-red-400 opacity-50" : ""}`} x={-2} y={-2} width={layer.width + 4} height={layer.height + 4} />
           {isLocked ? (
             <g transform={`translate(${layer.width / 2}, -22)`}>
@@ -309,7 +358,8 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
               <line x1={layer.width / 2} y1={-2} x2={layer.width / 2} y2={-14} className="stroke-blue-500 stroke-1" />
             </>
           )}
-        </>
+          </>
+        </g>
       )}
     </g>
   );

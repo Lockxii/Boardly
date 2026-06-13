@@ -965,7 +965,6 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       <svg
         id="board-canvas"
         className="w-[100vw] h-[100vh] overscroll-none"
-        style={{ contain: "layout paint" }}
         onPointerMove={onPointerMove}
         onPointerLeave={() => { syncCursor(null); setCursorPoint(null); }}
         onPointerDown={onPointerDown}
@@ -982,16 +981,16 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
             <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#A8C8E8" strokeWidth="1" className="dark:stroke-slate-500" />
           </pattern>
           <marker id="conn-arrow-end" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M 0 0 L 10 5 L 0 10 Z" fill="context-stroke" />
+            <path d="M 0 0 L 10 5 L 0 10 Z" fill="#64748B" />
           </marker>
           <marker id="conn-arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto">
-            <path d="M 10 0 L 0 5 L 10 10 Z" fill="context-stroke" />
+            <path d="M 10 0 L 0 5 L 10 10 Z" fill="#64748B" />
           </marker>
           <marker id="conn-dot-end" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-            <circle cx="5" cy="5" r="3.5" fill="context-stroke" />
+            <circle cx="5" cy="5" r="3.5" fill="#64748B" />
           </marker>
           <marker id="conn-dot-start" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="5" markerHeight="5" orient="auto">
-            <circle cx="5" cy="5" r="3.5" fill="context-stroke" />
+            <circle cx="5" cy="5" r="3.5" fill="#64748B" />
           </marker>
         </defs>
         <g className="canvas-g" transform={`translate(${camera.x} ${camera.y}) scale(${camera.zoom})`}>

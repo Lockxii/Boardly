@@ -12,6 +12,7 @@ import {
   getBoardSocket,
   type BoardUpdatedEvent,
 } from "@/lib/board-socket";
+import { fitCameraToBoard } from "@/lib/canvas-utils";
 import { fetchCurrentUser } from "@/lib/auth-client";
 
 interface RoomProps {
@@ -41,6 +42,9 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
       const isDark = document.documentElement.classList.contains("dark");
       useCanvasStore.setState({ darkMode: isDark });
       setReady(true);
+      const state = useCanvasStore.getState();
+      const camera = fitCameraToBoard(state.layers, state.layerIds);
+      if (camera) useCanvasStore.setState({ camera });
     })();
 
     return () => {
