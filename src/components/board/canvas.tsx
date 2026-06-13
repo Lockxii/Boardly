@@ -41,7 +41,7 @@ import {
 import { filePreviewKey } from "@/lib/image-insert";
 import type { DropPreviewKind } from "@/lib/canvas-drop";
 
-export function Canvas({ template, title, boardId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; readOnly?: boolean; isPublic?: boolean }) {
+export function Canvas({ template, title, boardId, roomId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; roomId?: string; readOnly?: boolean; isPublic?: boolean }) {
   const {
     camera, setCamera, canvasState, setCanvasState,
     pencilTool,
@@ -997,7 +997,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         onLayerRotatePointerDown={onLayerRotatePointerDown}
         onChange={(id, val) => updateLayerText(id, val)}
       />
-      {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
+      {roomId && <CursorsPresence boardId={roomId} camera={camera} readOnly={readOnly} />}
       <svg
         id="board-canvas"
         className="w-[100vw] h-[100vh] overscroll-none"

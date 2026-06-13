@@ -474,6 +474,7 @@ export function createApp() {
 
     res.json(
       presences.map((p) => ({
+        connectionId: `http:${p.userId}`,
         userId: p.userId,
         userName: p.user.name,
         cursorX: p.cursorX,

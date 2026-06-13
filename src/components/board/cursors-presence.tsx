@@ -5,22 +5,32 @@ import { apiFetch } from "@/lib/utils";
 import {
   cursorColorForUser,
   getBoardSocket,
+  isBoardRoomJoined,
   joinBoardRoom,
   type RemotePresence,
 } from "@/lib/board-socket";
 
+function mergePresence(existing: RemotePresence[], incoming: RemotePresence[]) {
+  const map = new Map(existing.map((user) => [user.connectionId, user]));
+  for (const user of incoming) {
+    map.set(user.connectionId, { ...map.get(user.connectionId), ...user });
+  }
+  return [...map.values()];
+}
+
 export function CursorsPresence({
   boardId,
   camera,
+  readOnly = false,
 }: {
   boardId: string;
   camera: { x: number; y: number; zoom: number };
+  readOnly?: boolean;
 }) {
   const [others, setOthers] = useState<RemotePresence[]>([]);
   const [renderPos, setRenderPos] = useState<Record<string, { x: number; y: number }>>({});
   const cursor = useCanvasStore((s) => s.cursor);
   const targetsRef = useRef<Record<string, { x: number; y: number }>>({});
-  const socketLiveRef = useRef(false);
   const cursorRef = useRef(cursor);
 
   useEffect(() => {
@@ -33,34 +43,28 @@ export function CursorsPresence({
     const socket = getBoardSocket();
     if (socket) joinBoardRoom(boardId);
 
-    const setTarget = (userId: string, x: number, y: number, snap = false) => {
+    const setTarget = (connectionId: string, x: number, y: number, snap = false) => {
       const pos = { x, y };
-      targetsRef.current[userId] = pos;
+      targetsRef.current[connectionId] = pos;
       if (snap) {
-        setRenderPos((prev) => ({ ...prev, [userId]: pos }));
+        setRenderPos((prev) => ({ ...prev, [connectionId]: pos }));
       }
     };
 
     const upsertOther = (user: RemotePresence, snap = false) => {
-      setOthers((prev) => {
-        const idx = prev.findIndex((p) => p.userId === user.userId);
-        if (idx === -1) return [...prev, user];
-        const next = [...prev];
-        next[idx] = { ...next[idx], ...user };
-        return next;
-      });
+      setOthers((prev) => mergePresence(prev, [user]));
       if (user.cursorX != null && user.cursorY != null) {
-        setTarget(user.userId, user.cursorX, user.cursorY, snap);
+        setTarget(user.connectionId, user.cursorX, user.cursorY, snap);
       }
     };
 
-    const removeOther = (userId: string) => {
-      setOthers((prev) => prev.filter((p) => p.userId !== userId));
-      delete targetsRef.current[userId];
+    const removeOther = (connectionId: string) => {
+      setOthers((prev) => prev.filter((p) => p.connectionId !== connectionId));
+      delete targetsRef.current[connectionId];
       setRenderPos((prev) => {
-        if (!prev[userId]) return prev;
+        if (!prev[connectionId]) return prev;
         const next = { ...prev };
-        delete next[userId];
+        delete next[connectionId];
         return next;
       });
     };
@@ -70,7 +74,7 @@ export function CursorsPresence({
       setOthers(users);
       for (const user of users) {
         if (user.cursorX != null && user.cursorY != null) {
-          setTarget(user.userId, user.cursorX, user.cursorY, true);
+          setTarget(user.connectionId, user.cursorX, user.cursorY, true);
         }
       }
     };
@@ -85,22 +89,17 @@ export function CursorsPresence({
       upsertOther(user, true);
     };
 
-    const onPresenceLeave = ({ userId }: { userId: string }) => {
+    const onPresenceLeave = ({ connectionId }: { connectionId: string }) => {
       if (cancelled) return;
-      removeOther(userId);
+      removeOther(connectionId);
     };
 
     const onConnect = () => {
-      socketLiveRef.current = true;
-      socket?.emit("board:join", { boardId });
-    };
-    const onDisconnect = () => {
-      socketLiveRef.current = false;
+      joinBoardRoom(boardId);
     };
 
     if (socket) {
       socket.on("connect", onConnect);
-      socket.on("disconnect", onDisconnect);
       socket.on("presence:state", onPresenceState);
       socket.on("presence:join", onPresenceJoin);
       socket.on("presence:cursor", onPresenceCursor);
@@ -108,24 +107,31 @@ export function CursorsPresence({
       if (socket.connected) onConnect();
     }
 
-    const httpFallback = async () => {
-      if (socketLiveRef.current) return;
+    const syncHttpPresence = async () => {
       try {
         const latestCursor = cursorRef.current;
-        await apiFetch(`/api/boards/${boardId}/presence`, {
-          method: "POST",
-          body: JSON.stringify({
-            cursorX: latestCursor?.x ?? null,
-            cursorY: latestCursor?.y ?? null,
-          }),
-        });
+        if (!readOnly) {
+          await apiFetch(`/api/boards/${boardId}/presence`, {
+            method: "POST",
+            body: JSON.stringify({
+              cursorX: latestCursor?.x ?? null,
+              cursorY: latestCursor?.y ?? null,
+            }),
+          });
+        }
+
         const data = await apiFetch<RemotePresence[]>(`/api/boards/${boardId}/presence`);
-        if (!cancelled) {
-          setOthers(data);
-          for (const user of data) {
-            if (user.cursorX != null && user.cursorY != null) {
-              setTarget(user.userId, user.cursorX, user.cursorY, true);
-            }
+        if (cancelled) return;
+
+        const normalized = data.map((user) => ({
+          ...user,
+          connectionId: user.connectionId || `http:${user.userId}`,
+        }));
+
+        setOthers((prev) => mergePresence(prev, normalized));
+        for (const user of normalized) {
+          if (user.cursorX != null && user.cursorY != null) {
+            setTarget(user.connectionId, user.cursorX, user.cursorY, true);
           }
         }
       } catch {
@@ -133,37 +139,39 @@ export function CursorsPresence({
       }
     };
 
-    void httpFallback();
-    const fallbackInterval = setInterval(httpFallback, 1500);
+    void syncHttpPresence();
+    const httpInterval = setInterval(syncHttpPresence, 1000);
 
     return () => {
       cancelled = true;
-      clearInterval(fallbackInterval);
+      clearInterval(httpInterval);
       socket?.off("connect", onConnect);
-      socket?.off("disconnect", onDisconnect);
       socket?.off("presence:state", onPresenceState);
       socket?.off("presence:join", onPresenceJoin);
       socket?.off("presence:cursor", onPresenceCursor);
       socket?.off("presence:leave", onPresenceLeave);
     };
-  }, [boardId]);
+  }, [boardId, readOnly]);
 
   useEffect(() => {
+    if (readOnly) return;
+
     const emit = () => {
-      const socket = getBoardSocket();
-      if (!socket?.connected) return;
       const latest = cursorRef.current;
-      socket.emit("presence:cursor", {
-        boardId,
-        cursorX: latest?.x ?? null,
-        cursorY: latest?.y ?? null,
-      });
+      const socket = getBoardSocket();
+      if (socket?.connected && isBoardRoomJoined(boardId)) {
+        socket.emit("presence:cursor", {
+          boardId,
+          cursorX: latest?.x ?? null,
+          cursorY: latest?.y ?? null,
+        });
+      }
     };
 
     emit();
     const interval = setInterval(emit, 50);
     return () => clearInterval(interval);
-  }, [boardId]);
+  }, [boardId, readOnly]);
 
   useEffect(() => {
     let raf = 0;
@@ -171,11 +179,11 @@ export function CursorsPresence({
       setRenderPos((prev) => {
         const next: Record<string, { x: number; y: number }> = { ...prev };
         let changed = false;
-        for (const [userId, target] of Object.entries(targetsRef.current)) {
-          const current = prev[userId] || target;
+        for (const [connectionId, target] of Object.entries(targetsRef.current)) {
+          const current = prev[connectionId] || target;
           const lerped = lerpPoint(current, target, 0.45);
           if (current.x !== lerped.x || current.y !== lerped.y) changed = true;
-          next[userId] = lerped;
+          next[connectionId] = lerped;
         }
         return changed ? next : prev;
       });
@@ -185,7 +193,8 @@ export function CursorsPresence({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  if (others.length === 0) return null;
+  const visibleOthers = others.filter((user) => renderPos[user.connectionId]);
+  if (visibleOthers.length === 0) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[30] overflow-hidden">
@@ -196,13 +205,13 @@ export function CursorsPresence({
           willChange: "transform",
         }}
       >
-        {others.map((user) => {
-          const pos = renderPos[user.userId];
+        {visibleOthers.map((user) => {
+          const pos = renderPos[user.connectionId];
           if (!pos) return null;
           const color = cursorColorForUser(user.userId);
           return (
             <div
-              key={user.userId}
+              key={user.connectionId}
               className="absolute flex items-start gap-1 remote-cursor"
               style={{ transform: `translate3d(${pos.x}px, ${pos.y}px, 0)` }}
             >

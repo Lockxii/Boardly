@@ -13,6 +13,7 @@ export type BoardUpdatedEvent = {
 };
 
 export type RemotePresencePayload = {
+  connectionId: string;
   userId: string;
   userName: string;
   cursorX: number | null;
@@ -21,7 +22,7 @@ export type RemotePresencePayload = {
 
 type SocketUser = { id: string; name: string; email: string };
 
-type RoomMember = RemotePresencePayload & { socketId: string };
+type RoomMember = RemotePresencePayload;
 
 const roomMembers = new Map<string, Map<string, RoomMember>>();
 
@@ -31,16 +32,14 @@ function roomKey(boardId: string) {
   return `board:${boardId}`;
 }
 
-function getOthers(boardId: string, excludeUserId: string): RemotePresencePayload[] {
+function getOthers(boardId: string, excludeConnectionId: string): RemotePresencePayload[] {
   const room = roomMembers.get(boardId);
   if (!room) return [];
-  return [...room.values()]
-    .filter((member) => member.userId !== excludeUserId)
-    .map(({ userId, userName, cursorX, cursorY }) => ({ userId, userName, cursorX, cursorY }));
+  return [...room.values()].filter((member) => member.connectionId !== excludeConnectionId);
 }
 
-function removeMember(boardId: string, userId: string) {
-  roomMembers.get(boardId)?.delete(userId);
+function removeMember(boardId: string, connectionId: string) {
+  roomMembers.get(boardId)?.delete(connectionId);
   if (roomMembers.get(boardId)?.size === 0) roomMembers.delete(boardId);
 }
 
@@ -52,12 +51,12 @@ function upsertMember(
   cursorY: number | null = null
 ) {
   if (!roomMembers.has(boardId)) roomMembers.set(boardId, new Map());
-  roomMembers.get(boardId)!.set(user.id, {
+  roomMembers.get(boardId)!.set(socketId, {
+    connectionId: socketId,
     userId: user.id,
     userName: user.name,
     cursorX,
     cursorY,
-    socketId,
   });
 }
 
@@ -107,16 +106,25 @@ export function initSocketServer(httpServer: HttpServer) {
   io.on("connection", (socket) => {
     const user = socket.data.user as SocketUser;
 
-    socket.on("board:join", async ({ boardId }: { boardId?: string }) => {
-      if (!boardId || typeof boardId !== "string") return;
+    socket.on("board:join", async ({ boardId }: { boardId?: string }, ack?: (payload: { ok: boolean; error?: string }) => void) => {
+      if (!boardId || typeof boardId !== "string") {
+        ack?.({ ok: false, error: "invalid_board" });
+        return;
+      }
 
       const access = await getBoardAccess(boardId, user);
-      if (!access) return;
+      if (!access) {
+        ack?.({ ok: false, error: "access_denied" });
+        return;
+      }
 
       for (const joinedId of socket.data.boardIds as Set<string>) {
         socket.leave(roomKey(joinedId));
-        removeMember(joinedId, user.id);
-        socket.to(roomKey(joinedId)).emit("presence:leave", { userId: user.id });
+        removeMember(joinedId, socket.id);
+        socket.to(roomKey(joinedId)).emit("presence:leave", {
+          connectionId: socket.id,
+          userId: user.id,
+        });
       }
       (socket.data.boardIds as Set<string>).clear();
 
@@ -124,21 +132,26 @@ export function initSocketServer(httpServer: HttpServer) {
       (socket.data.boardIds as Set<string>).add(boardId);
       upsertMember(boardId, user, socket.id);
 
-      socket.emit("presence:state", getOthers(boardId, user.id));
+      socket.emit("presence:state", getOthers(boardId, socket.id));
       socket.to(roomKey(boardId)).emit("presence:join", {
+        connectionId: socket.id,
         userId: user.id,
         userName: user.name,
         cursorX: null,
         cursorY: null,
       });
+      ack?.({ ok: true });
     });
 
     socket.on("board:leave", ({ boardId }: { boardId?: string }) => {
       if (!boardId || !(socket.data.boardIds as Set<string>).has(boardId)) return;
       socket.leave(roomKey(boardId));
       (socket.data.boardIds as Set<string>).delete(boardId);
-      removeMember(boardId, user.id);
-      socket.to(roomKey(boardId)).emit("presence:leave", { userId: user.id });
+      removeMember(boardId, socket.id);
+      socket.to(roomKey(boardId)).emit("presence:leave", {
+        connectionId: socket.id,
+        userId: user.id,
+      });
     });
 
     socket.on(
@@ -147,13 +160,14 @@ export function initSocketServer(httpServer: HttpServer) {
         if (!boardId || !(socket.data.boardIds as Set<string>).has(boardId)) return;
 
         const room = roomMembers.get(boardId);
-        const member = room?.get(user.id);
+        const member = room?.get(socket.id);
         if (member) {
           member.cursorX = typeof cursorX === "number" ? cursorX : null;
           member.cursorY = typeof cursorY === "number" ? cursorY : null;
         }
 
         socket.to(roomKey(boardId)).emit("presence:cursor", {
+          connectionId: socket.id,
           userId: user.id,
           userName: user.name,
           cursorX: typeof cursorX === "number" ? cursorX : null,
@@ -164,8 +178,11 @@ export function initSocketServer(httpServer: HttpServer) {
 
     socket.on("disconnect", () => {
       for (const boardId of socket.data.boardIds as Set<string>) {
-        removeMember(boardId, user.id);
-        io?.to(roomKey(boardId)).emit("presence:leave", { userId: user.id });
+        removeMember(boardId, socket.id);
+        io?.to(roomKey(boardId)).emit("presence:leave", {
+          connectionId: socket.id,
+          userId: user.id,
+        });
       }
     });
   });

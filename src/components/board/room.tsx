@@ -107,6 +107,9 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
     const onDisconnect = () => {
       if (!cancelled) setSocketLive(false);
     };
+    const onConnectError = () => {
+      if (!cancelled) setSocketLive(false);
+    };
 
     const onBoardUpdated = (event: BoardUpdatedEvent) => {
       if (event.boardId !== roomId) return;
@@ -118,6 +121,7 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
     if (socket) {
       socket.on("connect", onConnect);
       socket.on("disconnect", onDisconnect);
+      socket.on("connect_error", onConnectError);
       socket.on("board:updated", onBoardUpdated);
       if (socket.connected) onConnect();
     }
@@ -131,6 +135,7 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
       clearInterval(pollInterval);
       socket?.off("connect", onConnect);
       socket?.off("disconnect", onDisconnect);
+      socket?.off("connect_error", onConnectError);
       socket?.off("board:updated", onBoardUpdated);
       releaseBoardSocket();
     };
@@ -151,7 +156,7 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
           Live
         </div>
       )}
-      <Canvas template={template} title={title} boardId={boardId} isPublic={isPublic} />
+      <Canvas template={template} title={title} boardId={boardId} roomId={roomId} isPublic={isPublic} />
     </>
   );
 }

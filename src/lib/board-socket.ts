@@ -1,6 +1,7 @@
 import { io, type Socket } from "socket.io-client";
 
 export type RemotePresence = {
+  connectionId: string;
   userId: string;
   userName: string;
   cursorX: number | null;
@@ -14,9 +15,12 @@ export type BoardUpdatedEvent = {
   userName: string;
 };
 
+type JoinAck = { ok: boolean; error?: string };
+
 let socket: Socket | null = null;
 let refCount = 0;
 let activeBoardId: string | null = null;
+let joinedBoardId: string | null = null;
 let tokenCache: { token: string; expiresAt: number } | null = null;
 let tokenRequest: Promise<string | null> | null = null;
 
@@ -50,7 +54,7 @@ function createSocket() {
   const url = getSocketUrl();
   if (!url) return null;
   const usesExternalSocket = Boolean((import.meta.env.VITE_SOCKET_URL || "").trim());
-  return io(url, {
+  const client = io(url, {
     path: "/socket.io",
     transports: ["websocket", "polling"],
     withCredentials: true,
@@ -66,6 +70,12 @@ function createSocket() {
     reconnectionAttempts: Infinity,
     timeout: 10_000,
   });
+
+  client.on("connect_error", () => {
+    tokenCache = null;
+  });
+
+  return client;
 }
 
 export function acquireBoardSocket() {
@@ -85,6 +95,7 @@ export function releaseBoardSocket() {
     if (activeBoardId) {
       socket.emit("board:leave", { boardId: activeBoardId });
       activeBoardId = null;
+      joinedBoardId = null;
     }
     socket.removeAllListeners();
     socket.disconnect();
@@ -94,11 +105,20 @@ export function releaseBoardSocket() {
 
 export function joinBoardRoom(boardId: string) {
   if (!socket) return null;
-  if (activeBoardId === boardId) return socket;
-  if (activeBoardId) socket.emit("board:leave", { boardId: activeBoardId });
+  if (activeBoardId === boardId && joinedBoardId === boardId) return socket;
+  if (activeBoardId && activeBoardId !== boardId) {
+    socket.emit("board:leave", { boardId: activeBoardId });
+    joinedBoardId = null;
+  }
   activeBoardId = boardId;
 
-  const join = () => socket?.emit("board:join", { boardId });
+  const join = () => {
+    socket?.emit("board:join", { boardId }, (ack?: JoinAck) => {
+      if (ack?.ok) joinedBoardId = boardId;
+      else joinedBoardId = null;
+    });
+  };
+
   if (socket.connected) join();
   else socket.once("connect", join);
 
@@ -111,6 +131,10 @@ export function getBoardSocket() {
 
 export function isBoardSocketConnected() {
   return !!socket?.connected;
+}
+
+export function isBoardRoomJoined(boardId: string) {
+  return joinedBoardId === boardId && !!socket?.connected;
 }
 
 const CURSOR_COLORS = ["#2563EB", "#DC2626", "#16A34A", "#D97706", "#9333EA", "#0891B2", "#DB2777"];
