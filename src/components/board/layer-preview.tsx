@@ -3,7 +3,7 @@ import { Lock, ExternalLink } from "lucide-react";
 import { LinkCardBody, LinkCardImage, LinkUrlEdge } from "./link-card-parts";
 import type { Layer, LayerReaction } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
-import { LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT } from "@/lib/brand-icons";
+import { estimateLinkBodyHeight, LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT } from "@/lib/brand-icons";
 
 const EMPTY_REACTIONS: LayerReaction[] = [];
 
@@ -115,6 +115,12 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
   const totalStrokeWidth = Math.max(baseShapeStrokeWidth, strokeWidth);
   const shapeScale = layer.width > 0 && layer.height > 0 ? Math.min(layer.width, layer.height) / (Math.min(layer.width, layer.height) + totalStrokeWidth) : 1;
   const linkCardHeight = layer.type === "Link" ? Math.max(0, layer.height - LINK_URL_STRIP_HEIGHT - LINK_CARD_GAP) : 0;
+  const linkBodyHeight =
+    layer.type === "Link"
+      ? estimateLinkBodyHeight(layer.linkTitle || layer.url || "", !!(layer.linkAuthor || layer.linkDescription))
+      : 0;
+  const linkImageHeight =
+    layer.type === "Link" && layer.linkImage ? Math.max(1, linkCardHeight - linkBodyHeight) : undefined;
 
   return (
     <g
@@ -170,7 +176,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           >
             <div
               className="flex flex-col overflow-hidden border border-neutral-200 bg-white shadow-md dark:border-neutral-700 dark:bg-neutral-900"
-              style={{ borderRadius: cornerRadius || 10, height: linkCardHeight }}
+              style={{ borderRadius: cornerRadius || 10, height: linkCardHeight, minHeight: linkCardHeight, maxHeight: linkCardHeight }}
             >
               {layer.linkImage ? (
                 <LinkCardImage
@@ -178,6 +184,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
                   provider={layer.linkProvider}
                   url={layer.url}
                   width={layer.width}
+                  heightOverride={linkImageHeight}
                   imageWidth={layer.linkImageWidth}
                   imageHeight={layer.linkImageHeight}
                   linkVideoId={layer.linkVideoId}

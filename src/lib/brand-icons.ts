@@ -81,7 +81,7 @@ export function getLinkLayerDimensions(preview: {
   const provider = preview.provider;
   const width = defaultCardWidth(provider);
   const hasSubtitle = !!(preview.author || preview.description);
-  const bodyHeight = estimateLinkBodyHeight(preview.title || preview.image ? "Link" : "", hasSubtitle);
+  const bodyHeight = estimateLinkBodyHeight(preview.title || (preview.image ? "Link" : ""), hasSubtitle);
   const chrome = bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;
 
   if (!hasImage) {
