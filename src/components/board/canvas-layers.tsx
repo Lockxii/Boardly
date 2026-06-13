@@ -1,6 +1,7 @@
 import { memo, useMemo } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { getViewportCanvasBounds, isLayerInViewport } from "@/lib/motion-utils";
+import { isHtmlLayerType } from "@/lib/html-layer-types";
 import { LayerPreview } from "./layer-preview";
 import type { Layer } from "@/lib/types";
 
@@ -33,7 +34,7 @@ export const CanvasLayers = memo(function CanvasLayers({
   const visibleIds = useMemo(() => {
     return layerIds.filter((id) => {
       const layer = layers[id];
-      return layer && isLayerInViewport(layer, viewport);
+      return layer && !isHtmlLayerType(layer.type) && isLayerInViewport(layer, viewport);
     });
   }, [layerIds, layers, viewport]);
 

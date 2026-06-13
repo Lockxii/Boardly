@@ -320,8 +320,8 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
               onPointerDown={startMusic}
               title={musicPlaying ? "Pause" : "Écouter un extrait"}
             >
-              <div className={`rounded-full p-3 backdrop-blur-sm transition-all ${
-                musicPlaying ? "bg-blue-600/80 opacity-100" : "bg-black/50 opacity-0 group-hover:opacity-100"
+              <div className={`rounded-full p-3 transition-all ${
+                musicPlaying ? "bg-blue-600/90 opacity-100" : "bg-black/60 opacity-0 group-hover:opacity-100"
               }`}>
                 {musicLoading ? (
                   <Loader2 className="h-5 w-5 animate-spin text-white" />
@@ -383,7 +383,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
       {isVideo && showVideoEmbed && !!videoEmbedUrl && !readOnly && (
         <button
           type="button"
-          className={`absolute top-2 right-2 z-10 rounded-md p-1.5 backdrop-blur-sm pointer-events-auto transition-colors ${
+          className={`absolute top-2 right-2 z-10 rounded-md p-1.5 pointer-events-auto transition-colors ${
             soundOn
               ? "bg-blue-600/90 text-white hover:bg-blue-700/90"
               : "bg-black/55 text-white hover:bg-black/75"
@@ -396,7 +396,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
       )}
 
       {isMusic && hovering && !canPlayMusic && (
-        <div className="absolute top-2 right-2 z-10 rounded-md bg-black/55 px-2 py-1 text-[10px] text-white/80 backdrop-blur-sm pointer-events-none">
+        <div className="absolute top-2 right-2 z-10 rounded-md bg-black/70 px-2 py-1 text-[10px] text-white/90 pointer-events-none">
           Aperçu visuel
         </div>
       )}
@@ -404,11 +404,11 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
       {isVideo && !showVideoEmbed && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors duration-200 group-hover:bg-black/15 pointer-events-none">
           {isResolvingTikTok ? (
-            <div className="rounded-full bg-black/50 px-3 py-1.5 text-[11px] font-medium text-white opacity-100 backdrop-blur-sm">
+            <div className="rounded-full bg-black/65 px-3 py-1.5 text-[11px] font-medium text-white opacity-100">
               Chargement…
             </div>
           ) : (
-            <div className="rounded-full bg-black/50 p-2.5 opacity-0 shadow-sm backdrop-blur-sm transition-opacity duration-200 group-hover:opacity-100">
+            <div className="rounded-full bg-black/65 p-2.5 opacity-0 shadow-sm transition-opacity duration-200 group-hover:opacity-100">
               <Play className="h-5 w-5 fill-white text-white" />
             </div>
           )}

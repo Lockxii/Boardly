@@ -186,6 +186,22 @@
   stroke-width: 3px;
 }
 
+.html-layer-item {
+  isolation: isolate;
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+}
+
+.layer-flash-html {
+  animation: layer-flash-html 0.85s ease-out;
+}
+
+@keyframes layer-flash-html {
+  0% { box-shadow: 0 0 0 rgba(37, 99, 235, 0); }
+  35% { box-shadow: 0 0 18px rgba(37, 99, 235, 0.55); }
+  100% { box-shadow: 0 0 0 rgba(37, 99, 235, 0); }
+}
+
 .layer-flash .layer-flash-target,
 .layer-flash > rect:first-of-type,
 .layer-flash > foreignObject {

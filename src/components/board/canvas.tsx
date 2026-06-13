@@ -17,6 +17,7 @@ import { ConnectionTools } from "./connection-tools";
 import { CursorsPresence } from "./cursors-presence";
 import { BoardSearchDialog } from "./board-search-dialog";
 import { LayerCommentsPanel } from "./layer-comments-panel";
+import { HtmlLayerOverlay } from "./html-layer-overlay";
 import { CanvasLayers } from "./canvas-layers";
 import { CanvasOverlay } from "./canvas-overlay";
 import { PasteGhost } from "./paste-ghost";
@@ -962,6 +963,14 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <StatusBar />
       {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
+      <HtmlLayerOverlay
+        camera={camera}
+        readOnly={readOnly}
+        onLayerPointerDown={onLayerPointerDown}
+        onLayerResizePointerDown={onResizeHandlePointerDown}
+        onLayerRotatePointerDown={onLayerRotatePointerDown}
+        onChange={(id, val) => updateLayerText(id, val)}
+      />
       <svg
         id="board-canvas"
         className="w-[100vw] h-[100vh] overscroll-none"

@@ -84,7 +84,7 @@ export function LinkCardImage({
 
   const brandBadge =
     resolved !== "generic" ? (
-      <div className="absolute bottom-2 left-2 rounded-md bg-black/55 p-1.5 shadow-sm backdrop-blur-sm pointer-events-none">
+      <div className="absolute bottom-2 left-2 rounded-md bg-black/70 p-1.5 shadow-sm pointer-events-none">
         <BrandLogo provider={resolved} className="h-4 w-4" mono={!isColorLinkLogo(resolved)} />
       </div>
     ) : null;
@@ -181,10 +181,10 @@ export function LinkUrlEdge({
       onPointerDown={(e) => e.stopPropagation()}
     >
       <div
-        className={`flex h-full items-center gap-1.5 rounded-md border px-2 text-[10px] shadow-sm backdrop-blur-sm ${
+        className={`flex h-full items-center gap-1.5 rounded-md border px-2 text-[10px] shadow-sm ${
           editable
-            ? "border-blue-300 bg-blue-50/95 ring-1 ring-blue-200 dark:border-blue-700 dark:bg-blue-950/80"
-            : "border-neutral-200 bg-white/95 dark:border-neutral-700 dark:bg-neutral-900/95"
+            ? "border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-950/90"
+            : "border-neutral-200 bg-white dark:border-neutral-700 dark:bg-neutral-900"
         }`}
       >
         <ExternalLink className="h-3 w-3 shrink-0 text-blue-500" />
