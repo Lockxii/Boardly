@@ -1,34 +1,35 @@
 import { cn } from "@/lib/utils";
+import fredAiIcon from "@/assets/fred-ai.png";
 
-export const FRED_AI_ICON = "/fred-ai.png";
+export const FRED_AI_ICON = fredAiIcon;
 
 type FredAvatarProps = {
   className?: string;
   size?: number;
 };
 
-export function FredAvatar({ className, size = 32 }: FredAvatarProps) {
+export function FredAvatar({ className, size = 36 }: FredAvatarProps) {
   return (
     <img
-      src={FRED_AI_ICON}
+      src={fredAiIcon}
       alt="Fred AI"
       width={size}
       height={size}
-      className={cn("shrink-0 rounded-xl object-cover shadow-sm", className)}
+      className={cn("shrink-0 object-contain", className)}
       draggable={false}
     />
   );
 }
 
-export function FredIcon({ className, size = 20 }: FredAvatarProps) {
+export function FredIcon({ className, size = 22 }: FredAvatarProps) {
   return (
     <img
-      src={FRED_AI_ICON}
+      src={fredAiIcon}
       alt=""
       aria-hidden
       width={size}
       height={size}
-      className={cn("shrink-0 rounded-md object-cover", className)}
+      className={cn("shrink-0 object-contain", className)}
       draggable={false}
     />
   );

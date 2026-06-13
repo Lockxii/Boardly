@@ -404,7 +404,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <GripHorizontal className="h-4 w-4 shrink-0 text-neutral-400" />
-          <FredAvatar size={28} className="h-7 w-7" />
+          <FredAvatar size={36} className="h-9 w-9" />
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold tracking-tight">Fred AI</h3>
             <button
@@ -493,7 +493,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
           const isUser = msg.role === "user";
           return (
             <div key={msg.id} className={cn("flex gap-2", isUser ? "flex-row-reverse" : "flex-row")}>
-              {!isUser && <FredAvatar size={28} className="mt-0.5 h-7 w-7" />}
+              {!isUser && <FredAvatar size={32} className="mt-0.5 h-8 w-8" />}
               <div className={cn("max-w-[88%] space-y-2", isUser && "items-end")}>
                 {msg.linkedLayerIds && msg.linkedLayerIds.length > 0 && (
                   <button

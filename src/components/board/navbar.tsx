@@ -318,7 +318,7 @@ function NavbarContent({
             title="Fred AI (Shift+A)"
             className={btnSize}
           >
-            <FredIcon size={vertical ? 18 : compact ? 18 : 22} />
+            <FredIcon size={vertical ? 20 : compact ? 20 : 24} />
           </NavIconButton>
         )}
         <NavIconButton active={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion" className={btnSize}>
