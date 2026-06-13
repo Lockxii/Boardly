@@ -3,6 +3,7 @@ import { Lock, ExternalLink } from "lucide-react";
 import { LinkCardBody, LinkCardImage, LinkUrlEdge } from "./link-card-parts";
 import type { Layer, LayerReaction } from "@/lib/types";
 import { useCanvasStore } from "@/store/canvas-store";
+import { LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT } from "@/lib/brand-icons";
 
 const EMPTY_REACTIONS: LayerReaction[] = [];
 
@@ -113,17 +114,16 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
   const baseShapeStrokeWidth = cornerRadius * 2;
   const totalStrokeWidth = Math.max(baseShapeStrokeWidth, strokeWidth);
   const shapeScale = layer.width > 0 && layer.height > 0 ? Math.min(layer.width, layer.height) / (Math.min(layer.width, layer.height) + totalStrokeWidth) : 1;
+  const linkCardHeight = layer.type === "Link" ? Math.max(0, layer.height - LINK_URL_STRIP_HEIGHT - LINK_CARD_GAP) : 0;
 
   return (
     <g
+      transform={`translate(${layer.x} ${layer.y}) rotate(${rotation} ${layer.width / 2} ${layer.height / 2})`}
       onPointerDown={(e) => onLayerPointerDown(e, id)}
       onDoubleClick={handleDoubleClick}
       className={highlighted ? "layer-flash" : undefined}
       style={{
-        transform: `translate(${layer.x}px, ${layer.y}px) rotate(${rotation}deg)`,
-        transformOrigin: `${layer.width / 2}px ${layer.height / 2}px`,
         cursor: isLocked ? "default" : "move",
-        willChange: "transform",
       }}
     >
       {layer.type === "Path" && (
@@ -164,10 +164,13 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
       )}
       {layer.type === "Link" && (
         <foreignObject width={layer.width} height={layer.height} style={{ overflow: "visible" }}>
-          <div className="flex h-full w-full flex-col gap-1">
+          <div
+            className="flex flex-col"
+            style={{ width: layer.width, height: layer.height, gap: LINK_CARD_GAP }}
+          >
             <div
               className="flex flex-col overflow-hidden border border-neutral-200 bg-white shadow-md dark:border-neutral-700 dark:bg-neutral-900"
-              style={{ borderRadius: cornerRadius || 10 }}
+              style={{ borderRadius: cornerRadius || 10, height: linkCardHeight }}
             >
               {layer.linkImage ? (
                 <LinkCardImage

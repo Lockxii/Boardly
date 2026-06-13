@@ -994,7 +994,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
             <circle cx="5" cy="5" r="3.5" fill="context-stroke" />
           </marker>
         </defs>
-        <g className="canvas-g" style={{ transform: `translate3d(${camera.x}px, ${camera.y}px, 0) scale(${camera.zoom})`, transformOrigin: "0 0" }}>
+        <g className="canvas-g" transform={`translate(${camera.x} ${camera.y}) scale(${camera.zoom})`}>
           {showGrid && template === "grid" && <rect x="-100000" y="-100000" width="200000" height="200000" fill="url(#grid-pattern)" />}
           {showGrid && template === "blueprint" && (
             <>

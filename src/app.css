@@ -151,12 +151,6 @@
   touch-action: none;
 }
 
-/* Smooth canvas transitions */
-.canvas-g {
-  will-change: transform;
-  backface-visibility: hidden;
-}
-
 .layer-translate-ghost {
   fill: rgba(59, 130, 246, 0.12);
   stroke: rgba(59, 130, 246, 0.45);
