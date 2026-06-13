@@ -309,19 +309,24 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   };
 
   const onHeaderPointerMove = (e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.startX;
-    const dy = e.clientY - dragRef.current.startY;
+    const drag = dragRef.current;
+    if (!drag) return;
+    const dx = e.clientX - drag.startX;
+    const dy = e.clientY - drag.startY;
     setLayout((l) => ({
       ...l,
-      x: Math.max(8, Math.min(window.innerWidth - l.width - 8, dragRef.current!.origX + dx)),
-      y: Math.max(8, Math.min(window.innerHeight - 120, dragRef.current!.origY + dy)),
+      x: Math.max(8, Math.min(window.innerWidth - l.width - 8, drag.origX + dx)),
+      y: Math.max(8, Math.min(window.innerHeight - 120, drag.origY + dy)),
     }));
   };
 
   const onHeaderPointerUp = (e: React.PointerEvent) => {
     dragRef.current = null;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* pointer already released */
+    }
   };
 
   const onResizePointerDown = (e: React.PointerEvent) => {
@@ -337,19 +342,24 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   };
 
   const onResizePointerMove = (e: React.PointerEvent) => {
-    if (!resizeRef.current) return;
-    const dx = e.clientX - resizeRef.current.startX;
-    const dy = e.clientY - resizeRef.current.startY;
+    const resize = resizeRef.current;
+    if (!resize) return;
+    const dx = e.clientX - resize.startX;
+    const dy = e.clientY - resize.startY;
     setLayout((l) => ({
       ...l,
-      width: Math.max(MIN_WIDTH, Math.min(window.innerWidth - l.x - 8, resizeRef.current!.origW + dx)),
-      height: Math.max(MIN_HEIGHT, Math.min(window.innerHeight - l.y - 8, resizeRef.current!.origH + dy)),
+      width: Math.max(MIN_WIDTH, Math.min(window.innerWidth - l.x - 8, resize.origW + dx)),
+      height: Math.max(MIN_HEIGHT, Math.min(window.innerHeight - l.y - 8, resize.origH + dy)),
     }));
   };
 
   const onResizePointerUp = (e: React.PointerEvent) => {
     resizeRef.current = null;
-    (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* pointer already released */
+    }
   };
 
   const linkedImageCount = countLinkedImages(linkedIds, layers);
@@ -364,6 +374,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
         onPointerDown={onHeaderPointerDown}
         onPointerMove={onHeaderPointerMove}
         onPointerUp={onHeaderPointerUp}
+        onPointerCancel={onHeaderPointerUp}
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <GripHorizontal className="h-4 w-4 shrink-0 text-neutral-400" />
@@ -528,6 +539,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
         onPointerDown={onResizePointerDown}
         onPointerMove={onResizePointerMove}
         onPointerUp={onResizePointerUp}
+        onPointerCancel={onResizePointerUp}
         aria-hidden
       >
         <svg viewBox="0 0 16 16" className="h-full w-full text-neutral-300 dark:text-neutral-600">
