@@ -15,7 +15,7 @@ export function FredAvatar({ className, size = 36 }: FredAvatarProps) {
       alt="Fred AI"
       width={size}
       height={size}
-      className={cn("shrink-0 object-contain", className)}
+      className={cn("shrink-0 object-contain bg-transparent", className)}
       draggable={false}
     />
   );
@@ -29,7 +29,7 @@ export function FredIcon({ className, size = 22 }: FredAvatarProps) {
       aria-hidden
       width={size}
       height={size}
-      className={cn("shrink-0 object-contain", className)}
+      className={cn("shrink-0 object-contain bg-transparent", className)}
       draggable={false}
     />
   );
