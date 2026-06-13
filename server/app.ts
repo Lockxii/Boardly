@@ -3,6 +3,7 @@ import cors from "cors";
 import { existsSync } from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { Liveblocks } from "@liveblocks/node";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth.js";
 import { prisma } from "./prisma.js";
@@ -24,6 +25,18 @@ function getAppOrigin() {
   }
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return "http://localhost:5173";
+}
+
+function getLiveblocksSecret() {
+  return process.env.LIVEBLOCKS_SECRET_KEY || process.env.LIVEBLOCKS_SECRET;
+}
+
+function boardIdFromLiveblocksRoom(room: unknown) {
+  if (typeof room !== "string") return null;
+  const prefix = "board:";
+  if (!room.startsWith(prefix)) return null;
+  const boardId = room.slice(prefix.length).trim();
+  return boardId || null;
 }
 
 async function getSessionUser(req: express.Request) {
@@ -156,6 +169,32 @@ export function createApp() {
         name: user.name,
       })
     );
+  }));
+
+  app.post("/api/liveblocks-auth", requireAuth(async (req, res, user) => {
+    const secret = getLiveblocksSecret();
+    if (!secret) return res.status(500).json({ error: "Liveblocks non configuré" });
+    if (!user.email) return res.status(400).json({ error: "Email utilisateur manquant" });
+
+    const room = String(req.body?.room || "");
+    const boardId = boardIdFromLiveblocksRoom(room);
+    if (!boardId) return res.status(400).json({ error: "invalid_room" });
+
+    const access = await getBoardAccess(boardId, user as { id: string; email: string });
+    if (!access) return res.status(403).json({ error: "forbidden", reason: "Accès refusé" });
+
+    const liveblocks = new Liveblocks({ secret });
+    const session = liveblocks.prepareSession(user.id, {
+      userInfo: {
+        name: user.name,
+        email: user.email,
+        role: access.role,
+      },
+    });
+
+    session.allow(room, session.FULL_ACCESS);
+    const { body, status } = await session.authorize();
+    res.status(status).type("application/json").send(body);
   }));
 
   app.post("/api/realtime/board-updated", async (req, res) => {

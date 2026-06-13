@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { applyLiveBoardPatch, applyRemoteBoardUpdate, createBoardLivePatch, type BoardLivePatch } from "@/lib/board-remote-sync";
-import { apiFetch } from "@/lib/utils";
 import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
 import type { BoardCanvasData, Layer } from "@/lib/types";
@@ -139,17 +138,20 @@ function easeOutCubic(t: number) {
 export function CursorsPresence({
   boardId,
   readOnly = false,
+  onStatusChange,
+  onOnlineCountChange,
 }: {
   boardId: string;
   camera: { x: number; y: number; zoom: number };
   readOnly?: boolean;
+  onStatusChange?: (live: boolean) => void;
+  onOnlineCountChange?: (count: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const peersRef = useRef(new Map<string, Peer>());
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const lastEmitRef = useRef<{ x: number; y: number } | null>(null);
   const lastEmitAtRef = useRef(0);
-  const presenceLiveRef = useRef(false);
   const presenceRef = useRef<ReturnType<typeof createPresenceConnection> | null>(null);
   const applyingRemoteCanvasRef = useRef(false);
   const publishedCanvasRef = useRef<BoardCanvasData | null>(null);
@@ -217,7 +219,13 @@ export function CursorsPresence({
 
     const onPresenceState = (users: RemotePresence[]) => {
       if (cancelled) return;
-      presenceLiveRef.current = true;
+      onOnlineCountChange?.(users.length);
+      const activeConnectionIds = new Set(users.map((user) => user.connectionId));
+      for (const [connectionId, peer] of peersRef.current) {
+        if (activeConnectionIds.has(connectionId)) continue;
+        peer.el?.remove();
+        peersRef.current.delete(connectionId);
+      }
       for (const user of users) upsertPeer(user);
     };
 
@@ -228,7 +236,6 @@ export function CursorsPresence({
 
     const onPresenceCursor = (user: RemotePresence) => {
       if (cancelled) return;
-      presenceLiveRef.current = true;
       upsertPeer(user);
     };
 
@@ -266,6 +273,25 @@ export function CursorsPresence({
       if (!canvasEmitTimerRef.current) {
         canvasEmitTimerRef.current = window.setTimeout(flushQueuedCanvas, CANVAS_EMIT_INTERVAL_MS - elapsed);
       }
+    };
+
+    const currentPointerOrViewportCenter = () => {
+      const pointer = pointerRef.current;
+      if (pointer) return pointer;
+      const cam = useCanvasStore.getState().camera;
+      return {
+        x: (window.innerWidth / 2 - cam.x) / cam.zoom,
+        y: (window.innerHeight / 2 - cam.y) / cam.zoom,
+      };
+    };
+
+    const publishCurrentCursor = () => {
+      if (readOnly) return;
+      const cursor = currentPointerOrViewportCenter();
+      pointerRef.current = cursor;
+      lastEmitAtRef.current = performance.now();
+      lastEmitRef.current = { x: cursor.x, y: cursor.y };
+      presenceRef.current?.sendCursor(cursor.x, cursor.y);
     };
 
     const animateRemoteLayers = () => {
@@ -313,11 +339,12 @@ export function CursorsPresence({
 
     presenceRef.current = createPresenceConnection(boardId, {
       onOpen: () => {
-        presenceLiveRef.current = true;
+        onStatusChange?.(true);
+        publishCurrentCursor();
         flushQueuedCanvas();
       },
       onClose: () => {
-        presenceLiveRef.current = false;
+        onStatusChange?.(false);
       },
       onState: onPresenceState,
       onJoin: onPresenceJoin,
@@ -413,32 +440,8 @@ export function CursorsPresence({
       queueCanvas(canvasData);
     });
 
-    const syncHttpFallback = async () => {
-      if (cancelled || presenceLiveRef.current) return;
-      try {
-        const latest = pointerRef.current;
-        if (!readOnly) {
-          await apiFetch(`/api/boards/${boardId}/presence`, {
-            method: "POST",
-            body: JSON.stringify({
-              cursorX: latest?.x ?? null,
-              cursorY: latest?.y ?? null,
-            }),
-          });
-        }
-        const data = await apiFetch<RemotePresence[]>(`/api/boards/${boardId}/presence`);
-        if (cancelled || presenceLiveRef.current) return;
-        for (const user of data) upsertPeer(normalizePresence(user));
-      } catch {
-        /* offline */
-      }
-    };
-
-    const httpInterval = setInterval(syncHttpFallback, 2000);
-
     return () => {
       cancelled = true;
-      clearInterval(httpInterval);
       window.clearTimeout(canvasEmitTimerRef.current);
       cancelAnimationFrame(remoteLayerAnimationFrameRef.current);
       remoteLayerAnimationFrameRef.current = 0;
@@ -448,8 +451,10 @@ export function CursorsPresence({
       presenceRef.current = null;
       for (const peer of peersRef.current.values()) peer.el?.remove();
       peersRef.current.clear();
+      onStatusChange?.(false);
+      onOnlineCountChange?.(0);
     };
-  }, [boardId, readOnly]);
+  }, [boardId, readOnly, onStatusChange, onOnlineCountChange]);
 
   useEffect(() => {
     if (readOnly) return;

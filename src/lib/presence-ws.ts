@@ -1,5 +1,6 @@
-import { getRealtimeToken, type RemotePresence } from "@/lib/board-socket";
+import { createClient, type Client, type JsonObject, type Room, type User } from "@liveblocks/client";
 import type { BoardLivePatch } from "@/lib/board-remote-sync";
+import type { RemotePresence } from "@/lib/board-socket";
 import type { BoardCanvasData } from "@/lib/types";
 
 export type LiveCanvasUpdate = {
@@ -21,134 +22,177 @@ type PresenceHandlers = {
   onCanvas?: (update: LiveCanvasUpdate) => void;
 };
 
-function getPresenceBaseUrl() {
-  return (import.meta.env.VITE_SOCKET_URL || "").trim() || window.location.origin;
+type LiveblocksPresence = {
+  cursor: { x: number; y: number } | null;
+};
+
+type LiveblocksStorage = Record<string, never>;
+
+type LiveblocksUserMeta = {
+  id: string;
+  info: {
+    name?: string;
+    email?: string;
+    role?: string;
+  };
+};
+
+type LiveblocksRoomEvent = JsonObject;
+
+type BoardLiveblocksRoom = Room<LiveblocksPresence, LiveblocksStorage, LiveblocksUserMeta, LiveblocksRoomEvent>;
+type BoardLiveblocksUser = User<LiveblocksPresence, LiveblocksUserMeta>;
+
+let client: Client<LiveblocksUserMeta> | null = null;
+
+function getClient() {
+  if (!client) {
+    client = createClient<LiveblocksUserMeta>({
+      throttle: 16,
+      lostConnectionTimeout: 1000,
+      authEndpoint: async (room) => {
+        const response = await fetch("/api/liveblocks-auth", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ room }),
+        });
+        return await response.json();
+      },
+    });
+  }
+  return client;
 }
 
-function buildPresenceUrl(boardId: string, connectionId: string, token: string) {
-  const url = new URL(`/api/presence/${encodeURIComponent(boardId)}`, getPresenceBaseUrl());
-  url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-  url.searchParams.set("connectionId", connectionId);
-  url.searchParams.set("token", token);
-  return url.toString();
+function roomIdForBoard(boardId: string) {
+  return `board:${boardId}`;
+}
+
+function userName(user: BoardLiveblocksUser | null) {
+  return user?.info?.name || "Collaborateur";
+}
+
+function toRemotePresence(user: BoardLiveblocksUser): RemotePresence {
+  const cursor = user.presence.cursor;
+  return {
+    connectionId: String(user.connectionId),
+    userId: user.id || String(user.connectionId),
+    userName: userName(user),
+    cursorX: cursor?.x ?? null,
+    cursorY: cursor?.y ?? null,
+  };
 }
 
 export function createPresenceConnection(boardId: string, handlers: PresenceHandlers) {
-  const connectionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
-  let socket: WebSocket | null = null;
-  let reconnectTimer = 0;
-  let heartbeatTimer = 0;
-  let closed = false;
-  let retry = 0;
+  const localConnectionId = crypto.randomUUID?.() || Math.random().toString(36).slice(2);
+  const { room, leave } = getClient().enterRoom<LiveblocksPresence, LiveblocksStorage, LiveblocksRoomEvent>(
+    roomIdForBoard(boardId),
+    {
+      initialPresence: { cursor: null },
+    }
+  );
+  const boardRoom = room;
+  const unsubscribers: Array<() => void> = [];
+  let connected = boardRoom.getStatus() === "connected";
 
-  const cleanupSocket = () => {
-    window.clearInterval(heartbeatTimer);
-    heartbeatTimer = 0;
-    if (!socket) return;
-    socket.onopen = null;
-    socket.onclose = null;
-    socket.onerror = null;
-    socket.onmessage = null;
-    socket.close();
-    socket = null;
+  const emitState = () => {
+    handlers.onState?.(boardRoom.getOthers().map(toRemotePresence));
   };
 
-  const scheduleReconnect = () => {
-    if (closed) return;
-    window.clearTimeout(reconnectTimer);
-    const delay = Math.min(4000, 250 * 2 ** retry);
-    retry += 1;
-    reconnectTimer = window.setTimeout(connect, delay);
-  };
+  unsubscribers.push(
+    boardRoom.subscribe("status", (status) => {
+      const nextConnected = status === "connected";
+      if (nextConnected === connected) return;
+      connected = nextConnected;
+      if (nextConnected) {
+        handlers.onOpen?.();
+        emitState();
+      } else {
+        handlers.onClose?.();
+      }
+    })
+  );
 
-  const handleMessage = (event: MessageEvent) => {
-    let message: { type?: string; payload?: unknown };
-    try {
-      message = JSON.parse(String(event.data));
-    } catch {
-      return;
-    }
+  unsubscribers.push(
+    boardRoom.subscribe("others", (others, event) => {
+      handlers.onState?.(others.map(toRemotePresence));
 
-    switch (message.type) {
-      case "presence:state":
-        handlers.onState?.((Array.isArray(message.payload) ? message.payload : []) as RemotePresence[]);
-        break;
-      case "presence:join":
-        handlers.onJoin?.(message.payload as RemotePresence);
-        break;
-      case "presence:cursor":
-        handlers.onCursor?.(message.payload as RemotePresence);
-        break;
-      case "presence:leave":
-        handlers.onLeave?.(message.payload as { connectionId?: string; userId?: string });
-        break;
-      case "canvas:live":
-        handlers.onCanvas?.(message.payload as LiveCanvasUpdate);
-        break;
-      case "canvas:patch":
-        handlers.onCanvas?.(message.payload as LiveCanvasUpdate);
-        break;
-    }
-  };
+      if (event.type === "enter") {
+        const user = toRemotePresence(event.user);
+        handlers.onJoin?.(user);
+        if (user.cursorX != null && user.cursorY != null) handlers.onCursor?.(user);
+        return;
+      }
 
-  async function connect() {
-    if (closed) return;
-    cleanupSocket();
-    const token = await getRealtimeToken();
-    if (!token || closed) {
-      scheduleReconnect();
-      return;
-    }
+      if (event.type === "leave") {
+        handlers.onLeave?.({
+          connectionId: String(event.user.connectionId),
+          userId: event.user.id,
+        });
+        return;
+      }
 
-    const nextSocket = new WebSocket(buildPresenceUrl(boardId, connectionId, token));
-    socket = nextSocket;
+      if (event.type === "update") {
+        handlers.onCursor?.(toRemotePresence(event.user));
+        return;
+      }
 
-    nextSocket.onopen = () => {
-      retry = 0;
+      handlers.onState?.(others.map(toRemotePresence));
+    })
+  );
+
+  unsubscribers.push(
+    boardRoom.subscribe("event", ({ event, user, connectionId }) => {
+      if (event.type === "canvas:patch" && typeof event.updatedAt === "string" && event.patch) {
+        handlers.onCanvas?.({
+          connectionId: String(connectionId),
+          userId: user?.id || String(connectionId),
+          userName: userName(user),
+          updatedAt: event.updatedAt,
+          patch: event.patch as BoardLivePatch,
+        });
+        return;
+      }
+
+      if (event.type === "canvas:live" && typeof event.updatedAt === "string" && event.canvasData) {
+        handlers.onCanvas?.({
+          connectionId: String(connectionId),
+          userId: user?.id || String(connectionId),
+          userName: userName(user),
+          updatedAt: event.updatedAt,
+          canvasData: event.canvasData as BoardCanvasData,
+        });
+      }
+    })
+  );
+
+  if (connected) {
+    queueMicrotask(() => {
       handlers.onOpen?.();
-      heartbeatTimer = window.setInterval(() => {
-        if (nextSocket.readyState === WebSocket.OPEN) {
-          nextSocket.send(JSON.stringify({ type: "ping" }));
-        }
-      }, 20_000);
-    };
-    nextSocket.onmessage = handleMessage;
-    nextSocket.onerror = () => {
-      nextSocket.close();
-    };
-    nextSocket.onclose = () => {
-      if (socket === nextSocket) socket = null;
-      handlers.onClose?.();
-      window.clearInterval(heartbeatTimer);
-      heartbeatTimer = 0;
-      scheduleReconnect();
-    };
+      emitState();
+    });
   }
 
-  void connect();
-
   return {
-    connectionId,
-    isOpen: () => socket?.readyState === WebSocket.OPEN,
+    connectionId: localConnectionId,
+    isOpen: () => boardRoom.getStatus() === "connected",
     sendCursor: (cursorX: number, cursorY: number) => {
-      if (socket?.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: "cursor", cursorX, cursorY }));
+      if (boardRoom.getStatus() === "disconnected") return false;
+      boardRoom.updatePresence({ cursor: { x: cursorX, y: cursorY } });
       return true;
     },
     sendCanvas: (canvasData: BoardCanvasData, updatedAt = new Date().toISOString()) => {
-      if (socket?.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: "canvas", canvasData, updatedAt }));
+      if (boardRoom.getStatus() === "disconnected") return false;
+      boardRoom.broadcastEvent({ type: "canvas:live", canvasData, updatedAt } as unknown as LiveblocksRoomEvent);
       return true;
     },
     sendCanvasPatch: (patch: BoardLivePatch) => {
-      if (socket?.readyState !== WebSocket.OPEN) return false;
-      socket.send(JSON.stringify({ type: "canvas:patch", patch }));
+      if (boardRoom.getStatus() === "disconnected") return false;
+      boardRoom.broadcastEvent({ type: "canvas:patch", patch, updatedAt: patch.updatedAt } as unknown as LiveblocksRoomEvent);
       return true;
     },
     close: () => {
-      closed = true;
-      window.clearTimeout(reconnectTimer);
-      cleanupSocket();
+      for (const unsubscribe of unsubscribers) unsubscribe();
+      leave();
     },
   };
 }

@@ -1,19 +1,11 @@
-import { useEffect, useLayoutEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Canvas } from "./canvas";
 import { useCanvasStore } from "@/store/canvas-store";
 import { RouteLoading } from "@/components/route-loading";
 import { apiFetch } from "@/lib/utils";
 import { applyRemoteBoardUpdate } from "@/lib/board-remote-sync";
-import {
-  acquireBoardSocket,
-  joinBoardRoom,
-  releaseBoardSocket,
-  getBoardSocket,
-  type BoardUpdatedEvent,
-} from "@/lib/board-socket";
 import { fitCameraToBoard } from "@/lib/canvas-utils";
-import { fetchCurrentUser } from "@/lib/auth-client";
 
 interface RoomProps {
   roomId: string;
@@ -26,7 +18,7 @@ interface RoomProps {
 
 export function Room({ roomId, template, title, boardId, isPublic, isOwner = false }: RoomProps) {
   const [ready, setReady] = useState(false);
-  const [socketLive, setSocketLive] = useState(false);
+  const [realtimeLive, setRealtimeLive] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
   const queryClient = useQueryClient();
   const loadBoard = useCanvasStore((s) => s.loadBoard);
@@ -71,22 +63,11 @@ export function Room({ roomId, template, title, boardId, isPublic, isOwner = fal
     };
   }, [ready, roomId, saveBoard, queryClient]);
 
-  useLayoutEffect(() => {
-    if (!ready) return;
-    acquireBoardSocket();
-    joinBoardRoom(roomId);
-  }, [ready, roomId]);
-
   useEffect(() => {
     if (!ready) return;
 
     let cancelled = false;
     let remoteUpdatedAt = 0;
-    let currentUserId: string | null = null;
-
-    void fetchCurrentUser().then((user) => {
-      currentUserId = user?.id ?? null;
-    });
 
     const pullRemote = async (options: { userId?: string; userName?: string; notify?: boolean } = {}) => {
       try {
@@ -102,45 +83,6 @@ export function Room({ roomId, template, title, boardId, isPublic, isOwner = fal
       }
     };
 
-    const onConnect = () => {
-      if (!cancelled) setSocketLive(true);
-      joinBoardRoom(roomId);
-    };
-    const onDisconnect = () => {
-      if (!cancelled) setSocketLive(false);
-    };
-    const onConnectError = () => {
-      if (!cancelled) setSocketLive(false);
-    };
-
-    const onBoardUpdated = (event: BoardUpdatedEvent) => {
-      if (event.boardId !== roomId) return;
-      if (currentUserId && event.userId === currentUserId) return;
-      void pullRemote({ userId: event.userId, userName: event.userName });
-    };
-
-    const onPresenceState = (users: unknown[]) => {
-      if (!cancelled) setOnlineCount(users.length);
-    };
-    const onPresenceJoin = () => {
-      if (!cancelled) setOnlineCount((count) => count + 1);
-    };
-    const onPresenceLeave = () => {
-      if (!cancelled) setOnlineCount((count) => Math.max(0, count - 1));
-    };
-
-    const socket = getBoardSocket();
-    if (socket) {
-      socket.on("connect", onConnect);
-      socket.on("disconnect", onDisconnect);
-      socket.on("connect_error", onConnectError);
-      socket.on("board:updated", onBoardUpdated);
-      socket.on("presence:state", onPresenceState);
-      socket.on("presence:join", onPresenceJoin);
-      socket.on("presence:leave", onPresenceLeave);
-      if (socket.connected) onConnect();
-    }
-
     const pollInterval = setInterval(() => {
       void pullRemote();
     }, 8000);
@@ -148,14 +90,6 @@ export function Room({ roomId, template, title, boardId, isPublic, isOwner = fal
     return () => {
       cancelled = true;
       clearInterval(pollInterval);
-      socket?.off("connect", onConnect);
-      socket?.off("disconnect", onDisconnect);
-      socket?.off("connect_error", onConnectError);
-      socket?.off("board:updated", onBoardUpdated);
-      socket?.off("presence:state", onPresenceState);
-      socket?.off("presence:join", onPresenceJoin);
-      socket?.off("presence:leave", onPresenceLeave);
-      releaseBoardSocket();
     };
   }, [ready, roomId]);
 
@@ -165,13 +99,13 @@ export function Room({ roomId, template, title, boardId, isPublic, isOwner = fal
 
   return (
     <>
-      {socketLive && (
+      {realtimeLive && (
         <div
           className="pointer-events-none fixed bottom-3 left-3 z-[60] flex items-center gap-2"
         >
           <div
             className="flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-300"
-            title="Collaboration temps réel active"
+            title="Collaboration temps réel active avec Liveblocks"
           >
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
             Live
@@ -183,7 +117,16 @@ export function Room({ roomId, template, title, boardId, isPublic, isOwner = fal
           )}
         </div>
       )}
-      <Canvas template={template} title={title} boardId={boardId} roomId={roomId} isPublic={isPublic} isOwner={isOwner} />
+      <Canvas
+        template={template}
+        title={title}
+        boardId={boardId}
+        roomId={roomId}
+        isPublic={isPublic}
+        isOwner={isOwner}
+        onRealtimeStatusChange={setRealtimeLive}
+        onRealtimeOnlineCountChange={setOnlineCount}
+      />
     </>
   );
 }
