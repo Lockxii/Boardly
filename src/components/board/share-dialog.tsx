@@ -14,10 +14,12 @@ export function ShareDialog({
   boardId,
   isPublic = false,
   iconOnly = false,
+  canManage = false,
 }: {
   boardId: string;
   isPublic?: boolean;
   iconOnly?: boolean;
+  canManage?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [publicEnabled, setPublicEnabled] = useState(isPublic);
@@ -113,6 +115,9 @@ export function ShareDialog({
           <section className="space-y-2">
             <Label className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Collaborateurs</Label>
             <p className="text-xs text-neutral-500">Toute personne connectée avec ce lien peut éditer le board.</p>
+            {!canManage && (
+              <p className="text-xs text-neutral-500">Vous pouvez modifier le contenu, mais seul le propriétaire gère les accès.</p>
+            )}
             <div className="flex gap-2">
               <Input readOnly value={inviteUrl} className="text-xs font-mono" />
               <Button variant="outline" size="icon" onClick={copyInvite} title="Copier le lien">
@@ -143,15 +148,17 @@ export function ShareDialog({
                       <p className="text-sm font-medium truncate dark:text-white">{member.email}</p>
                       <p className="text-[10px] text-neutral-500 uppercase">{member.role}</p>
                     </div>
-                    <NavIconButton
-                      className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-950 shrink-0"
-                      title="Retirer"
-                      onClick={() => {
-                        if (confirm(`Retirer l'accès à ${member.email} ?`)) removeMutation.mutate(member.email);
-                      }}
-                    >
-                      <XCircle className="h-4 w-4" />
-                    </NavIconButton>
+                    {canManage && (
+                      <NavIconButton
+                        className="h-8 w-8 text-red-500 hover:bg-red-50 dark:hover:bg-red-950 shrink-0"
+                        title="Retirer"
+                        onClick={() => {
+                          if (confirm(`Retirer l'accès à ${member.email} ?`)) removeMutation.mutate(member.email);
+                        }}
+                      >
+                        <XCircle className="h-4 w-4" />
+                      </NavIconButton>
+                    )}
                   </div>
                 ))}
               </div>
@@ -170,7 +177,7 @@ export function ShareDialog({
               <Button
                 variant={publicEnabled ? "default" : "outline"}
                 size="sm"
-                disabled={patchMutation.isPending}
+                disabled={!canManage || patchMutation.isPending}
                 onClick={() => patchMutation.mutate(!publicEnabled)}
               >
                 {publicEnabled ? "Activé" : "Activer"}

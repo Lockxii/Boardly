@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,18 @@ import { BoardlyBrand } from "@/components/boardly-brand";
 import { MousePointer2, ArrowRight, Eye, EyeOff, Loader2 } from "lucide-react";
 import { authClient, fetchCurrentUser } from "@/lib/auth-client";
 
+function getSafeRedirectPath() {
+  const raw = new URLSearchParams(window.location.search).get("redirect");
+  if (!raw) return "/dashboard";
+  try {
+    const url = new URL(raw, window.location.origin);
+    if (url.origin !== window.location.origin) return "/dashboard";
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return "/dashboard";
+  }
+}
+
 export function SignInPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
@@ -17,8 +28,8 @@ export function SignInPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const redirectPath = getSafeRedirectPath();
 
   const { data: user, isLoading: authLoading } = useQuery({
     queryKey: ["auth", "me"],
@@ -28,8 +39,8 @@ export function SignInPage() {
   });
 
   useEffect(() => {
-    if (user) navigate({ to: "/dashboard" });
-  }, [user, navigate]);
+    if (user) window.location.assign(redirectPath);
+  }, [user, redirectPath]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,7 +71,7 @@ export function SignInPage() {
 
       const currentUser = await fetchCurrentUser();
       queryClient.setQueryData(["auth", "me"], currentUser);
-      navigate({ to: "/dashboard" });
+      window.location.assign(redirectPath);
     } catch {
       setError("Erreur de connexion au serveur");
       setLoading(false);

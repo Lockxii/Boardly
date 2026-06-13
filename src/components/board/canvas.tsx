@@ -41,7 +41,23 @@ import {
 import { filePreviewKey } from "@/lib/image-insert";
 import type { DropPreviewKind } from "@/lib/canvas-drop";
 
-export function Canvas({ template, title, boardId, roomId, readOnly = false, isPublic = false }: { template: string; title: string; boardId?: string; roomId?: string; readOnly?: boolean; isPublic?: boolean }) {
+export function Canvas({
+  template,
+  title,
+  boardId,
+  roomId,
+  readOnly = false,
+  isPublic = false,
+  isOwner = false,
+}: {
+  template: string;
+  title: string;
+  boardId?: string;
+  roomId?: string;
+  readOnly?: boolean;
+  isPublic?: boolean;
+  isOwner?: boolean;
+}) {
   const {
     camera, setCamera, canvasState, setCanvasState,
     pencilTool,
@@ -1012,7 +1028,7 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
       onDragOver={handleDragOver}
       onDrop={handleCanvasDrop}
     >
-      <Navbar title={title} boardId={boardId} template={template} isPublic={isPublic} readOnly={readOnly} />
+      <Navbar title={title} boardId={boardId} template={template} isPublic={isPublic} readOnly={readOnly} isOwner={isOwner} />
       {!readOnly && <Toolbar />}
       {!readOnly && <PencilToolbar />}
       {!readOnly && <ConnectionTools />}

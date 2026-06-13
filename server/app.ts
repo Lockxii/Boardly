@@ -528,6 +528,7 @@ export function createApp() {
     if (!board) return res.status(404).json({ error: "Tableau introuvable" });
 
     const authUser = user as { id: string; email: string };
+    if (!authUser.email) return res.status(400).json({ error: "Email utilisateur manquant" });
     if (board.authorId === authUser.id) {
       return res.json({ success: true, role: "owner" });
     }
@@ -545,9 +546,7 @@ export function createApp() {
     const email = decodeURIComponent(String(req.params.email));
     const access = await getBoardAccess(boardId, user as { id: string; email: string });
     if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut retirer des membres" });
-    await prisma.boardMember.delete({
-      where: { boardId_email: { boardId, email } },
-    });
+    await prisma.boardMember.deleteMany({ where: { boardId, email } });
     res.json({ success: true });
   }));
 

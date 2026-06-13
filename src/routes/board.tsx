@@ -49,5 +49,5 @@ export function BoardPage() {
     );
   }
 
-  return <Room roomId={board.id} template={board.template || "blank"} title={board.title} boardId={boardId} isPublic={board.isPublic} />;
+  return <Room roomId={board.id} template={board.template || "blank"} title={board.title} boardId={boardId} isPublic={board.isPublic} isOwner={board.isOwner !== false} />;
 }

@@ -23,9 +23,10 @@ interface NavbarProps {
   template?: string;
   isPublic?: boolean;
   readOnly?: boolean;
+  isOwner?: boolean;
 }
 
-export function Navbar({ title, boardId, template, isPublic = false, readOnly = false }: NavbarProps) {
+export function Navbar({ title, boardId, template, isPublic = false, readOnly = false, isOwner = false }: NavbarProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [newTitle, setNewTitle] = useState(title);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -162,6 +163,7 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
           isChatOpen={isChatOpen}
           setIsChatOpen={setIsChatOpen}
           readOnly={readOnly}
+          isOwner={isOwner}
           actualBoardId={actualBoardId}
           isPublic={isPublic}
           toggleDarkMode={toggleDarkMode}
@@ -199,6 +201,7 @@ function NavbarContent({
   isChatOpen,
   setIsChatOpen,
   readOnly,
+  isOwner,
   actualBoardId,
   isPublic,
   toggleDarkMode,
@@ -221,6 +224,7 @@ function NavbarContent({
   isChatOpen: boolean;
   setIsChatOpen: (v: boolean) => void;
   readOnly: boolean;
+  isOwner: boolean;
   actualBoardId: string;
   isPublic: boolean;
   toggleDarkMode: () => void;
@@ -260,7 +264,7 @@ function NavbarContent({
         {!vertical && (
           <>
             <div className="h-4 w-px shrink-0 bg-neutral-200 dark:bg-neutral-700" />
-            {isEditing ? (
+            {isEditing && isOwner ? (
               <input
                 ref={inputRef}
                 autoFocus
@@ -276,12 +280,14 @@ function NavbarContent({
             ) : (
               <button
                 type="button"
-                onClick={() => setIsEditing(true)}
+                onClick={() => {
+                  if (isOwner) setIsEditing(true);
+                }}
                 className="group flex max-w-[160px] items-center gap-1 rounded px-1.5 py-0.5 transition hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 title={title}
               >
                 <span className="truncate text-sm font-semibold dark:text-white">{title}</span>
-                {!compact && (
+                {!compact && isOwner && (
                   <Pencil className="h-3 w-3 shrink-0 text-neutral-400 opacity-0 transition group-hover:opacity-100" />
                 )}
               </button>
@@ -327,7 +333,7 @@ function NavbarContent({
         <HistoryDialog />
         {!readOnly && <TrashDialog />}
         {!readOnly && actualBoardId && (
-          <ShareDialog boardId={actualBoardId} isPublic={isPublic} iconOnly={iconOnly} />
+          <ShareDialog boardId={actualBoardId} isPublic={isPublic} iconOnly={iconOnly} canManage={isOwner} />
         )}
         {readOnly && !vertical && (
           <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-950/40 dark:text-blue-400">

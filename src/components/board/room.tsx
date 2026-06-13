@@ -21,9 +21,10 @@ interface RoomProps {
   title: string;
   boardId?: string;
   isPublic?: boolean;
+  isOwner?: boolean;
 }
 
-export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) {
+export function Room({ roomId, template, title, boardId, isPublic, isOwner = false }: RoomProps) {
   const [ready, setReady] = useState(false);
   const [socketLive, setSocketLive] = useState(false);
   const [onlineCount, setOnlineCount] = useState(0);
@@ -182,7 +183,7 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
           )}
         </div>
       )}
-      <Canvas template={template} title={title} boardId={boardId} roomId={roomId} isPublic={isPublic} />
+      <Canvas template={template} title={title} boardId={boardId} roomId={roomId} isPublic={isPublic} isOwner={isOwner} />
     </>
   );
 }

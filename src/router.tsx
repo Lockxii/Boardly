@@ -57,13 +57,9 @@ const LazyDashboard = lazy(() => import("./routes/dashboard").then((m) => ({ def
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/dashboard",
-  beforeLoad: async ({ context }) => {
-    try {
-      const user = await context.queryClient.ensureQueryData(authQueryOptions());
-      if (!user) throw redirect({ to: "/auth/sign-in" });
-    } catch {
-      throw redirect({ to: "/auth/sign-in" });
-    }
+  beforeLoad: async ({ context, location }) => {
+    const user = await context.queryClient.ensureQueryData(authQueryOptions()).catch(() => null);
+    if (!user) throw redirect({ to: "/auth/sign-in", search: { redirect: location.href } });
   },
   component: () => (
     <Suspense fallback={<RouteLoading />}>
@@ -78,13 +74,9 @@ const LazyBoard = lazy(() => import("./routes/board").then((m) => ({ default: m.
 const boardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/board/$boardId",
-  beforeLoad: async ({ context }) => {
-    try {
-      const user = await context.queryClient.ensureQueryData(authQueryOptions());
-      if (!user) throw redirect({ to: "/auth/sign-in" });
-    } catch {
-      throw redirect({ to: "/auth/sign-in" });
-    }
+  beforeLoad: async ({ context, location }) => {
+    const user = await context.queryClient.ensureQueryData(authQueryOptions()).catch(() => null);
+    if (!user) throw redirect({ to: "/auth/sign-in", search: { redirect: location.href } });
   },
   component: () => (
     <Suspense fallback={<RouteLoading />}>

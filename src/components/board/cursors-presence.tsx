@@ -1,19 +1,10 @@
 import { useEffect, useRef } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { apiFetch } from "@/lib/utils";
-import {
-  acquireBoardSocket,
-  cursorColorForUser,
-  emitPresenceCursor,
-  getBoardSocket,
-  isBoardRoomJoined,
-  isBoardSocketConnected,
-  joinBoardRoom,
-  releaseBoardSocket,
-  type RemotePresence,
-} from "@/lib/board-socket";
+import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
+import { createPresenceConnection } from "@/lib/presence-ws";
 
-const CURSOR_EMIT_INTERVAL_MS = 33;
+const CURSOR_EMIT_INTERVAL_MS = 50;
 const PEER_TIMEOUT_MS = 30_000;
 const CURSOR_LERP = 0.32;
 
@@ -80,7 +71,8 @@ export function CursorsPresence({
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const lastEmitRef = useRef<{ x: number; y: number } | null>(null);
   const lastEmitAtRef = useRef(0);
-  const socketLiveRef = useRef(false);
+  const presenceLiveRef = useRef(false);
+  const presenceRef = useRef<ReturnType<typeof createPresenceConnection> | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
@@ -134,13 +126,10 @@ export function CursorsPresence({
     };
 
     let cancelled = false;
-    const socket = acquireBoardSocket();
-    if (socket) joinBoardRoom(boardId);
-    socketLiveRef.current = isBoardRoomJoined(boardId);
 
     const onPresenceState = (users: RemotePresence[]) => {
       if (cancelled) return;
-      socketLiveRef.current = true;
+      presenceLiveRef.current = true;
       for (const user of users) upsertPeer(user);
     };
 
@@ -151,31 +140,25 @@ export function CursorsPresence({
 
     const onPresenceCursor = (user: RemotePresence) => {
       if (cancelled) return;
-      socketLiveRef.current = true;
+      presenceLiveRef.current = true;
       upsertPeer(user);
     };
 
-    const onConnect = () => {
-      socketLiveRef.current = isBoardRoomJoined(boardId);
-      joinBoardRoom(boardId);
-    };
-
-    const onDisconnect = () => {
-      socketLiveRef.current = false;
-    };
-
-    if (socket) {
-      socket.on("connect", onConnect);
-      socket.on("disconnect", onDisconnect);
-      socket.on("presence:state", onPresenceState);
-      socket.on("presence:join", onPresenceJoin);
-      socket.on("presence:cursor", onPresenceCursor);
-      socket.on("presence:leave", removePeer);
-      if (socket.connected) onConnect();
-    }
+    presenceRef.current = createPresenceConnection(boardId, {
+      onOpen: () => {
+        presenceLiveRef.current = true;
+      },
+      onClose: () => {
+        presenceLiveRef.current = false;
+      },
+      onState: onPresenceState,
+      onJoin: onPresenceJoin,
+      onCursor: onPresenceCursor,
+      onLeave: removePeer,
+    });
 
     const syncHttpFallback = async () => {
-      if (cancelled || socketLiveRef.current || (isBoardSocketConnected() && isBoardRoomJoined(boardId))) return;
+      if (cancelled || presenceLiveRef.current) return;
       try {
         const latest = pointerRef.current;
         if (!readOnly) {
@@ -188,7 +171,7 @@ export function CursorsPresence({
           });
         }
         const data = await apiFetch<RemotePresence[]>(`/api/boards/${boardId}/presence`);
-        if (cancelled || socketLiveRef.current) return;
+        if (cancelled || presenceLiveRef.current) return;
         for (const user of data) upsertPeer(normalizePresence(user));
       } catch {
         /* offline */
@@ -200,13 +183,8 @@ export function CursorsPresence({
     return () => {
       cancelled = true;
       clearInterval(httpInterval);
-      socket?.off("connect", onConnect);
-      socket?.off("disconnect", onDisconnect);
-      socket?.off("presence:state", onPresenceState);
-      socket?.off("presence:join", onPresenceJoin);
-      socket?.off("presence:cursor", onPresenceCursor);
-      socket?.off("presence:leave", removePeer);
-      releaseBoardSocket();
+      presenceRef.current?.close();
+      presenceRef.current = null;
       for (const peer of peersRef.current.values()) peer.el?.remove();
       peersRef.current.clear();
     };
@@ -237,7 +215,7 @@ export function CursorsPresence({
       const cam = useCanvasStore.getState().camera;
       const pointer = pointerRef.current;
 
-      if (pointer && getBoardSocket()?.connected && now - lastEmitAtRef.current >= CURSOR_EMIT_INTERVAL_MS) {
+      if (pointer && now - lastEmitAtRef.current >= CURSOR_EMIT_INTERVAL_MS) {
         const last = lastEmitRef.current;
         if (
           !last ||
@@ -246,7 +224,7 @@ export function CursorsPresence({
         ) {
           lastEmitAtRef.current = now;
           lastEmitRef.current = { x: pointer.x, y: pointer.y };
-          emitPresenceCursor(boardId, pointer.x, pointer.y);
+          presenceRef.current?.sendCursor(pointer.x, pointer.y);
         }
       }
 

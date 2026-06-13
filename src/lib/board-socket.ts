@@ -31,7 +31,7 @@ function getSocketUrl() {
   return window.location.origin;
 }
 
-async function getRealtimeToken() {
+export async function getRealtimeToken() {
   if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) return tokenCache.token;
   if (tokenRequest) return tokenRequest;
 
