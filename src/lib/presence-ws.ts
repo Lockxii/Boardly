@@ -49,6 +49,7 @@ function getClient() {
     client = createClient<LiveblocksUserMeta>({
       throttle: 33,
       lostConnectionTimeout: 2000,
+      badgeLocation: "top-right",
       authEndpoint: async (room) => {
         const response = await fetch("/api/liveblocks-auth", {
           method: "POST",
