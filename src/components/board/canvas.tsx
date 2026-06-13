@@ -49,8 +49,6 @@ export function Canvas({
   readOnly = false,
   isPublic = false,
   isOwner = false,
-  onRealtimeStatusChange,
-  onRealtimeOnlineCountChange,
 }: {
   template: string;
   title: string;
@@ -59,8 +57,6 @@ export function Canvas({
   readOnly?: boolean;
   isPublic?: boolean;
   isOwner?: boolean;
-  onRealtimeStatusChange?: (live: boolean) => void;
-  onRealtimeOnlineCountChange?: (count: number) => void;
 }) {
   const {
     camera, setCamera, canvasState, setCanvasState,
@@ -1134,8 +1130,6 @@ export function Canvas({
           boardId={roomId}
           camera={camera}
           readOnly={readOnly}
-          onStatusChange={onRealtimeStatusChange}
-          onOnlineCountChange={onRealtimeOnlineCountChange}
         />
       )}
     </main>

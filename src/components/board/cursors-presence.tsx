@@ -156,14 +156,10 @@ function isHighFrequencyCanvasUpdate(state: ReturnType<typeof useCanvasStore.get
 export function CursorsPresence({
   boardId,
   readOnly = false,
-  onStatusChange,
-  onOnlineCountChange,
 }: {
   boardId: string;
   camera: { x: number; y: number; zoom: number };
   readOnly?: boolean;
-  onStatusChange?: (live: boolean) => void;
-  onOnlineCountChange?: (count: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const peersRef = useRef(new Map<string, Peer>());
@@ -188,8 +184,6 @@ export function CursorsPresence({
     const container = containerRef.current;
     if (!container) return;
     if (readOnly) {
-      onStatusChange?.(false);
-      onOnlineCountChange?.(0);
       return;
     }
 
@@ -247,7 +241,6 @@ export function CursorsPresence({
     const clearPeers = () => {
       for (const peer of peersRef.current.values()) peer.el?.remove();
       peersRef.current.clear();
-      onOnlineCountChange?.(0);
     };
 
     const closePresence = () => {
@@ -257,7 +250,6 @@ export function CursorsPresence({
       hiddenTimer = 0;
       presenceRef.current?.close();
       presenceRef.current = null;
-      onStatusChange?.(false);
       clearPeers();
     };
 
@@ -270,7 +262,6 @@ export function CursorsPresence({
 
     const onPresenceState = (users: RemotePresence[]) => {
       if (cancelled) return;
-      onOnlineCountChange?.(users.length);
       const activeConnectionIds = new Set(users.map((user) => user.connectionId));
       for (const [connectionId, peer] of peersRef.current) {
         if (activeConnectionIds.has(connectionId)) continue;
@@ -396,14 +387,11 @@ export function CursorsPresence({
       if (cancelled || document.hidden || presenceRef.current) return;
       presenceRef.current = createPresenceConnection(boardId, {
         onOpen: () => {
-          onStatusChange?.(true);
           publishCurrentCursor();
           flushQueuedCanvas();
           scheduleIdleDisconnect();
         },
-        onClose: () => {
-          onStatusChange?.(false);
-        },
+        onClose: () => {},
         onState: onPresenceState,
         onJoin: onPresenceJoin,
         onCursor: onPresenceCursor,
@@ -553,7 +541,7 @@ export function CursorsPresence({
       unsubscribeCanvas();
       closePresence();
     };
-  }, [boardId, readOnly, onStatusChange, onOnlineCountChange]);
+  }, [boardId, readOnly]);
 
   useEffect(() => {
     if (readOnly) return;
