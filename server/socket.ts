@@ -3,6 +3,7 @@ import { Server } from "socket.io";
 import { fromNodeHeaders } from "better-auth/node";
 import { auth, getAuthBaseURL } from "./auth.js";
 import { getBoardAccess } from "./board-access.js";
+import { verifyRealtimeToken } from "./realtime-auth.js";
 
 export type BoardUpdatedEvent = {
   boardId: string;
@@ -73,6 +74,14 @@ export function initSocketServer(httpServer: HttpServer) {
 
   io.use(async (socket, next) => {
     try {
+      const tokenUser = verifyRealtimeToken(socket.handshake.auth?.token);
+      if (tokenUser) {
+        socket.data.user = tokenUser satisfies SocketUser;
+        socket.data.boardIds = new Set<string>();
+        next();
+        return;
+      }
+
       const session = await auth.api.getSession({
         headers: fromNodeHeaders(socket.request.headers),
       });

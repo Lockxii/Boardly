@@ -12,7 +12,8 @@ import { fetchMusicPreviewHandler } from "./music-preview.js";
 import { buildTemplateCanvas } from "./board-seeds.js";
 import { chatWithFred, isFredConfigured, streamChatWithFred } from "./fred-ai.js";
 import { getBoardAccess } from "./board-access.js";
-import { emitBoardUpdated } from "./socket.js";
+import { emitBoardUpdated, type BoardUpdatedEvent } from "./socket.js";
+import { createRealtimeToken, getRealtimeWebhookSecret } from "./realtime-auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -46,6 +47,25 @@ function requireAuth(handler: (req: express.Request, res: express.Response, user
       });
     }
   };
+}
+
+async function notifyRealtimeServer(event: BoardUpdatedEvent) {
+  const realtimeUrl = process.env.REALTIME_SERVER_URL?.replace(/\/$/, "");
+  if (!realtimeUrl) return;
+
+  try {
+    await fetch(`${realtimeUrl}/api/realtime/board-updated`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-realtime-secret": getRealtimeWebhookSecret(),
+      },
+      body: JSON.stringify(event),
+      signal: AbortSignal.timeout(1500),
+    });
+  } catch (error) {
+    console.warn("Realtime webhook failed:", error instanceof Error ? error.message : error);
+  }
 }
 
 function serializeBoard(
@@ -126,6 +146,36 @@ export function createApp() {
       checks.databaseUrl === true &&
       checks.authSecret === true;
     res.status(ok ? 200 : 503).json({ ok, checks });
+  });
+
+  app.get("/api/realtime/token", requireAuth(async (_req, res, user) => {
+    res.json(
+      createRealtimeToken({
+        id: user.id,
+        email: user.email,
+        name: user.name,
+      })
+    );
+  }));
+
+  app.post("/api/realtime/board-updated", async (req, res) => {
+    const secret = req.header("x-realtime-secret");
+    if (!secret || secret !== getRealtimeWebhookSecret()) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const event = req.body as Partial<BoardUpdatedEvent>;
+    if (!event.boardId || !event.updatedAt || !event.userId || !event.userName) {
+      return res.status(400).json({ error: "Invalid event" });
+    }
+
+    emitBoardUpdated({
+      boardId: event.boardId,
+      updatedAt: event.updatedAt,
+      userId: event.userId,
+      userName: event.userName,
+    });
+    res.json({ success: true });
   });
 
   // --- BOARD ROUTES ---
@@ -392,12 +442,15 @@ export function createApp() {
       },
     });
 
-    emitBoardUpdated({
+    const event: BoardUpdatedEvent = {
       boardId,
       updatedAt: updated.updatedAt.toISOString(),
       userId: user.id,
       userName: user.name,
-    });
+    };
+
+    emitBoardUpdated(event);
+    await notifyRealtimeServer(event);
 
     res.json({
       success: true,

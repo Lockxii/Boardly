@@ -119,7 +119,6 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
     }
 
     const pollInterval = setInterval(() => {
-      if (socket?.connected) return;
       void pullRemote();
     }, 8000);
 

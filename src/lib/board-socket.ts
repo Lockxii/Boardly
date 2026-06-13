@@ -17,6 +17,8 @@ export type BoardUpdatedEvent = {
 let socket: Socket | null = null;
 let refCount = 0;
 let activeBoardId: string | null = null;
+let tokenCache: { token: string; expiresAt: number } | null = null;
+let tokenRequest: Promise<string | null> | null = null;
 
 function getSocketUrl() {
   const configuredUrl = (import.meta.env.VITE_SOCKET_URL || "").trim();
@@ -25,13 +27,39 @@ function getSocketUrl() {
   return null;
 }
 
+async function getRealtimeToken() {
+  if (tokenCache && tokenCache.expiresAt > Date.now() + 30_000) return tokenCache.token;
+  if (tokenRequest) return tokenRequest;
+
+  tokenRequest = fetch("/api/realtime/token", { credentials: "include" })
+    .then(async (response) => {
+      if (!response.ok) return null;
+      const data = (await response.json()) as { token?: string; expiresAt?: number };
+      if (!data.token || !data.expiresAt) return null;
+      tokenCache = { token: data.token, expiresAt: data.expiresAt };
+      return data.token;
+    })
+    .catch(() => null)
+    .finally(() => {
+      tokenRequest = null;
+    });
+
+  return tokenRequest;
+}
+
 function createSocket() {
   const url = getSocketUrl();
   if (!url) return null;
+  const usesExternalSocket = Boolean((import.meta.env.VITE_SOCKET_URL || "").trim());
   return io(url, {
     path: "/socket.io",
     transports: ["websocket", "polling"],
     withCredentials: true,
+    auth: usesExternalSocket
+      ? async (callback) => {
+          callback({ token: await getRealtimeToken() });
+        }
+      : undefined,
     autoConnect: true,
     reconnection: true,
     reconnectionDelay: 800,

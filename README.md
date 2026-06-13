@@ -61,25 +61,26 @@ Rendez-vous sur `http://localhost:3000`.
     - Suppression (Touche Suppr ou Bouton).
 - **Modèles** : Choix entre Vide, Grille ou Plan (Blueprint) à la création.
 
-## Déploiement Railway + Socket.io
+## Déploiement Vercel + Railway Socket.io
 
 Vercel déploie l'API Express comme une Function serverless, donc le serveur Socket.io local (`server/index.ts`) ne tourne pas en production Vercel. Par défaut, Boardly désactive donc Socket.io sur Vercel et garde la collaboration via fallback HTTP.
 
-Le plus simple pour avoir Socket.io en production est de déployer toute l'app sur Railway :
+Pour garder le frontend sur Vercel et mettre seulement le serveur Socket.io sur Railway :
 
 1. Railway → New Project → Deploy from GitHub repo → `Lockxii/Boardly`.
 2. Variables Railway :
    - `DATABASE_URL`
-   - `BETTER_AUTH_SECRET`
-   - `BETTER_AUTH_URL=https://votre-domaine.up.railway.app`
-   - `GOOGLE_AI_API_KEY`
+   - `BETTER_AUTH_SECRET` = même valeur que Vercel
+   - `BETTER_AUTH_URL=https://boardly-r3xr.vercel.app`
+   - `REALTIME_AUTH_SECRET` = même valeur que Vercel, optionnel si `BETTER_AUTH_SECRET` est partagé
+   - `GOOGLE_AI_API_KEY`, optionnel pour les routes IA si utilisées sur Railway
 3. Settings → Networking → Generate Domain.
-4. Remplacez `BETTER_AUTH_URL` par le domaine généré, puis redeploy.
+4. Dans Vercel, ajoutez :
+   - `VITE_SOCKET_URL=https://votre-domaine.up.railway.app`
+   - `REALTIME_SERVER_URL=https://votre-domaine.up.railway.app`
+   - `REALTIME_AUTH_SECRET` = même valeur que Railway, optionnel si `BETTER_AUTH_SECRET` est partagé
+5. Redeploy Railway, puis redeploy Vercel.
 
-Railway lancera `npm run build`, puis `npm start`. Le script `start` sert le frontend `dist/`, l'API Express et Socket.io sur le même domaine.
+Le frontend Vercel récupère un token court via `/api/realtime/token`, puis se connecte à Socket.io sur Railway avec ce token. Quand une sauvegarde board passe par l'API Vercel, Vercel envoie aussi l'événement à Railway via `REALTIME_SERVER_URL`.
 
-Si vous gardez le frontend sur Vercel et déployez seulement Socket.io ailleurs, il faut un vrai domaine partagé/cookies compatibles ou une auth Socket.io par token. Ensuite seulement, ajoutez dans Vercel :
-
-```env
-VITE_SOCKET_URL="https://votre-api-socket.example.com"
-```
+Railway lancera `npm run build`, puis `npm start`. Le script `start` démarre le serveur Node avec Socket.io.
