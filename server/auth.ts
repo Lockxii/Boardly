@@ -11,7 +11,7 @@ export function getAuthBaseURL() {
   return "http://localhost:5173";
 }
 
-function getTrustedOrigins() {
+export function getTrustedOrigins() {
   const origins = new Set<string>(["http://localhost:5173", "http://127.0.0.1:5173"]);
 
   const addOrigin = (value?: string) => {
@@ -24,6 +24,7 @@ function getTrustedOrigins() {
   addOrigin(process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : undefined);
   addOrigin(process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined);
   addOrigin(process.env.VERCEL_BRANCH_URL ? `https://${process.env.VERCEL_BRANCH_URL}` : undefined);
+  addOrigin(process.env.CLIENT_ORIGIN);
 
   return [...origins];
 }

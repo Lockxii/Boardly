@@ -1,7 +1,7 @@
 import type { Server as HttpServer } from "http";
 import { Server } from "socket.io";
 import { fromNodeHeaders } from "better-auth/node";
-import { auth, getAuthBaseURL } from "./auth.js";
+import { auth, getAuthBaseURL, getTrustedOrigins } from "./auth.js";
 import { getBoardAccess } from "./board-access.js";
 import { verifyRealtimeToken } from "./realtime-auth.js";
 
@@ -65,7 +65,13 @@ export function initSocketServer(httpServer: HttpServer) {
   io = new Server(httpServer, {
     path: "/socket.io",
     cors: {
-      origin: getAuthBaseURL(),
+      origin: (origin, callback) => {
+        if (!origin) return callback(null, true);
+        const allowed = new Set(getTrustedOrigins());
+        const base = getAuthBaseURL();
+        if (base) allowed.add(base);
+        callback(null, allowed.has(origin.replace(/\/$/, "")));
+      },
       credentials: true,
     },
     pingInterval: 20_000,

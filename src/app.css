@@ -214,7 +214,6 @@
 
 .remote-cursor {
   will-change: transform;
-  transition: transform 0.05s linear;
 }
 
 .paste-ghost {

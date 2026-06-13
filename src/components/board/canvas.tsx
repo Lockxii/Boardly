@@ -106,7 +106,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
 
   const syncCursor = useCallback((point: { x: number; y: number } | null) => {
     const now = Date.now();
-    if (point && now - lastCursorSyncRef.current < 120) return;
+    if (point && now - lastCursorSyncRef.current < 40) return;
     lastCursorSyncRef.current = now;
     setCursor(point);
   }, [setCursor]);
@@ -890,6 +890,33 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
   }, [handleBoardWheel]);
 
   useEffect(() => {
+    const el = mainRef.current;
+    if (!el || readOnly) return;
+
+    const onPointerMove = (e: PointerEvent) => {
+      const cam = useCanvasStore.getState().camera;
+      const point = {
+        x: Math.round((e.clientX - cam.x) / cam.zoom),
+        y: Math.round((e.clientY - cam.y) / cam.zoom),
+      };
+      syncCursor(point);
+      setCursorPoint(point);
+    };
+
+    const onPointerLeave = () => {
+      syncCursor(null);
+      setCursorPoint(null);
+    };
+
+    el.addEventListener("pointermove", onPointerMove, { capture: true });
+    el.addEventListener("pointerleave", onPointerLeave);
+    return () => {
+      el.removeEventListener("pointermove", onPointerMove, { capture: true });
+      el.removeEventListener("pointerleave", onPointerLeave);
+    };
+  }, [readOnly, syncCursor]);
+
+  useEffect(() => {
     const html = document.documentElement;
     const body = document.body;
     const prevHtml = html.style.overscrollBehavior;
@@ -962,7 +989,6 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
       <PresentationMode open={showPresentation} onClose={() => setShowPresentation(false)} />
       {showShortcuts && <ShortcutsHelp onClose={() => setShowShortcuts(false)} />}
       <StatusBar />
-      {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
       <HtmlLayerOverlay
         camera={camera}
         readOnly={readOnly}
@@ -971,6 +997,7 @@ export function Canvas({ template, title, boardId, readOnly = false, isPublic = 
         onLayerRotatePointerDown={onLayerRotatePointerDown}
         onChange={(id, val) => updateLayerText(id, val)}
       />
+      {boardId && <CursorsPresence boardId={boardId} camera={camera} />}
       <svg
         id="board-canvas"
         className="w-[100vw] h-[100vh] overscroll-none"

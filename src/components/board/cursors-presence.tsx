@@ -20,7 +20,6 @@ export function CursorsPresence({
   const [renderPos, setRenderPos] = useState<Record<string, { x: number; y: number }>>({});
   const cursor = useCanvasStore((s) => s.cursor);
   const targetsRef = useRef<Record<string, { x: number; y: number }>>({});
-  const lastEmitRef = useRef(0);
   const socketLiveRef = useRef(false);
   const cursorRef = useRef(cursor);
 
@@ -34,7 +33,15 @@ export function CursorsPresence({
     const socket = getBoardSocket();
     if (socket) joinBoardRoom(boardId);
 
-    const upsertOther = (user: RemotePresence) => {
+    const setTarget = (userId: string, x: number, y: number, snap = false) => {
+      const pos = { x, y };
+      targetsRef.current[userId] = pos;
+      if (snap) {
+        setRenderPos((prev) => ({ ...prev, [userId]: pos }));
+      }
+    };
+
+    const upsertOther = (user: RemotePresence, snap = false) => {
       setOthers((prev) => {
         const idx = prev.findIndex((p) => p.userId === user.userId);
         if (idx === -1) return [...prev, user];
@@ -43,13 +50,19 @@ export function CursorsPresence({
         return next;
       });
       if (user.cursorX != null && user.cursorY != null) {
-        targetsRef.current[user.userId] = { x: user.cursorX, y: user.cursorY };
+        setTarget(user.userId, user.cursorX, user.cursorY, snap);
       }
     };
 
     const removeOther = (userId: string) => {
       setOthers((prev) => prev.filter((p) => p.userId !== userId));
       delete targetsRef.current[userId];
+      setRenderPos((prev) => {
+        if (!prev[userId]) return prev;
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
     };
 
     const onPresenceState = (users: RemotePresence[]) => {
@@ -57,7 +70,7 @@ export function CursorsPresence({
       setOthers(users);
       for (const user of users) {
         if (user.cursorX != null && user.cursorY != null) {
-          targetsRef.current[user.userId] = { x: user.cursorX, y: user.cursorY };
+          setTarget(user.userId, user.cursorX, user.cursorY, true);
         }
       }
     };
@@ -69,7 +82,7 @@ export function CursorsPresence({
 
     const onPresenceCursor = (user: RemotePresence) => {
       if (cancelled) return;
-      upsertOther(user);
+      upsertOther(user, true);
     };
 
     const onPresenceLeave = ({ userId }: { userId: string }) => {
@@ -111,7 +124,7 @@ export function CursorsPresence({
           setOthers(data);
           for (const user of data) {
             if (user.cursorX != null && user.cursorY != null) {
-              targetsRef.current[user.userId] = { x: user.cursorX, y: user.cursorY };
+              setTarget(user.userId, user.cursorX, user.cursorY, true);
             }
           }
         }
@@ -121,7 +134,7 @@ export function CursorsPresence({
     };
 
     void httpFallback();
-    const fallbackInterval = setInterval(httpFallback, 4000);
+    const fallbackInterval = setInterval(httpFallback, 1500);
 
     return () => {
       cancelled = true;
@@ -136,30 +149,35 @@ export function CursorsPresence({
   }, [boardId]);
 
   useEffect(() => {
-    const socket = getBoardSocket();
-    if (!socket?.connected) return;
+    const emit = () => {
+      const socket = getBoardSocket();
+      if (!socket?.connected) return;
+      const latest = cursorRef.current;
+      socket.emit("presence:cursor", {
+        boardId,
+        cursorX: latest?.x ?? null,
+        cursorY: latest?.y ?? null,
+      });
+    };
 
-    const now = Date.now();
-    if (now - lastEmitRef.current < 33) return;
-    lastEmitRef.current = now;
-
-    socket.emit("presence:cursor", {
-      boardId,
-      cursorX: cursor?.x ?? null,
-      cursorY: cursor?.y ?? null,
-    });
-  }, [boardId, cursor?.x, cursor?.y]);
+    emit();
+    const interval = setInterval(emit, 50);
+    return () => clearInterval(interval);
+  }, [boardId]);
 
   useEffect(() => {
     let raf = 0;
     const tick = () => {
       setRenderPos((prev) => {
         const next: Record<string, { x: number; y: number }> = { ...prev };
+        let changed = false;
         for (const [userId, target] of Object.entries(targetsRef.current)) {
           const current = prev[userId] || target;
-          next[userId] = lerpPoint(current, target, 0.35);
+          const lerped = lerpPoint(current, target, 0.45);
+          if (current.x !== lerped.x || current.y !== lerped.y) changed = true;
+          next[userId] = lerped;
         }
-        return next;
+        return changed ? next : prev;
       });
       raf = requestAnimationFrame(tick);
     };
@@ -170,31 +188,37 @@ export function CursorsPresence({
   if (others.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 overflow-hidden">
-      {others.map((user) => {
-        const pos = renderPos[user.userId];
-        if (!pos) return null;
-        const x = pos.x * camera.zoom + camera.x;
-        const y = pos.y * camera.zoom + camera.y;
-        const color = cursorColorForUser(user.userId);
-        return (
-          <div
-            key={user.userId}
-            className="absolute flex items-start gap-1 remote-cursor"
-            style={{ transform: `translate3d(${x}px, ${y}px, 0)` }}
-          >
-            <svg width="16" height="20" viewBox="0 0 16 20" className="drop-shadow-sm">
-              <path d="M0 0 L0 14 L4 10 L7 16 L9 15 L6 9 L12 9 Z" fill={color} />
-            </svg>
-            <span
-              className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm"
-              style={{ backgroundColor: color }}
+    <div className="pointer-events-none absolute inset-0 z-[30] overflow-hidden">
+      <div
+        className="absolute left-0 top-0 origin-top-left"
+        style={{
+          transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
+          willChange: "transform",
+        }}
+      >
+        {others.map((user) => {
+          const pos = renderPos[user.userId];
+          if (!pos) return null;
+          const color = cursorColorForUser(user.userId);
+          return (
+            <div
+              key={user.userId}
+              className="absolute flex items-start gap-1 remote-cursor"
+              style={{ transform: `translate3d(${pos.x}px, ${pos.y}px, 0)` }}
             >
-              {user.userName}
-            </span>
-          </div>
-        );
-      })}
+              <svg width="16" height="20" viewBox="0 0 16 20" className="drop-shadow-sm">
+                <path d="M0 0 L0 14 L4 10 L7 16 L9 15 L6 9 L12 9 Z" fill={color} />
+              </svg>
+              <span
+                className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm"
+                style={{ backgroundColor: color }}
+              >
+                {user.userName}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }

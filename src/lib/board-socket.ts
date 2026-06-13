@@ -23,8 +23,7 @@ let tokenRequest: Promise<string | null> | null = null;
 function getSocketUrl() {
   const configuredUrl = (import.meta.env.VITE_SOCKET_URL || "").trim();
   if (configuredUrl) return configuredUrl;
-  if (import.meta.env.DEV) return window.location.origin;
-  return null;
+  return window.location.origin;
 }
 
 async function getRealtimeToken() {
