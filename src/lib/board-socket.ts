@@ -6,13 +6,6 @@ export type RemotePresence = {
   cursorY: number | null;
 };
 
-export type BoardUpdatedEvent = {
-  boardId: string;
-  updatedAt: string;
-  userId: string;
-  userName: string;
-};
-
 const CURSOR_COLORS = ["#2563EB", "#DC2626", "#16A34A", "#D97706", "#9333EA", "#0891B2", "#DB2777"];
 
 export function cursorColorForUser(userId: string) {

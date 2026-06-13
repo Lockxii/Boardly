@@ -47,8 +47,8 @@ let client: Client<LiveblocksUserMeta> | null = null;
 function getClient() {
   if (!client) {
     client = createClient<LiveblocksUserMeta>({
-      throttle: 16,
-      lostConnectionTimeout: 1000,
+      throttle: 100,
+      lostConnectionTimeout: 2000,
       authEndpoint: async (room) => {
         const response = await fetch("/api/liveblocks-auth", {
           method: "POST",

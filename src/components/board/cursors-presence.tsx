@@ -5,11 +5,15 @@ import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
 import type { BoardCanvasData, Layer } from "@/lib/types";
 
-const CURSOR_EMIT_INTERVAL_MS = 16;
-const CANVAS_EMIT_INTERVAL_MS = 32;
+const CURSOR_EMIT_INTERVAL_MS = 80;
+const CANVAS_EMIT_INTERVAL_MS = 120;
 const PEER_TIMEOUT_MS = 30_000;
 const CURSOR_LERP = 0.82;
 const REMOTE_LAYER_ANIMATION_MS = 96;
+const SOLO_IDLE_DISCONNECT_MS = 45_000;
+const COLLAB_IDLE_DISCONNECT_MS = 5 * 60_000;
+const HIDDEN_DISCONNECT_MS = 5_000;
+const ACTIVITY_THROTTLE_MS = 3_000;
 
 type Peer = {
   connectionId: string;
@@ -152,6 +156,8 @@ export function CursorsPresence({
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const lastEmitRef = useRef<{ x: number; y: number } | null>(null);
   const lastEmitAtRef = useRef(0);
+  const lastActivityAtRef = useRef(0);
+  const markRealtimeActivityRef = useRef<() => void>(() => {});
   const presenceRef = useRef<ReturnType<typeof createPresenceConnection> | null>(null);
   const applyingRemoteCanvasRef = useRef(false);
   const publishedCanvasRef = useRef<BoardCanvasData | null>(null);
@@ -167,6 +173,11 @@ export function CursorsPresence({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+    if (readOnly) {
+      onStatusChange?.(false);
+      onOnlineCountChange?.(0);
+      return;
+    }
 
     const upsertPeer = (raw: Partial<RemotePresence> & { userId: string }) => {
       const user = normalizePresence(raw);
@@ -216,6 +227,32 @@ export function CursorsPresence({
     };
 
     let cancelled = false;
+    let idleTimer = 0;
+    let hiddenTimer = 0;
+
+    const clearPeers = () => {
+      for (const peer of peersRef.current.values()) peer.el?.remove();
+      peersRef.current.clear();
+      onOnlineCountChange?.(0);
+    };
+
+    const closePresence = () => {
+      window.clearTimeout(idleTimer);
+      idleTimer = 0;
+      window.clearTimeout(hiddenTimer);
+      hiddenTimer = 0;
+      presenceRef.current?.close();
+      presenceRef.current = null;
+      onStatusChange?.(false);
+      clearPeers();
+    };
+
+    const scheduleIdleDisconnect = () => {
+      window.clearTimeout(idleTimer);
+      if (document.hidden || !presenceRef.current) return;
+      const delay = peersRef.current.size > 0 ? COLLAB_IDLE_DISCONNECT_MS : SOLO_IDLE_DISCONNECT_MS;
+      idleTimer = window.setTimeout(closePresence, delay);
+    };
 
     const onPresenceState = (users: RemotePresence[]) => {
       if (cancelled) return;
@@ -227,16 +264,19 @@ export function CursorsPresence({
         peersRef.current.delete(connectionId);
       }
       for (const user of users) upsertPeer(user);
+      scheduleIdleDisconnect();
     };
 
     const onPresenceJoin = (user: RemotePresence) => {
       if (cancelled) return;
       if (user.cursorX != null && user.cursorY != null) upsertPeer(user);
+      scheduleIdleDisconnect();
     };
 
     const onPresenceCursor = (user: RemotePresence) => {
       if (cancelled) return;
       upsertPeer(user);
+      scheduleIdleDisconnect();
     };
 
     const flushQueuedCanvas = () => {
@@ -264,6 +304,7 @@ export function CursorsPresence({
       if (!patch) return;
       queuedPatchRef.current = patch;
       queuedCanvasDataRef.current = canvasData;
+      markRealtimeActivityRef.current();
       const now = performance.now();
       const elapsed = now - lastCanvasEmitAtRef.current;
       if (elapsed >= CANVAS_EMIT_INTERVAL_MS) {
@@ -337,90 +378,109 @@ export function CursorsPresence({
       remoteLayerAnimationFrameRef.current = requestAnimationFrame(step);
     };
 
-    presenceRef.current = createPresenceConnection(boardId, {
-      onOpen: () => {
-        onStatusChange?.(true);
-        publishCurrentCursor();
-        flushQueuedCanvas();
-      },
-      onClose: () => {
-        onStatusChange?.(false);
-      },
-      onState: onPresenceState,
-      onJoin: onPresenceJoin,
-      onCursor: onPresenceCursor,
-      onLeave: removePeer,
-      onCanvas: async (update) => {
-        if (cancelled) return;
-        const incomingRevision = update.patch?.revision ?? 0;
-        if (incomingRevision) {
-          const previousRevision = remoteRevisionRef.current.get(update.connectionId) ?? 0;
-          if (incomingRevision <= previousRevision) return;
-          remoteRevisionRef.current.set(update.connectionId, incomingRevision);
-        }
+    const openPresence = () => {
+      if (cancelled || document.hidden || presenceRef.current) return;
+      presenceRef.current = createPresenceConnection(boardId, {
+        onOpen: () => {
+          onStatusChange?.(true);
+          publishCurrentCursor();
+          flushQueuedCanvas();
+          scheduleIdleDisconnect();
+        },
+        onClose: () => {
+          onStatusChange?.(false);
+        },
+        onState: onPresenceState,
+        onJoin: onPresenceJoin,
+        onCursor: onPresenceCursor,
+        onLeave: (payload) => {
+          removePeer(payload);
+          scheduleIdleDisconnect();
+        },
+        onCanvas: async (update) => {
+          if (cancelled) return;
+          scheduleIdleDisconnect();
+          const incomingRevision = update.patch?.revision ?? 0;
+          if (incomingRevision) {
+            const previousRevision = remoteRevisionRef.current.get(update.connectionId) ?? 0;
+            if (incomingRevision <= previousRevision) return;
+            remoteRevisionRef.current.set(update.connectionId, incomingRevision);
+          }
 
-        const state = useCanvasStore.getState();
-        const activeElement = document.activeElement;
-        const isEditingText = activeElement instanceof HTMLElement && activeElement.isContentEditable;
-        const protectSelection = isEditingText || (state.canvasState.mode !== "none" && state.canvasState.mode !== "panning");
-        const protectedLayerIds = protectSelection ? state.selection : [];
-        const protectedLayerSet = new Set(protectedLayerIds);
-        applyingRemoteCanvasRef.current = true;
-        try {
-          if (update.patch) {
-            let patch = update.patch;
-            if (patch.deletedLayerIds?.length) {
-              for (const id of patch.deletedLayerIds) remoteLayerAnimationsRef.current.delete(id);
-            }
-            if (patch.layers) {
-              const animatedLayers: Record<string, Layer> = {};
-              let hasAnimatedLayer = false;
+          const state = useCanvasStore.getState();
+          const activeElement = document.activeElement;
+          const isEditingText = activeElement instanceof HTMLElement && activeElement.isContentEditable;
+          const protectSelection = isEditingText || (state.canvasState.mode !== "none" && state.canvasState.mode !== "panning");
+          const protectedLayerIds = protectSelection ? state.selection : [];
+          const protectedLayerSet = new Set(protectedLayerIds);
+          applyingRemoteCanvasRef.current = true;
+          try {
+            if (update.patch) {
+              let patch = update.patch;
+              if (patch.deletedLayerIds?.length) {
+                for (const id of patch.deletedLayerIds) remoteLayerAnimationsRef.current.delete(id);
+              }
+              if (patch.layers) {
+                const animatedLayers: Record<string, Layer> = {};
+                let hasAnimatedLayer = false;
 
-              for (const [id, targetLayer] of Object.entries(patch.layers)) {
-                const currentLayer = state.layers[id];
-                if (protectedLayerSet.has(id) || !shouldAnimateLayer(currentLayer, targetLayer)) {
-                  animatedLayers[id] = targetLayer;
-                  continue;
+                for (const [id, targetLayer] of Object.entries(patch.layers)) {
+                  const currentLayer = state.layers[id];
+                  if (protectedLayerSet.has(id) || !shouldAnimateLayer(currentLayer, targetLayer)) {
+                    animatedLayers[id] = targetLayer;
+                    continue;
+                  }
+
+                  const from = layerGeometry(currentLayer);
+                  const to = layerGeometry(targetLayer);
+                  remoteLayerAnimationsRef.current.set(id, {
+                    startedAt: performance.now(),
+                    duration: REMOTE_LAYER_ANIMATION_MS,
+                    from,
+                    to,
+                    target: targetLayer,
+                  });
+                  animatedLayers[id] = withLayerGeometry(targetLayer, from);
+                  hasAnimatedLayer = true;
                 }
 
-                const from = layerGeometry(currentLayer);
-                const to = layerGeometry(targetLayer);
-                remoteLayerAnimationsRef.current.set(id, {
-                  startedAt: performance.now(),
-                  duration: REMOTE_LAYER_ANIMATION_MS,
-                  from,
-                  to,
-                  target: targetLayer,
-                });
-                animatedLayers[id] = withLayerGeometry(targetLayer, from);
-                hasAnimatedLayer = true;
+                if (hasAnimatedLayer) {
+                  patch = { ...patch, layers: animatedLayers };
+                  animateRemoteLayers();
+                }
               }
 
-              if (hasAnimatedLayer) {
-                patch = { ...patch, layers: animatedLayers };
-                animateRemoteLayers();
-              }
+              applyLiveBoardPatch(patch, {
+                userId: update.userId,
+                userName: update.userName,
+                notify: false,
+                preserveSelection: true,
+                protectedLayerIds,
+              });
+            } else if (update.canvasData) {
+              await applyRemoteBoardUpdate(
+                { canvasData: update.canvasData, updatedAt: update.updatedAt },
+                { userId: update.userId, userName: update.userName, notify: false, preserveSelection: true }
+              );
             }
-
-            applyLiveBoardPatch(patch, {
-              userId: update.userId,
-              userName: update.userName,
-              notify: false,
-              preserveSelection: true,
-              protectedLayerIds,
-            });
-          } else if (update.canvasData) {
-            await applyRemoteBoardUpdate(
-              { canvasData: update.canvasData, updatedAt: update.updatedAt },
-              { userId: update.userId, userName: update.userName, notify: false, preserveSelection: true }
-            );
+            if (!queuedPatchRef.current) publishedCanvasRef.current = canvasDataFromStore();
+          } finally {
+            applyingRemoteCanvasRef.current = false;
           }
-          if (!queuedPatchRef.current) publishedCanvasRef.current = canvasDataFromStore();
-        } finally {
-          applyingRemoteCanvasRef.current = false;
-        }
-      },
-    });
+        },
+      });
+    };
+
+    const markRealtimeActivity = () => {
+      if (cancelled || document.hidden) return;
+      const now = performance.now();
+      if (presenceRef.current && now - lastActivityAtRef.current < ACTIVITY_THROTTLE_MS) return;
+      lastActivityAtRef.current = now;
+      openPresence();
+      scheduleIdleDisconnect();
+    };
+
+    markRealtimeActivityRef.current = markRealtimeActivity;
 
     publishedCanvasRef.current = canvasDataFromStore();
     const unsubscribeCanvas = useCanvasStore.subscribe((state) => {
@@ -440,19 +500,44 @@ export function CursorsPresence({
       queueCanvas(canvasData);
     });
 
+    const onVisibilityChange = () => {
+      window.clearTimeout(hiddenTimer);
+      if (document.hidden) {
+        hiddenTimer = window.setTimeout(closePresence, HIDDEN_DISCONNECT_MS);
+        return;
+      }
+      markRealtimeActivity();
+    };
+
+    const onLocalActivity = () => {
+      markRealtimeActivity();
+    };
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onLocalActivity, { passive: true });
+    window.addEventListener("pointerdown", onLocalActivity, { passive: true });
+    window.addEventListener("keydown", onLocalActivity);
+    window.addEventListener("wheel", onLocalActivity, { passive: true });
+    window.addEventListener("touchstart", onLocalActivity, { passive: true });
+    markRealtimeActivity();
+
     return () => {
       cancelled = true;
+      markRealtimeActivityRef.current = () => {};
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onLocalActivity);
+      window.removeEventListener("pointerdown", onLocalActivity);
+      window.removeEventListener("keydown", onLocalActivity);
+      window.removeEventListener("wheel", onLocalActivity);
+      window.removeEventListener("touchstart", onLocalActivity);
+      window.clearTimeout(idleTimer);
+      window.clearTimeout(hiddenTimer);
       window.clearTimeout(canvasEmitTimerRef.current);
       cancelAnimationFrame(remoteLayerAnimationFrameRef.current);
       remoteLayerAnimationFrameRef.current = 0;
       remoteLayerAnimationsRef.current.clear();
       unsubscribeCanvas();
-      presenceRef.current?.close();
-      presenceRef.current = null;
-      for (const peer of peersRef.current.values()) peer.el?.remove();
-      peersRef.current.clear();
-      onStatusChange?.(false);
-      onOnlineCountChange?.(0);
+      closePresence();
     };
   }, [boardId, readOnly, onStatusChange, onOnlineCountChange]);
 
@@ -466,6 +551,7 @@ export function CursorsPresence({
         x: (e.clientX - cam.x) / cam.zoom,
         y: (e.clientY - cam.y) / cam.zoom,
       };
+      markRealtimeActivityRef.current();
     };
 
     window.addEventListener("pointermove", onPointerMove, { passive: true });
