@@ -166,7 +166,7 @@ export function initSocketServer(httpServer: HttpServer) {
           member.cursorY = typeof cursorY === "number" ? cursorY : null;
         }
 
-        socket.to(roomKey(boardId)).emit("presence:cursor", {
+        socket.to(roomKey(boardId)).volatile.emit("presence:cursor", {
           connectionId: socket.id,
           userId: user.id,
           userName: user.name,

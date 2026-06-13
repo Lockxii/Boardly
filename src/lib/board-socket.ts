@@ -57,6 +57,8 @@ function createSocket() {
   const client = io(url, {
     path: "/socket.io",
     transports: ["websocket", "polling"],
+    upgrade: true,
+    rememberUpgrade: true,
     withCredentials: true,
     auth: usesExternalSocket
       ? async (callback) => {
@@ -139,6 +141,11 @@ export function isBoardSocketConnected() {
 
 export function isBoardRoomJoined(boardId: string) {
   return joinedBoardId === boardId && !!socket?.connected;
+}
+
+export function emitPresenceCursor(boardId: string, cursorX: number, cursorY: number) {
+  if (!socket?.connected || activeBoardId !== boardId) return;
+  socket.volatile.emit("presence:cursor", { boardId, cursorX, cursorY });
 }
 
 const CURSOR_COLORS = ["#2563EB", "#DC2626", "#16A34A", "#D97706", "#9333EA", "#0891B2", "#DB2777"];
