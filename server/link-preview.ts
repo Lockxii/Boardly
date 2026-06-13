@@ -6,6 +6,7 @@ import {
 import {
   extractVideoIdFromOEmbedHtml,
   tiktokIdFromUrl,
+  twitterStatusIdFromUrl,
   vimeoIdFromUrl,
   youtubeIdFromUrl,
 } from "../src/lib/link-media-utils.js";
@@ -195,6 +196,8 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "g
     videoId = tiktokIdFromUrl(url.toString()) || extractVideoIdFromOEmbedHtml(data.html || "") || undefined;
   } else if (provider === "vimeo") {
     videoId = vimeoIdFromUrl(url.toString()) || undefined;
+  } else if (provider === "twitter") {
+    videoId = twitterStatusIdFromUrl(url.toString()) || undefined;
   }
 
   return {

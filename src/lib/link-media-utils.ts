@@ -13,7 +13,7 @@ export const LINK_PROVIDER_ACCENT: Record<LinkProvider, string> = {
 };
 
 export function isVideoLinkProvider(provider?: string) {
-  return provider === "youtube" || provider === "tiktok" || provider === "vimeo";
+  return provider === "youtube" || provider === "tiktok" || provider === "vimeo" || provider === "twitter";
 }
 
 function hashSeed(seed: string) {
@@ -90,6 +90,20 @@ export function vimeoIdFromUrl(url?: string) {
   }
 }
 
+export function twitterStatusIdFromUrl(url?: string) {
+  if (!url) return null;
+  try {
+    const parsed = new URL(url);
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const statusIndex = parts.findIndex((part) => part === "status" || part === "statuses");
+    if (statusIndex >= 0 && parts[statusIndex + 1]) return parts[statusIndex + 1].split("?")[0];
+    if (parts[0] === "i" && parts[1] === "web" && parts[2] === "status" && parts[3]) return parts[3];
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function extractVideoIdFromOEmbedHtml(html: string) {
   const patterns = [
     /\/video\/(\d+)/,
@@ -114,6 +128,7 @@ export function resolveVideoId(
   if (provider === "youtube") return youtubeIdFromUrl(url);
   if (provider === "tiktok") return tiktokIdFromUrl(url);
   if (provider === "vimeo") return vimeoIdFromUrl(url);
+  if (provider === "twitter") return twitterStatusIdFromUrl(url);
   return null;
 }
 
@@ -142,6 +157,13 @@ export function getVideoEmbedUrl(
     const id = options?.videoId || vimeoIdFromUrl(url);
     if (!id) return null;
     return `https://player.vimeo.com/video/${id}?autoplay=1&muted=1&background=1&loop=1&api=1`;
+  }
+
+  if (provider === "twitter") {
+    const id = options?.videoId || twitterStatusIdFromUrl(url);
+    if (!id) return null;
+    const theme = typeof document !== "undefined" && document.documentElement.classList.contains("dark") ? "dark" : "light";
+    return `https://platform.twitter.com/embed/Tweet.html?id=${encodeURIComponent(id)}&dnt=true&hideThread=true&theme=${theme}&lang=fr&autoplay=1`;
   }
 
   return null;

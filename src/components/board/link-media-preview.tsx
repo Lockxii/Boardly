@@ -46,6 +46,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
 }: LinkMediaPreviewProps) {
   const isMusic = isMusicLinkProvider(provider);
   const isVideo = isVideoLinkProvider(provider);
+  const isTwitterVideo = provider === "twitter";
   const canPlayMusic = isMusic && supportsMusicPlayback(provider);
 
   const [hovering, setHovering] = useState(false);
@@ -267,6 +268,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   const duration = trackDuration ?? (isMusic ? fakeTrackDurationSeconds(url || src) : 0);
   const currentTime = Math.floor(duration * progress);
   const isResolvingTikTok = isVideo && provider === "tiktok" && hovering && !resolvedVideoId;
+  const canToggleVideoSound = isVideo && !isTwitterVideo;
 
   return (
     <div
@@ -372,7 +374,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
           key={videoEmbedUrl}
           src={videoEmbedUrl}
           title="Aperçu vidéo"
-          className="pointer-events-none absolute inset-0 h-full w-full border-0 bg-black"
+          className={`${isTwitterVideo ? "pointer-events-auto" : "pointer-events-none"} absolute inset-0 h-full w-full border-0 bg-black`}
           allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
           referrerPolicy="strict-origin-when-cross-origin"
           loading="eager"
@@ -380,7 +382,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         />
       )}
 
-      {isVideo && showVideoEmbed && !!videoEmbedUrl && !readOnly && (
+      {canToggleVideoSound && showVideoEmbed && !!videoEmbedUrl && !readOnly && (
         <button
           type="button"
           className={`absolute top-2 right-2 z-10 rounded-md p-1.5 pointer-events-auto transition-colors ${
