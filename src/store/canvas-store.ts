@@ -53,6 +53,7 @@ interface CanvasStore {
   // Save state
   saveStatus: "idle" | "saving" | "saved" | "error";
   lastSavedAt: number | null;
+  lastPersistedSnapshot: string | null;
   setSaveStatus: (status: "idle" | "saving" | "saved" | "error", at?: number) => void;
 
   // Connector tool
@@ -186,6 +187,21 @@ function restoreSnapshot(snapshot: HistorySnapshot): { layers: Record<string, La
   };
 }
 
+export function serializeCanvasDataSnapshot(data: Partial<BoardCanvasData>) {
+  return JSON.stringify({
+    layers: data.layers || {},
+    layerIds: data.layerIds || [],
+    connections: data.connections || [],
+    versions: data.versions || [],
+    auditLog: data.auditLog || [],
+    chatMessages: data.chatMessages || [],
+    layerComments: data.layerComments || {},
+    reactions: data.reactions || {},
+    trash: data.trash || [],
+    brandColors: data.brandColors || ["#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"],
+  });
+}
+
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Data
   layers: {},
@@ -231,6 +247,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   saveStatus: "idle",
   lastSavedAt: null,
+  lastPersistedSnapshot: null,
   setSaveStatus: (saveStatus, at) =>
     set({
       saveStatus,
@@ -922,6 +939,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       selectedConnectionId: null,
       saveStatus: "idle",
       lastSavedAt: null,
+      lastPersistedSnapshot: null,
     }),
 
   loadBoard: async (boardId) => {
@@ -944,6 +962,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         selection: [],
         connectFromId: null,
         selectedConnectionId: null,
+        lastPersistedSnapshot: serializeCanvasDataSnapshot(data),
       });
     };
 
@@ -999,7 +1018,6 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   saveBoard: async (boardId) => {
     const state = get();
-    get().setSaveStatus("saving");
     const canvasData: BoardCanvasData = {
       layers: state.layers,
       layerIds: state.layerIds,
@@ -1012,6 +1030,14 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       trash: state.trash,
       brandColors: state.brandColors,
     };
+    const snapshot = serializeCanvasDataSnapshot(canvasData);
+
+    if (snapshot === state.lastPersistedSnapshot) {
+      if (state.saveStatus !== "saved") get().setSaveStatus("saved", state.lastSavedAt ?? Date.now());
+      return;
+    }
+
+    get().setSaveStatus("saving");
 
     try {
       localStorage.setItem(`boardly-${boardId}`, JSON.stringify(canvasData));
@@ -1023,6 +1049,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         method: "PUT",
         body: JSON.stringify({ canvasData, thumbnail }),
       });
+      set({ lastPersistedSnapshot: snapshot });
       get().setSaveStatus("saved", Date.now());
     } catch {
       get().setSaveStatus("error");

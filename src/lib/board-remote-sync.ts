@@ -1,5 +1,5 @@
 import { toast } from "sonner";
-import { useCanvasStore } from "@/store/canvas-store";
+import { serializeCanvasDataSnapshot, useCanvasStore } from "@/store/canvas-store";
 import type { BoardCanvasData } from "@/lib/types";
 
 export async function applyRemoteBoardUpdate(
@@ -10,7 +10,6 @@ export async function applyRemoteBoardUpdate(
   const state = useCanvasStore.getState();
   if (state.saveStatus === "saving") return false;
   if (!remote.canvasData?.layerIds?.length) return false;
-  if (state.lastSavedAt && updatedAt <= state.lastSavedAt + 2000) return false;
 
   const prevLayers = state.layers;
   const nextLayers = remote.canvasData.layers;
@@ -35,6 +34,9 @@ export async function applyRemoteBoardUpdate(
     reactions: remote.canvasData.reactions || {},
     brandColors: remote.canvasData.brandColors || useCanvasStore.getState().brandColors,
     selection: [],
+    saveStatus: "saved",
+    lastSavedAt: updatedAt,
+    lastPersistedSnapshot: serializeCanvasDataSnapshot(remote.canvasData),
   });
 
   if (changedIds.length > 0) {
