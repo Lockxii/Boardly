@@ -21,6 +21,7 @@ let socket: Socket | null = null;
 let refCount = 0;
 let activeBoardId: string | null = null;
 let joinedBoardId: string | null = null;
+let pendingJoinBoardId: string | null = null;
 let tokenCache: { token: string; expiresAt: number } | null = null;
 let tokenRequest: Promise<string | null> | null = null;
 
@@ -50,6 +51,16 @@ async function getRealtimeToken() {
   return tokenRequest;
 }
 
+function sendJoin(boardId: string) {
+  if (!socket?.connected) return;
+  pendingJoinBoardId = boardId;
+  socket.emit("board:join", { boardId }, (ack?: JoinAck) => {
+    if (activeBoardId !== boardId) return;
+    pendingJoinBoardId = null;
+    joinedBoardId = ack?.ok === false ? null : boardId;
+  });
+}
+
 function createSocket() {
   const url = getSocketUrl();
   if (!url) return null;
@@ -75,6 +86,19 @@ function createSocket() {
 
   client.on("connect_error", () => {
     tokenCache = null;
+    joinedBoardId = null;
+    pendingJoinBoardId = null;
+  });
+
+  client.on("disconnect", () => {
+    joinedBoardId = null;
+    pendingJoinBoardId = null;
+  });
+
+  client.on("connect", () => {
+    joinedBoardId = null;
+    pendingJoinBoardId = null;
+    if (activeBoardId) sendJoin(activeBoardId);
   });
 
   return client;
@@ -98,6 +122,7 @@ export function releaseBoardSocket() {
       socket.emit("board:leave", { boardId: activeBoardId });
       activeBoardId = null;
       joinedBoardId = null;
+      pendingJoinBoardId = null;
     }
     socket.removeAllListeners();
     socket.disconnect();
@@ -107,22 +132,16 @@ export function releaseBoardSocket() {
 
 export function joinBoardRoom(boardId: string) {
   if (!socket) return null;
-  if (activeBoardId === boardId && joinedBoardId === boardId) return socket;
   if (activeBoardId && activeBoardId !== boardId) {
     socket.emit("board:leave", { boardId: activeBoardId });
     joinedBoardId = null;
+    pendingJoinBoardId = null;
   }
   activeBoardId = boardId;
-  joinedBoardId = boardId;
 
-  const join = () => {
-    socket?.emit("board:join", { boardId }, (ack?: JoinAck) => {
-      if (ack?.ok === false) joinedBoardId = null;
-    });
-  };
-
-  if (socket.connected) join();
-  else socket.once("connect", join);
+  if (socket.connected && joinedBoardId !== boardId && pendingJoinBoardId !== boardId) {
+    sendJoin(boardId);
+  }
 
   return socket;
 }
@@ -145,6 +164,7 @@ export function isBoardRoomJoined(boardId: string) {
 
 export function emitPresenceCursor(boardId: string, cursorX: number, cursorY: number) {
   if (!socket?.connected || activeBoardId !== boardId) return;
+  if (joinedBoardId !== boardId) joinBoardRoom(boardId);
   socket.volatile.emit("presence:cursor", { boardId, cursorX, cursorY });
 }
 

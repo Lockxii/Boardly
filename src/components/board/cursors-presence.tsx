@@ -2,20 +2,30 @@ import { useEffect, useRef } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { apiFetch } from "@/lib/utils";
 import {
+  acquireBoardSocket,
   cursorColorForUser,
   emitPresenceCursor,
   getBoardSocket,
+  isBoardRoomJoined,
   isBoardSocketConnected,
   joinBoardRoom,
+  releaseBoardSocket,
   type RemotePresence,
 } from "@/lib/board-socket";
+
+const CURSOR_EMIT_INTERVAL_MS = 33;
+const PEER_TIMEOUT_MS = 30_000;
+const CURSOR_LERP = 0.32;
 
 type Peer = {
   connectionId: string;
   userId: string;
   userName: string;
-  x: number;
-  y: number;
+  targetX: number;
+  targetY: number;
+  screenX: number | null;
+  screenY: number | null;
+  lastSeen: number;
   el: HTMLDivElement | null;
 };
 
@@ -69,6 +79,7 @@ export function CursorsPresence({
   const peersRef = useRef(new Map<string, Peer>());
   const pointerRef = useRef<{ x: number; y: number } | null>(null);
   const lastEmitRef = useRef<{ x: number; y: number } | null>(null);
+  const lastEmitAtRef = useRef(0);
   const socketLiveRef = useRef(false);
 
   useEffect(() => {
@@ -85,15 +96,19 @@ export function CursorsPresence({
           connectionId: user.connectionId,
           userId: user.userId,
           userName: user.userName,
-          x: user.cursorX,
-          y: user.cursorY,
+          targetX: user.cursorX,
+          targetY: user.cursorY,
+          screenX: null,
+          screenY: null,
+          lastSeen: performance.now(),
           el: null,
         };
         peersRef.current.set(user.connectionId, peer);
       } else {
         peer.userName = user.userName;
-        peer.x = user.cursorX;
-        peer.y = user.cursorY;
+        peer.targetX = user.cursorX;
+        peer.targetY = user.cursorY;
+        peer.lastSeen = performance.now();
       }
 
       if (!peer.el) {
@@ -119,12 +134,13 @@ export function CursorsPresence({
     };
 
     let cancelled = false;
-    const socket = getBoardSocket();
+    const socket = acquireBoardSocket();
     if (socket) joinBoardRoom(boardId);
-    socketLiveRef.current = isBoardSocketConnected();
+    socketLiveRef.current = isBoardRoomJoined(boardId);
 
     const onPresenceState = (users: RemotePresence[]) => {
       if (cancelled) return;
+      socketLiveRef.current = true;
       for (const user of users) upsertPeer(user);
     };
 
@@ -135,11 +151,12 @@ export function CursorsPresence({
 
     const onPresenceCursor = (user: RemotePresence) => {
       if (cancelled) return;
+      socketLiveRef.current = true;
       upsertPeer(user);
     };
 
     const onConnect = () => {
-      socketLiveRef.current = true;
+      socketLiveRef.current = isBoardRoomJoined(boardId);
       joinBoardRoom(boardId);
     };
 
@@ -158,7 +175,7 @@ export function CursorsPresence({
     }
 
     const syncHttpFallback = async () => {
-      if (socketLiveRef.current || cancelled) return;
+      if (cancelled || socketLiveRef.current || (isBoardSocketConnected() && isBoardRoomJoined(boardId))) return;
       try {
         const latest = pointerRef.current;
         if (!readOnly) {
@@ -189,6 +206,7 @@ export function CursorsPresence({
       socket?.off("presence:join", onPresenceJoin);
       socket?.off("presence:cursor", onPresenceCursor);
       socket?.off("presence:leave", removePeer);
+      releaseBoardSocket();
       for (const peer of peersRef.current.values()) peer.el?.remove();
       peersRef.current.clear();
     };
@@ -213,17 +231,20 @@ export function CursorsPresence({
     if (readOnly) return;
 
     let raf = 0;
+    let lastFrameAt = performance.now();
     const tick = () => {
+      const now = performance.now();
       const cam = useCanvasStore.getState().camera;
       const pointer = pointerRef.current;
 
-      if (pointer && getBoardSocket()?.connected) {
+      if (pointer && getBoardSocket()?.connected && now - lastEmitAtRef.current >= CURSOR_EMIT_INTERVAL_MS) {
         const last = lastEmitRef.current;
         if (
           !last ||
           Math.abs(last.x - pointer.x) > 0.25 ||
           Math.abs(last.y - pointer.y) > 0.25
         ) {
+          lastEmitAtRef.current = now;
           lastEmitRef.current = { x: pointer.x, y: pointer.y };
           emitPresenceCursor(boardId, pointer.x, pointer.y);
         }
@@ -231,11 +252,23 @@ export function CursorsPresence({
 
       for (const peer of peersRef.current.values()) {
         if (!peer.el) continue;
-        const sx = peer.x * cam.zoom + cam.x;
-        const sy = peer.y * cam.zoom + cam.y;
+        if (now - peer.lastSeen > PEER_TIMEOUT_MS) {
+          peer.el.remove();
+          peersRef.current.delete(peer.connectionId);
+          continue;
+        }
+        const targetSx = peer.targetX * cam.zoom + cam.x;
+        const targetSy = peer.targetY * cam.zoom + cam.y;
+        const frameScale = Math.min(1, Math.max(0.18, (now - lastFrameAt) / 16.7));
+        const amount = Math.min(1, CURSOR_LERP * frameScale);
+        const sx = peer.screenX == null ? targetSx : peer.screenX + (targetSx - peer.screenX) * amount;
+        const sy = peer.screenY == null ? targetSy : peer.screenY + (targetSy - peer.screenY) * amount;
+        peer.screenX = sx;
+        peer.screenY = sy;
         peer.el.style.transform = `translate3d(${sx}px, ${sy}px, 0)`;
       }
 
+      lastFrameAt = now;
       raf = requestAnimationFrame(tick);
     };
 

@@ -103,7 +103,7 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
 
     const onConnect = () => {
       if (!cancelled) setSocketLive(true);
-      socket?.emit("board:join", { boardId: roomId });
+      joinBoardRoom(roomId);
     };
     const onDisconnect = () => {
       if (!cancelled) setSocketLive(false);
