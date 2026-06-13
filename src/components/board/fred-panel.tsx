@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from "react";
-import { X, Send, Loader2, Sparkles, Wand2, Lightbulb, FileText } from "lucide-react";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { X, Send, Loader2, Sparkles, Wand2, Lightbulb, FileText, ImageIcon, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -7,13 +7,22 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { buildBoardSummary } from "@/lib/board-context";
 import { sendFredMessage, fetchFredStatus, type FredChatMessage } from "@/lib/fred-ai";
 import { applyFredActions } from "@/lib/fred-actions";
+import {
+  buildVisionPayload,
+  describeVisionMode,
+  shouldAttachVision,
+  type FredVisionMode,
+} from "@/lib/fred-vision";
 import { cn } from "@/lib/utils";
 
 const QUICK_PROMPTS = [
   { label: "Résumer", icon: FileText, prompt: "Résume ce tableau en 3 points clés." },
-  { label: "Brainstorm", icon: Lightbulb, prompt: "Propose 5 idées créatives liées à ce board." },
-  { label: "Post-its", icon: Wand2, prompt: "Ajoute 4 post-its avec des angles différents à explorer." },
+  { label: "Analyser", icon: ImageIcon, prompt: "Analyse les images visibles : palette, mood et directions créatives." },
+  { label: "Brainstorm", icon: Lightbulb, prompt: "Propose 5 idées créatives concrètes à partir du contexte actuel." },
+  { label: "Post-its", icon: Wand2, prompt: "Génère 4 post-its avec des angles différents à explorer." },
 ] as const;
+
+const VISION_MODES: FredVisionMode[] = ["auto", "selection", "off"];
 
 function FredAvatar({ className }: { className?: string }) {
   return (
@@ -46,13 +55,33 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
       id: "welcome",
       role: "assistant",
       content:
-        "Salut ! Je suis **Fred**, ton assistant sur Boardly. Je peux résumer ton board, brainstormer ou poser des post-its directement sur le canvas.",
+        "Salut ! Je suis **Fred**. Je peux analyser tes images (max 3), résumer le board et générer post-its ou sections — toujours à partir du contexte réel, sans inventer.",
     },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [preparingVision, setPreparingVision] = useState(false);
   const [configured, setConfigured] = useState<boolean | null>(null);
+  const [visionMode, setVisionMode] = useState<FredVisionMode>("auto");
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const boardSummary = useMemo(
+    () =>
+      buildBoardSummary({
+        title: boardTitle,
+        template: boardTemplate,
+        layers,
+        layerIds,
+        selection,
+        connections,
+      }),
+    [boardTitle, boardTemplate, layers, layerIds, selection, connections]
+  );
+
+  const willAttachVision = useMemo(
+    () => shouldAttachVision(visionMode, input, layers, layerIds, selection),
+    [visionMode, input, layers, layerIds, selection]
+  );
 
   useEffect(() => {
     fetchFredStatus()
@@ -62,23 +91,13 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "smooth" });
-  }, [messages, loading]);
+  }, [messages, loading, preparingVision]);
 
-  const getBoardContext = () => {
-    const summary = buildBoardSummary({
-      title: boardTitle,
-      template: boardTemplate,
-      layers,
-      layerIds,
-      selection,
-      connections,
-    });
-    return {
-      title: boardTitle,
-      template: boardTemplate,
-      ...summary,
-    };
-  };
+  const getBoardContext = () => ({
+    title: boardTitle,
+    template: boardTemplate,
+    ...boardSummary,
+  });
 
   const sendMessage = async (text: string) => {
     const trimmed = text.trim();
@@ -94,9 +113,23 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
     setLoading(true);
 
     try {
+      setPreparingVision(true);
+      const { assets, skipped, attached } = await buildVisionPayload({
+        mode: visionMode,
+        message: trimmed,
+        layers,
+        layerIds,
+        selection,
+      });
+      setPreparingVision(false);
+
+      if (skipped > 0 && attached) {
+        toast.message(`${skipped} image(s) ignorée(s) (trop lourde ou illisible)`);
+      }
+
       const history = [...messages, userMsg]
         .filter((m) => m.id !== "welcome" && !m.pending)
-        .slice(-10)
+        .slice(-8)
         .map((m) => ({ role: m.role, content: m.content }));
 
       const response = await sendFredMessage({
@@ -104,6 +137,8 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
         history: history.slice(0, -1),
         boardContext: getBoardContext(),
         boardId,
+        visionMode,
+        visionAssets: assets.length ? assets : undefined,
       });
 
       setMessages((prev) => [
@@ -113,12 +148,14 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
           role: "assistant",
           content: response.reply,
           actions: response.actions?.length ? response.actions : undefined,
+          meta: response.meta,
         },
       ]);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Fred n'a pas pu répondre");
     } finally {
       setLoading(false);
+      setPreparingVision(false);
     }
   };
 
@@ -130,8 +167,13 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
     );
   };
 
+  const cycleVisionMode = () => {
+    const idx = VISION_MODES.indexOf(visionMode);
+    setVisionMode(VISION_MODES[(idx + 1) % VISION_MODES.length]);
+  };
+
   return (
-    <div className="pointer-events-auto absolute left-4 top-16 z-50 flex max-h-[calc(100vh-100px)] w-[min(100vw-2rem,22rem)] flex-col overflow-hidden rounded-2xl border border-neutral-200/80 bg-[#FDFCF8]/95 shadow-2xl shadow-black/10 backdrop-blur-md dark:border-neutral-700/80 dark:bg-neutral-950/95">
+    <div className="pointer-events-auto absolute left-4 top-16 z-50 flex max-h-[calc(100vh-100px)] w-[min(100vw-2rem,24rem)] flex-col overflow-hidden rounded-2xl border border-neutral-200/80 bg-[#FDFCF8]/95 shadow-2xl shadow-black/10 backdrop-blur-md dark:border-neutral-700/80 dark:bg-neutral-950/95">
       <div className="flex items-center justify-between border-b border-neutral-200/80 px-4 py-3 dark:border-neutral-800">
         <div className="flex items-center gap-3">
           <FredAvatar />
@@ -140,7 +182,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
               <h3 className="text-sm font-semibold tracking-tight">Fred AI</h3>
               <Sparkles className="h-3 w-3 text-blue-500" />
             </div>
-            <p className="text-[11px] text-neutral-500">Assistant Boardly · Gemini</p>
+            <p className="text-[11px] text-neutral-500">Vision · Génération contextuelle</p>
           </div>
         </div>
         <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={onClose}>
@@ -153,6 +195,41 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
           Clé API manquante côté serveur (<code className="text-[10px]">GOOGLE_AI_API_KEY</code>).
         </div>
       )}
+
+      <div className="space-y-2 border-b border-neutral-100 px-3 py-2 dark:border-neutral-800">
+        <div className="flex flex-wrap items-center gap-1.5 text-[10px] text-neutral-500">
+          <span className="rounded-full bg-neutral-100 px-2 py-0.5 dark:bg-neutral-800">
+            {boardSummary.layerCount} éléments
+          </span>
+          {boardSummary.selectionCount > 0 && (
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300">
+              {boardSummary.selectionCount} sélectionné{boardSummary.selectionCount > 1 ? "s" : ""}
+            </span>
+          )}
+          {boardSummary.visionCount > 0 && (
+            <span className="rounded-full bg-violet-50 px-2 py-0.5 text-violet-700 dark:bg-violet-950/40 dark:text-violet-300">
+              {boardSummary.visionCount} image{boardSummary.visionCount > 1 ? "s" : ""} dispo
+            </span>
+          )}
+          {willAttachVision && (
+            <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+              vision active
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={cycleVisionMode}
+            className="inline-flex items-center gap-1 rounded-full border border-neutral-200/80 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600 transition hover:border-blue-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300"
+            title="Images : auto (sélection ou mots-clés), sélection uniquement, ou off"
+          >
+            {visionMode === "off" ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+            Images · {describeVisionMode(visionMode)}
+          </button>
+          <span className="text-[10px] text-neutral-400">max 3 · compressées</span>
+        </div>
+      </div>
 
       <div className="flex gap-1.5 overflow-x-auto border-b border-neutral-100 px-3 py-2 dark:border-neutral-800">
         {QUICK_PROMPTS.map(({ label, icon: Icon, prompt }) => (
@@ -186,6 +263,11 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
                 >
                   <FredMessageContent content={msg.content} />
                 </div>
+                {msg.meta?.visionUsed ? (
+                  <p className="text-[10px] text-neutral-400">
+                    {msg.meta.visionUsed} image{msg.meta.visionUsed > 1 ? "s" : ""} analysée{msg.meta.visionUsed > 1 ? "s" : ""}
+                  </p>
+                ) : null}
                 {msg.actions && msg.actions.length > 0 && (
                   <Button
                     size="sm"
@@ -201,10 +283,10 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
             </div>
           );
         })}
-        {loading && (
+        {(loading || preparingVision) && (
           <div className="flex items-center gap-2 text-xs text-neutral-500">
             <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
-            Fred réfléchit…
+            {preparingVision ? "Préparation des images…" : "Fred réfléchit…"}
           </div>
         )}
       </div>
@@ -219,7 +301,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId }: FredP
         <Input
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="Demande quelque chose à Fred…"
+          placeholder="Demande à Fred…"
           className="h-9 flex-1 rounded-xl border-neutral-200 bg-white text-sm dark:border-neutral-700 dark:bg-neutral-900"
           disabled={loading}
         />

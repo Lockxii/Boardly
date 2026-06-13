@@ -8,15 +8,15 @@ function truncate(text: string, max = 120) {
   return `${clean.slice(0, max - 1)}…`;
 }
 
-function describeLayer(layer: Layer): string {
+function describeLayer(layer: Layer, id?: string): string {
   switch (layer.type) {
     case "Note":
     case "Text":
       return layer.value ? `${layer.type}: "${truncate(layer.value)}"` : layer.type;
     case "Link":
-      return `Lien: ${layer.linkTitle || layer.url || "sans titre"}`;
+      return `Lien: ${layer.linkTitle || layer.url || "sans titre"}${layer.linkImage ? " [preview]" : ""}`;
     case "Image":
-      return "Image";
+      return layer.src ? "Image [visuelle]" : "Image";
     case "Frame":
       return layer.value ? `Cadre "${truncate(layer.value, 40)}"` : "Cadre";
     case "Path":
@@ -24,6 +24,16 @@ function describeLayer(layer: Layer): string {
     default:
       return layer.type;
   }
+}
+
+export function countVisionLayers(layers: Record<string, Layer>, layerIds: string[]) {
+  return layerIds.filter((id) => {
+    const layer = layers[id];
+    if (!layer) return false;
+    if (layer.type === "Image" && layer.src) return true;
+    if (layer.type === "Link" && layer.linkImage) return true;
+    return false;
+  }).length;
 }
 
 export function buildBoardSummary(input: {
@@ -46,6 +56,8 @@ export function buildBoardSummary(input: {
     .filter(Boolean)
     .map((layer) => describeLayer(layer));
 
+  const visionCount = countVisionLayers(layers, layerIds);
+
   const parts: string[] = [];
   if (items.length) parts.push(items.join("\n"));
   if (layerIds.length > MAX_SUMMARY_ITEMS) {
@@ -61,6 +73,7 @@ export function buildBoardSummary(input: {
   return {
     layerCount: layerIds.length,
     selectionCount: selection.length,
+    visionCount,
     summary: parts.join("\n") || "Tableau vide.",
   };
 }

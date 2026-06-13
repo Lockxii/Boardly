@@ -211,11 +211,12 @@ export function createApp() {
   }));
 
   app.post("/api/fred/chat", requireAuth(async (req, res, user) => {
-    const { message, history, boardContext, boardId } = req.body as {
+    const { message, history, boardContext, boardId, visionAssets } = req.body as {
       message?: string;
       history?: { role: "user" | "assistant"; content: string }[];
       boardContext?: Record<string, unknown>;
       boardId?: string;
+      visionAssets?: { label: string; mimeType?: string; data?: string; src?: string }[];
     };
 
     if (!message?.trim()) return res.status(400).json({ error: "Message requis" });
@@ -230,6 +231,7 @@ export function createApp() {
         message: message.trim(),
         history,
         boardContext: boardContext as Parameters<typeof chatWithFred>[0]["boardContext"],
+        visionAssets,
       });
       res.json(result);
     } catch (error) {

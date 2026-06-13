@@ -1,22 +1,42 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import { z } from "zod";
+import { resolveVisionAssets, type VisionAssetInput } from "./fred-vision.js";
 
 const FRED_MODEL = process.env.FRED_AI_MODEL || "gemini-2.0-flash";
+
+const NoteItemSchema = z.union([
+  z.string().min(1).max(500),
+  z.object({
+    text: z.string().min(1).max(500),
+    color: z.string().max(32).optional(),
+  }),
+]);
 
 const FredActionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("add_notes"),
-    items: z.array(z.string().min(1).max(500)).max(8),
+    items: z.array(NoteItemSchema).max(8),
   }),
   z.object({
     type: z.literal("add_text"),
     items: z.array(z.string().min(1).max(500)).max(6),
   }),
+  z.object({
+    type: z.literal("add_frames"),
+    items: z
+      .array(
+        z.object({
+          title: z.string().min(1).max(80),
+          notes: z.array(z.string().min(1).max(300)).max(5).optional(),
+        })
+      )
+      .max(3),
+  }),
 ]);
 
 const FredResponseSchema = z.object({
   reply: z.string().min(1),
-  actions: z.array(FredActionSchema).max(4).optional().default([]),
+  actions: z.array(FredActionSchema).max(5).optional().default([]),
 });
 
 export type FredAction = z.infer<typeof FredActionSchema>;
@@ -28,26 +48,35 @@ export type BoardContextPayload = {
   layerCount?: number;
   selectionCount?: number;
   summary?: string;
+  visionAttached?: boolean;
+  visionCount?: number;
 };
 
-const SYSTEM_PROMPT = `Tu es Fred, l'assistant IA intégré à Boardly — un canvas infini pour moodboards, refs visuelles et brainstorm.
+const SYSTEM_PROMPT = `Tu es Fred, l'assistant IA intégré à Boardly — canvas infini pour moodboards et refs visuelles.
 
-Personnalité : créatif, direct, bienveillant. Tu tutoies l'utilisateur. Réponds en français.
+Personnalité : créatif, direct, bienveillant. Tu tutoies. Réponds en français.
 
-Tu reçois parfois un résumé du tableau (éléments, liens, notes). Utilise-le pour des réponses concrètes.
+RÈGLES DE CONTEXTE (important) :
+- Base-toi UNIQUEMENT sur le résumé texte et les images fournies. N'invente pas de contenu absent.
+- Si une image est floue, cropée ou illisible, dis-le clairement au lieu de deviner.
+- Si tu n'as pas assez d'info, pose une question courte ou propose une action prudente.
+- Ne répète pas tout le résumé du board : va à l'essentiel.
 
-Quand l'utilisateur demande d'ajouter des idées, post-its, notes ou titres sur le canvas, propose des actions.
-Sinon, laisse "actions" vide.
+VISION : quand des images sont jointes, décris palette, style, composition, mood, éléments utiles pour un moodboard.
 
-Réponds UNIQUEMENT en JSON valide, sans markdown autour :
+GÉNÉRATION SUR LE CANVAS : quand l'utilisateur demande des idées, post-its, sections ou titres, propose des actions JSON.
+Sinon laisse "actions" vide.
+
+Réponds UNIQUEMENT en JSON valide :
 {
-  "reply": "ta réponse (markdown léger autorisé dans la string)",
+  "reply": "ta réponse (markdown léger autorisé)",
   "actions": []
 }
 
 Actions autorisées :
-- { "type": "add_notes", "items": ["note 1", "note 2"] } — post-its jaunes (max 8)
-- { "type": "add_text", "items": ["titre ou label"] } — blocs texte (max 6)
+- { "type": "add_notes", "items": ["note"] } ou items avec { "text": "...", "color": "#FEF3C7" }
+- { "type": "add_text", "items": ["titre"] }
+- { "type": "add_frames", "items": [{ "title": "Section", "notes": ["idée 1"] }] } — cadres avec post-its (max 3 sections)
 
 Ne invente pas d'autres types d'actions.`;
 
@@ -68,6 +97,9 @@ function buildContextBlock(context?: BoardContextPayload) {
   if (typeof context.selectionCount === "number" && context.selectionCount > 0) {
     lines.push(`Sélection : ${context.selectionCount} élément(s)`);
   }
+  if (context.visionAttached) {
+    lines.push(`Images jointes à ce message : ${context.visionCount ?? 1} (analyse visuelle disponible)`);
+  }
   if (context.summary) lines.push(`Contenu :\n${context.summary}`);
   lines.push("--- Fin contexte ---");
   return lines.join("\n");
@@ -81,26 +113,48 @@ function parseFredResponse(raw: string) {
   return FredResponseSchema.parse(parsed);
 }
 
+function buildVisionParts(assets: { label: string; mimeType: string; data: string }[]): Part[] {
+  const parts: Part[] = [];
+  for (const asset of assets) {
+    parts.push({ text: `[Image: ${asset.label}]` });
+    parts.push({ inlineData: { mimeType: asset.mimeType, data: asset.data } });
+  }
+  return parts;
+}
+
 export async function chatWithFred(input: {
   message: string;
   history?: FredChatMessage[];
   boardContext?: BoardContextPayload;
+  visionAssets?: VisionAssetInput[];
 }) {
+  const { assets: resolvedVision, skipped } = await resolveVisionAssets(input.visionAssets);
+
+  const enrichedContext: BoardContextPayload | undefined = input.boardContext
+    ? {
+        ...input.boardContext,
+        visionAttached: resolvedVision.length > 0,
+        visionCount: resolvedVision.length,
+      }
+    : resolvedVision.length > 0
+      ? { visionAttached: true, visionCount: resolvedVision.length }
+      : undefined;
+
   const genAI = getClient();
   const model = genAI.getGenerativeModel({
     model: FRED_MODEL,
     systemInstruction: SYSTEM_PROMPT,
     generationConfig: {
-      temperature: 0.7,
+      temperature: 0.65,
       maxOutputTokens: 2048,
       responseMimeType: "application/json",
     },
   });
 
-  const contextBlock = buildContextBlock(input.boardContext);
-  const history = (input.history ?? []).slice(-10);
+  const contextBlock = buildContextBlock(enrichedContext);
+  const history = (input.history ?? []).slice(-8);
 
-  const contents: { role: "user" | "model"; parts: { text: string }[] }[] = [];
+  const contents: { role: "user" | "model"; parts: Part[] }[] = [];
 
   for (const msg of history) {
     contents.push({
@@ -114,17 +168,27 @@ export async function chatWithFred(input: {
     userText = `${contextBlock}\n\nMessage utilisateur :\n${userText}`;
   }
 
-  contents.push({ role: "user", parts: [{ text: userText }] });
+  const userParts: Part[] = [{ text: userText }, ...buildVisionParts(resolvedVision)];
+
+  contents.push({ role: "user", parts: userParts });
 
   const result = await model.generateContent({ contents });
   const text = result.response.text();
 
   try {
-    return parseFredResponse(text);
+    const parsed = parseFredResponse(text);
+    return {
+      ...parsed,
+      meta: {
+        visionUsed: resolvedVision.length,
+        visionSkipped: skipped,
+      },
+    };
   } catch {
     return {
       reply: text || "Je n'ai pas pu formuler une réponse claire. Réessaie.",
       actions: [] as FredAction[],
+      meta: { visionUsed: resolvedVision.length, visionSkipped: skipped },
     };
   }
 }
