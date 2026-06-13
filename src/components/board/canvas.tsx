@@ -373,13 +373,13 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
     pencilDraft.current = id;
   }, [lastUsedColor, pencilThickness]);
 
-  const continueDrawing = useCallback((point: { x: number; y: number }, e: React.PointerEvent) => {
+  const continueDrawing = useCallback((point: { x: number; y: number }, pressure = 0.5) => {
     const layerId = pencilDraft.current;
     if (!layerId) return;
     useCanvasStore.setState((s) => {
       const layer = s.layers[layerId];
       if (!layer) return s;
-      const points = [...(layer.points || []), [point.x, point.y, e.pressure]];
+      const points = [...(layer.points || []), [point.x, point.y, pressure]];
       return { layers: { ...s.layers, [layerId]: { ...layer, points } } };
     });
   }, []);
@@ -520,9 +520,12 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
   }, []);
 
   // Pointer handlers
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    e.preventDefault();
-    const current = pointerEventToCanvasPoint(e, camera);
+  const processPointerMove = useCallback((e: Pick<PointerEvent, "clientX" | "clientY" | "buttons" | "shiftKey" | "pressure">) => {
+    const cam = useCanvasStore.getState().camera;
+    const current = {
+      x: Math.round((e.clientX - cam.x) / cam.zoom),
+      y: Math.round((e.clientY - cam.y) / cam.zoom),
+    };
     pastePointRef.current = current;
     syncCursor(current);
     setCursorPoint(current);
@@ -559,42 +562,29 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
       setCamera({
         x: rubberBand(rawX, -8000, 8000),
         y: rubberBand(rawY, -8000, 8000),
-        zoom: camera.zoom,
+        zoom: cam.zoom,
       });
-    }
-    else if (state.canvasState.mode === "selectionNet") setCanvasState({ mode: "selectionNet", origin: state.canvasState.origin, current });
-    else if (state.canvasState.mode === "inserting" && state.canvasState.origin) setCanvasState({ ...state.canvasState, current });
-    else if (state.canvasState.mode === "pencil") {
-      if (pencilTool === "draw") continueDrawing(current, e);
+    } else if (state.canvasState.mode === "selectionNet") {
+      setCanvasState({ mode: "selectionNet", origin: state.canvasState.origin, current });
+    } else if (state.canvasState.mode === "inserting" && state.canvasState.origin) {
+      setCanvasState({ ...state.canvasState, current });
+    } else if (state.canvasState.mode === "pencil") {
+      if (pencilTool === "draw") continueDrawing(current, e.pressure || 0.5);
       else if (pencilTool === "erase" && e.buttons === 1) eraser(current);
     }
-  }, [camera, syncCursor, setCanvasState, pencilTool, translateSelectedLayers, resizeSelectedLayer, rotateSelectedLayer, continueDrawing, eraser, setCamera]);
+  }, [syncCursor, setCanvasState, pencilTool, translateSelectedLayers, resizeSelectedLayer, rotateSelectedLayer, continueDrawing, eraser, setCamera]);
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    const point = pointerEventToCanvasPoint(e, camera);
-    const state = useCanvasStore.getState();
-    if (state.canvasState.mode === "panning") {
-      setCanvasState({
-        mode: "panning",
-        start: { x: e.clientX, y: e.clientY },
-        camStart: { x: camera.x, y: camera.y },
-      });
-      return;
-    }
-    if (state.canvasState.mode === "inserting") {
-      setCanvasState({ ...state.canvasState, origin: point, current: point });
-      return;
-    }
-    if (state.canvasState.mode === "pencil") {
-      if (pencilTool === "draw") startDrawing(point, e.pressure);
-      else eraser(point);
-      return;
-    }
-    if (state.canvasState.mode === "none") setCanvasState({ mode: "selectionNet", origin: point, current: point });
-  }, [camera, setCanvasState, pencilTool, startDrawing, eraser]);
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    e.preventDefault();
+    processPointerMove(e);
+  }, [processPointerMove]);
 
-  const onPointerUp = useCallback((e: React.PointerEvent) => {
-    const point = pointerEventToCanvasPoint(e, camera);
+  const processPointerUp = useCallback((e: Pick<PointerEvent, "clientX" | "clientY">) => {
+    const cam = useCanvasStore.getState().camera;
+    const point = {
+      x: Math.round((e.clientX - cam.x) / cam.zoom),
+      y: Math.round((e.clientY - cam.y) / cam.zoom),
+    };
     const state = useCanvasStore.getState();
     if (state.canvasState.mode === "translating" || state.canvasState.mode === "resizing" || state.canvasState.mode === "rotating") {
       if (state.selection.length > 0) {
@@ -629,12 +619,70 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
         if (w < 5 && h < 5) {
           if (state.canvasState.layerType === "Line") insertLayer("Line", point.x - 50, point.y, 100, 0);
           else insertLayer(state.canvasState.layerType, point.x, point.y);
-        } else insertLayer(state.canvasState.layerType, x, y, Math.max(w, state.canvasState.layerType === "Line" ? 20 : 5), Math.max(h, state.canvasState.layerType === "Line" ? 0 : 5));
+        } else {
+          insertLayer(
+            state.canvasState.layerType,
+            x,
+            y,
+            Math.max(w, state.canvasState.layerType === "Line" ? 20 : 5),
+            Math.max(h, state.canvasState.layerType === "Line" ? 0 : 5)
+          );
+        }
       }
     } else if (state.canvasState.mode === "pencil") {
       if (pencilTool === "draw") insertPath();
     }
-  }, [camera, setCanvasState, setSelection, insertLayer, insertPath, addAuditEntry, pushHistory, pencilTool]);
+  }, [setCanvasState, setSelection, insertLayer, insertPath, addAuditEntry, clearTranslateGhost, pencilTool]);
+
+  const onPointerUp = useCallback((e: React.PointerEvent) => {
+    processPointerUp(e);
+  }, [processPointerUp]);
+
+  useEffect(() => {
+    if (readOnly) return;
+
+    const onWindowPointerMove = (e: PointerEvent) => {
+      const state = useCanvasStore.getState();
+      if (state.canvasState.mode === "none" && !state.connectFromId) return;
+      processPointerMove(e);
+    };
+
+    const onWindowPointerUp = (e: PointerEvent) => {
+      processPointerUp(e);
+    };
+
+    window.addEventListener("pointermove", onWindowPointerMove);
+    window.addEventListener("pointerup", onWindowPointerUp);
+    window.addEventListener("pointercancel", onWindowPointerUp);
+    return () => {
+      window.removeEventListener("pointermove", onWindowPointerMove);
+      window.removeEventListener("pointerup", onWindowPointerUp);
+      window.removeEventListener("pointercancel", onWindowPointerUp);
+    };
+  }, [readOnly, processPointerMove, processPointerUp]);
+
+  const onPointerDown = useCallback((e: React.PointerEvent) => {
+    const point = pointerEventToCanvasPoint(e, camera);
+    const state = useCanvasStore.getState();
+    if (state.canvasState.mode === "panning") {
+      setCanvasState({
+        mode: "panning",
+        start: { x: e.clientX, y: e.clientY },
+        camStart: { x: camera.x, y: camera.y },
+      });
+      return;
+    }
+    if (state.canvasState.mode === "inserting") {
+      setCanvasState({ ...state.canvasState, origin: point, current: point });
+      return;
+    }
+    if (state.canvasState.mode === "pencil") {
+      if (pencilTool === "draw") startDrawing(point, e.pressure);
+      else eraser(point);
+      return;
+    }
+    if (state.canvasState.mode === "none") setCanvasState({ mode: "selectionNet", origin: point, current: point });
+  }, [camera, setCanvasState, pencilTool, startDrawing, eraser]);
 
   const onLayerPointerDown = useCallback((e: React.PointerEvent, layerId: string) => {
     e.stopPropagation();
@@ -660,7 +708,11 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
     if (!state.selection.includes(layerId)) {
       setSelection([layerId]);
     }
-    // Save pre-mutation state BEFORE translate
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
     state.pushHistory();
     captureTranslateGhost();
     setCanvasState({ mode: "translating", current: point });
@@ -682,6 +734,11 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
 
   const onResizeHandlePointerDown = useCallback((e: React.PointerEvent, initialBounds: any) => {
     e.stopPropagation();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
     const point = pointerEventToCanvasPoint(e, camera);
     // Save pre-mutation state BEFORE resize
     useCanvasStore.getState().pushHistory();
@@ -690,6 +747,11 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
 
   const onLayerRotatePointerDown = useCallback((e: React.PointerEvent, layerId: string) => {
     e.stopPropagation();
+    try {
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
     const layer = useCanvasStore.getState().layers[layerId];
     if (!layer || layer.locked) return;
     const centerX = layer.x + layer.width / 2;

@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
-import { lerpPoint } from "@/lib/motion-utils";
 import { apiFetch } from "@/lib/utils";
 import {
   cursorColorForUser,
-  getBoardSocket,
   getActiveBoardId,
+  getBoardSocket,
   joinBoardRoom,
   type RemotePresence,
 } from "@/lib/board-socket";
@@ -39,30 +38,44 @@ export function CursorsPresence({
 }) {
   const [others, setOthers] = useState<RemotePresence[]>([]);
   const [renderPos, setRenderPos] = useState<Record<string, { x: number; y: number }>>({});
-  const targetsRef = useRef<Record<string, { x: number; y: number }>>({});
   const cursorRef = useRef<{ x: number; y: number } | null>(null);
+  const lastEmitRef = useRef<{ x: number; y: number } | null>(null);
+
+  const setTarget = (connectionId: string, x: number, y: number) => {
+    setRenderPos((prev) => ({ ...prev, [connectionId]: { x, y } }));
+  };
 
   useEffect(() => {
     if (readOnly) return;
 
     let raf = 0;
-    const onMove = (e: MouseEvent) => {
+    const pushCursor = (x: number, y: number) => {
+      cursorRef.current = { x, y };
+      const socket = getBoardSocket();
+      if (socket?.connected && getActiveBoardId() === boardId) {
+        socket.emit("presence:cursor", { boardId, cursorX: x, cursorY: y });
+      }
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
         const { camera: cam } = useCanvasStore.getState();
-        cursorRef.current = {
-          x: Math.round((e.clientX - cam.x) / cam.zoom),
-          y: Math.round((e.clientY - cam.y) / cam.zoom),
-        };
+        const x = Math.round((e.clientX - cam.x) / cam.zoom);
+        const y = Math.round((e.clientY - cam.y) / cam.zoom);
+        const last = lastEmitRef.current;
+        if (last && last.x === x && last.y === y) return;
+        lastEmitRef.current = { x, y };
+        pushCursor(x, y);
       });
     };
 
-    window.addEventListener("mousemove", onMove, { passive: true });
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
     return () => {
-      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("pointermove", onPointerMove);
       cancelAnimationFrame(raf);
     };
-  }, [readOnly]);
+  }, [boardId, readOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -70,26 +83,17 @@ export function CursorsPresence({
     const socket = getBoardSocket();
     if (socket) joinBoardRoom(boardId);
 
-    const setTarget = (connectionId: string, x: number, y: number, snap = false) => {
-      const pos = { x, y };
-      targetsRef.current[connectionId] = pos;
-      if (snap) {
-        setRenderPos((prev) => ({ ...prev, [connectionId]: pos }));
-      }
-    };
-
-    const upsertOther = (raw: Partial<RemotePresence> & { userId: string }, snap = false) => {
+    const upsertOther = (raw: Partial<RemotePresence> & { userId: string }) => {
       const user = normalizePresence(raw);
       setOthers((prev) => mergePresence(prev, [user]));
       if (user.cursorX != null && user.cursorY != null) {
-        setTarget(user.connectionId, user.cursorX, user.cursorY, snap);
+        setTarget(user.connectionId, user.cursorX, user.cursorY);
       }
     };
 
     const removeOther = (payload: { connectionId?: string; userId?: string }) => {
       if (payload.connectionId) {
         setOthers((prev) => prev.filter((p) => p.connectionId !== payload.connectionId));
-        delete targetsRef.current[payload.connectionId];
         setRenderPos((prev) => {
           if (!prev[payload.connectionId!]) return prev;
           const next = { ...prev };
@@ -99,14 +103,7 @@ export function CursorsPresence({
         return;
       }
       if (payload.userId) {
-        setOthers((prev) => {
-          for (const user of prev) {
-            if (user.userId === payload.userId) {
-              delete targetsRef.current[user.connectionId];
-            }
-          }
-          return prev.filter((p) => p.userId !== payload.userId);
-        });
+        setOthers((prev) => prev.filter((p) => p.userId !== payload.userId));
         setRenderPos((prev) => {
           const next = { ...prev };
           for (const connectionId of Object.keys(next)) {
@@ -125,7 +122,7 @@ export function CursorsPresence({
       setOthers(normalized);
       for (const user of normalized) {
         if (user.cursorX != null && user.cursorY != null) {
-          setTarget(user.connectionId, user.cursorX, user.cursorY, true);
+          setTarget(user.connectionId, user.cursorX, user.cursorY);
         }
       }
     };
@@ -137,12 +134,7 @@ export function CursorsPresence({
 
     const onPresenceCursor = (user: RemotePresence) => {
       if (cancelled) return;
-      upsertOther(user, true);
-    };
-
-    const onPresenceLeave = (payload: { connectionId?: string; userId?: string }) => {
-      if (cancelled) return;
-      removeOther(payload);
+      upsertOther(user);
     };
 
     const onConnect = () => {
@@ -154,7 +146,7 @@ export function CursorsPresence({
       socket.on("presence:state", onPresenceState);
       socket.on("presence:join", onPresenceJoin);
       socket.on("presence:cursor", onPresenceCursor);
-      socket.on("presence:leave", onPresenceLeave);
+      socket.on("presence:leave", removeOther);
       if (socket.connected) onConnect();
     }
 
@@ -178,7 +170,7 @@ export function CursorsPresence({
         setOthers((prev) => mergePresence(prev, normalized));
         for (const user of normalized) {
           if (user.cursorX != null && user.cursorY != null) {
-            setTarget(user.connectionId, user.cursorX, user.cursorY, true);
+            setTarget(user.connectionId, user.cursorX, user.cursorY);
           }
         }
       } catch {
@@ -196,53 +188,11 @@ export function CursorsPresence({
       socket?.off("presence:state", onPresenceState);
       socket?.off("presence:join", onPresenceJoin);
       socket?.off("presence:cursor", onPresenceCursor);
-      socket?.off("presence:leave", onPresenceLeave);
+      socket?.off("presence:leave", removeOther);
     };
   }, [boardId, readOnly]);
 
-  useEffect(() => {
-    if (readOnly) return;
-
-    const emit = () => {
-      const latest = cursorRef.current;
-      const socket = getBoardSocket();
-      if (socket?.connected && getActiveBoardId() === boardId) {
-        socket.emit("presence:cursor", {
-          boardId,
-          cursorX: latest?.x ?? null,
-          cursorY: latest?.y ?? null,
-        });
-      }
-    };
-
-    emit();
-    const interval = setInterval(emit, 50);
-    return () => clearInterval(interval);
-  }, [boardId, readOnly]);
-
-  useEffect(() => {
-    let raf = 0;
-    const tick = () => {
-      setRenderPos((prev) => {
-        const next: Record<string, { x: number; y: number }> = { ...prev };
-        let changed = false;
-        for (const [connectionId, target] of Object.entries(targetsRef.current)) {
-          const current = prev[connectionId] || target;
-          const lerped = lerpPoint(current, target, 0.45);
-          if (current.x !== lerped.x || current.y !== lerped.y) changed = true;
-          next[connectionId] = lerped;
-        }
-        return changed ? next : prev;
-      });
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, []);
-
-  const visibleOthers = others.filter(
-    (user) => renderPos[user.connectionId] && user.cursorX != null && user.cursorY != null
-  );
+  const visibleOthers = others.filter((user) => renderPos[user.connectionId]);
   if (visibleOthers.length === 0) return null;
 
   return (
