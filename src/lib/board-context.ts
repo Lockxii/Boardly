@@ -8,21 +8,25 @@ function truncate(text: string, max = 120) {
   return `${clean.slice(0, max - 1)}…`;
 }
 
-function describeLayer(layer: Layer): string {
+function describeLayer(id: string, layer: Layer): string {
+  const base = `[id:${id}]`;
+  const meta = `pos(${Math.round(layer.x)},${Math.round(layer.y)}) size(${Math.round(layer.width)}x${Math.round(layer.height)})`;
   switch (layer.type) {
     case "Note":
     case "Text":
-      return layer.value ? `${layer.type}: "${truncate(layer.value)}"` : layer.type;
+      return layer.value
+        ? `${base} ${layer.type}: "${truncate(layer.value)}" ${meta}${layer.fill ? ` fill:${layer.fill}` : ""}`
+        : `${base} ${layer.type} ${meta}`;
     case "Link":
-      return `Lien: ${layer.linkTitle || layer.url || "sans titre"}${layer.linkImage ? " [preview]" : ""}`;
+      return `${base} Lien: ${truncate(layer.linkTitle || layer.url || "sans titre")}${layer.linkImage ? " [preview]" : ""} ${meta}`;
     case "Image":
-      return layer.src ? "Image [visuelle]" : "Image";
+      return `${base} ${layer.src ? "Image [visuelle]" : "Image"} ${meta}`;
     case "Frame":
-      return layer.value ? `Cadre "${truncate(layer.value, 40)}"` : "Cadre";
+      return layer.value ? `${base} Cadre "${truncate(layer.value, 40)}" ${meta}` : `${base} Cadre ${meta}`;
     case "Path":
-      return "Dessin";
+      return `${base} Dessin ${meta}`;
     default:
-      return layer.type;
+      return `${base} ${layer.type} ${meta}`;
   }
 }
 
@@ -46,15 +50,15 @@ export function buildBoardSummary(input: {
 }) {
   const { layers, layerIds, selection, connections } = input;
   const items = layerIds
-    .map((id) => layers[id])
-    .filter(Boolean)
+    .map((id) => ({ id, layer: layers[id] }))
+    .filter(({ layer }) => Boolean(layer))
     .slice(0, MAX_SUMMARY_ITEMS)
-    .map((layer, i) => `${i + 1}. ${describeLayer(layer)}`);
+    .map(({ id, layer }, i) => `${i + 1}. ${describeLayer(id, layer)}`);
 
   const selected = selection
-    .map((id) => layers[id])
-    .filter(Boolean)
-    .map((layer) => describeLayer(layer));
+    .map((id) => ({ id, layer: layers[id] }))
+    .filter(({ layer }) => Boolean(layer))
+    .map(({ id, layer }) => describeLayer(id, layer));
 
   const visionCount = countVisionLayers(layers, layerIds);
 
@@ -81,8 +85,8 @@ export function buildBoardSummary(input: {
 export function buildLinkedLayersSummary(linkedIds: string[], layers: Record<string, Layer>) {
   if (!linkedIds.length) return "";
   const lines = linkedIds
-    .map((id) => layers[id])
-    .filter(Boolean)
-    .map((layer, i) => `${i + 1}. ${describeLayer(layer!)}`);
+    .map((id) => ({ id, layer: layers[id] }))
+    .filter(({ layer }) => Boolean(layer))
+    .map(({ id, layer }, i) => `${i + 1}. ${describeLayer(id, layer)}`);
   return lines.length ? `Éléments liés au message :\n${lines.join("\n")}` : "";
 }

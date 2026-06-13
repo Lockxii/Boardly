@@ -11,6 +11,14 @@ import {
   GripHorizontal,
   Pencil,
   Trash2,
+  Search,
+  Palette,
+  FileText,
+  LayoutGrid,
+  ClipboardCheck,
+  Presentation,
+  Download,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +38,7 @@ import {
 import { toast } from "sonner";
 import { useCanvasStore } from "@/store/canvas-store";
 import { buildBoardSummary, buildLinkedLayersSummary } from "@/lib/board-context";
-import { sendFredMessage, fetchFredStatus, type FredChatMessage } from "@/lib/fred-ai";
+import { sendFredMessage, fetchFredStatus, type FredChatMessage, type FredToolMode } from "@/lib/fred-ai";
 import { applyFredActions } from "@/lib/fred-actions";
 import { buildVisionFromLinked, countLinkedImages } from "@/lib/fred-vision";
 import {
@@ -51,6 +59,61 @@ import { FredAvatar } from "@/components/fred-avatar";
 const MIN_WIDTH = 300;
 const MIN_HEIGHT = 360;
 const DEFAULT_LAYOUT: FredPanelLayout = { x: 16, y: 64, width: 384, height: 520 };
+const QUICK_ACTIONS: {
+  mode: FredToolMode;
+  label: string;
+  icon: typeof Wand2;
+  message: string;
+}[] = [
+  {
+    mode: "critique",
+    label: "Critique",
+    icon: ClipboardCheck,
+    message: "Critique ce board : cohérence, hiérarchie, lisibilité, direction artistique et prochaines décisions.",
+  },
+  {
+    mode: "palette",
+    label: "Style",
+    icon: Palette,
+    message: "Analyse le style visuel, la palette, le mood, la composition et les typographies probables.",
+  },
+  {
+    mode: "brief",
+    label: "Brief",
+    icon: FileText,
+    message: "Transforme ce board en brief clair et exploitable.",
+  },
+  {
+    mode: "organize",
+    label: "Ranger",
+    icon: LayoutGrid,
+    message: "Range les éléments liés ou sélectionnés de façon plus lisible et crée une version avant modification.",
+  },
+  {
+    mode: "annotate",
+    label: "Annoter",
+    icon: MessageSquare,
+    message: "Ajoute des annotations courtes et actionnables sur les éléments liés ou sélectionnés.",
+  },
+  {
+    mode: "pitch",
+    label: "Pitch",
+    icon: Presentation,
+    message: "Prépare un pitch de présentation pour ce board, section par section.",
+  },
+  {
+    mode: "web",
+    label: "Refs web",
+    icon: Search,
+    message: "Cherche des références web pertinentes pour enrichir ce board, avec URLs utiles.",
+  },
+  {
+    mode: "export",
+    label: "Export",
+    icon: Download,
+    message: "Rédige un export Markdown propre et exploitable à partir de ce board.",
+  },
+];
 
 type FredPanelProps = {
   onClose: () => void;
@@ -82,6 +145,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   const [layout, setLayout] = useState<FredPanelLayout>(
     () => loadFredPanelLayout(boardId) ?? DEFAULT_LAYOUT
   );
+  const [chatSearch, setChatSearch] = useState("");
   const [renameTarget, setRenameTarget] = useState<{ id: string; title: string } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
@@ -90,6 +154,14 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
   const resizeRef = useRef<{ startX: number; startY: number; origW: number; origH: number } | null>(null);
 
   const messages = (activeSession?.messages ?? []) as FredChatMessage[];
+  const filteredSessions = sessions.filter((session) => {
+    const needle = chatSearch.trim().toLowerCase();
+    if (!needle) return true;
+    return (
+      session.title.toLowerCase().includes(needle) ||
+      session.messages.some((message) => message.content.toLowerCase().includes(needle))
+    );
+  });
 
   const persistSessions = useCallback(
     (nextOrUpdater: FredChatSession[] | ((current: FredChatSession[]) => FredChatSession[])) => {
@@ -200,7 +272,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
     });
   };
 
-  const sendMessage = async (text: string) => {
+  const sendMessage = async (text: string, toolMode: FredToolMode = "chat") => {
     const trimmed = text.trim();
     const hasLinked = linkedIds.length > 0;
     if ((!trimmed && !hasLinked) || loading) return;
@@ -252,14 +324,16 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
       const response = await sendFredMessage({
         message: trimmed || "Analyse les éléments liés et réponds en fonction du contexte.",
         history: history.slice(0, -1),
-        boardContext: getBoardContext(currentLinked),
+        boardContext: { ...getBoardContext(currentLinked), memory: activeSession?.memory },
         boardId,
         linkedLayerIds: currentLinked.length ? currentLinked : undefined,
         visionAssets: assets.length ? assets : undefined,
+        toolMode,
       });
 
       updateActiveSession((session) => ({
         ...session,
+        memory: response.memory || session.memory,
         updatedAt: Date.now(),
         messages: [
           ...session.messages,
@@ -268,6 +342,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
             role: "assistant",
             content: response.reply,
             actions: response.actions?.length ? response.actions : undefined,
+            linkedLayerIds: currentLinked.length ? currentLinked : undefined,
             meta: response.meta,
           },
         ],
@@ -280,9 +355,27 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
     }
   };
 
+  const runQuickAction = (mode: FredToolMode, message: string) => {
+    void sendMessage(message, mode);
+  };
+
+  const downloadMessage = (msg: FredChatMessage) => {
+    const title = activeSession?.title || "fred";
+    const safeTitle = title.toLowerCase().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "") || "fred";
+    const blob = new Blob([msg.content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${safeTitle}-${new Date().toISOString().slice(0, 10)}.md`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
   const handleApplyActions = (msg: FredChatMessage) => {
     if (!msg.actions?.length) return;
-    applyFredActions(msg.actions);
+    applyFredActions(msg.actions, { linkedIds: msg.linkedLayerIds ?? linkedIds });
     updateActiveSession((session) => ({
       ...session,
       messages: session.messages.map((m) =>
@@ -433,7 +526,18 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="max-h-72 w-64 overflow-y-auto p-1">
-              {sessions.map((s) => (
+              <div className="sticky top-0 z-10 bg-white p-1 dark:bg-neutral-950">
+                <div className="flex items-center gap-1.5 rounded-md border border-neutral-200 bg-white px-2 py-1 dark:border-neutral-800 dark:bg-neutral-900">
+                  <Search className="h-3.5 w-3.5 shrink-0 text-neutral-400" />
+                  <input
+                    value={chatSearch}
+                    onChange={(e) => setChatSearch(e.target.value)}
+                    placeholder="Rechercher"
+                    className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-neutral-400"
+                  />
+                </div>
+              </div>
+              {filteredSessions.map((s) => (
                 <div
                   key={s.id}
                   className={cn(
@@ -476,6 +580,9 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
                   </Button>
                 </div>
               ))}
+              {filteredSessions.length === 0 && (
+                <p className="px-2 py-3 text-center text-xs text-neutral-500">Aucun chat trouvé.</p>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
           <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg" onClick={handleNewChat} title="Nouveau chat">
@@ -541,6 +648,18 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
                     Ajouter au canvas
                   </Button>
                 )}
+                {!isUser && msg.id !== "welcome" && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 rounded-full px-2 text-[11px] text-neutral-500 hover:text-neutral-800 dark:hover:text-neutral-200"
+                    onClick={() => downloadMessage(msg)}
+                    title="Exporter cette réponse en Markdown"
+                  >
+                    <Download className="mr-1 h-3.5 w-3.5" />
+                    Exporter
+                  </Button>
+                )}
               </div>
             </div>
           );
@@ -551,6 +670,29 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
             {preparingVision ? "Préparation des images liées…" : "Fred réfléchit…"}
           </div>
         )}
+      </div>
+
+      <div className="border-t border-neutral-100 px-3 py-2 dark:border-neutral-800">
+        <div className="flex gap-1.5 overflow-x-auto pb-0.5">
+          {QUICK_ACTIONS.map((action) => {
+            const Icon = action.icon;
+            return (
+              <Button
+                key={action.mode}
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-8 shrink-0 rounded-lg px-2 text-xs"
+                disabled={loading}
+                onClick={() => runQuickAction(action.mode, action.message)}
+                title={action.message}
+              >
+                <Icon className="mr-1.5 h-3.5 w-3.5" />
+                {action.label}
+              </Button>
+            );
+          })}
+        </div>
       </div>
 
       {linkedIds.length > 0 && (

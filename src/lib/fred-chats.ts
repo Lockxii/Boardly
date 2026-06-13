@@ -12,6 +12,7 @@ export type FredStoredMessage = {
 export type FredChatSession = {
   id: string;
   title: string;
+  memory?: string;
   createdAt: number;
   updatedAt: number;
   messages: FredStoredMessage[];
