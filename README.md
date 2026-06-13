@@ -61,11 +61,24 @@ Rendez-vous sur `http://localhost:3000`.
     - Suppression (Touche Suppr ou Bouton).
 - **Modèles** : Choix entre Vide, Grille ou Plan (Blueprint) à la création.
 
-## Déploiement Vercel + Socket.io
+## Déploiement Railway + Socket.io
 
 Vercel déploie l'API Express comme une Function serverless, donc le serveur Socket.io local (`server/index.ts`) ne tourne pas en production Vercel. Par défaut, Boardly désactive donc Socket.io sur Vercel et garde la collaboration via fallback HTTP.
 
-Pour avoir du vrai WebSocket en production, déployez le serveur Node ailleurs (Railway, Fly, Render, VPS), puis ajoutez dans Vercel :
+Le plus simple pour avoir Socket.io en production est de déployer toute l'app sur Railway :
+
+1. Railway → New Project → Deploy from GitHub repo → `Lockxii/Boardly`.
+2. Variables Railway :
+   - `DATABASE_URL`
+   - `BETTER_AUTH_SECRET`
+   - `BETTER_AUTH_URL=https://votre-domaine.up.railway.app`
+   - `GOOGLE_AI_API_KEY`
+3. Settings → Networking → Generate Domain.
+4. Remplacez `BETTER_AUTH_URL` par le domaine généré, puis redeploy.
+
+Railway lancera `npm run build`, puis `npm start`. Le script `start` sert le frontend `dist/`, l'API Express et Socket.io sur le même domaine.
+
+Si vous gardez le frontend sur Vercel et déployez seulement Socket.io ailleurs, il faut un vrai domaine partagé/cookies compatibles ou une auth Socket.io par token. Ensuite seulement, ajoutez dans Vercel :
 
 ```env
 VITE_SOCKET_URL="https://votre-api-socket.example.com"

@@ -1,5 +1,8 @@
 import express from "express";
 import cors from "cors";
+import { existsSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { auth } from "./auth.js";
 import { prisma } from "./prisma.js";
@@ -10,6 +13,8 @@ import { buildTemplateCanvas } from "./board-seeds.js";
 import { chatWithFred, isFredConfigured, streamChatWithFred } from "./fred-ai.js";
 import { getBoardAccess } from "./board-access.js";
 import { emitBoardUpdated } from "./socket.js";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function getAppOrigin() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
@@ -519,6 +524,18 @@ export function createApp() {
       res.send(Buffer.from(base64, "base64"));
     }
   });
+
+  if (process.env.SERVE_STATIC === "true") {
+    const staticDir = path.resolve(__dirname, "../dist");
+    const indexFile = path.join(staticDir, "index.html");
+
+    if (existsSync(indexFile)) {
+      app.use(express.static(staticDir));
+      app.get(/^(?!\/api(?:\/|$)).*/, (_req, res) => {
+        res.sendFile(indexFile);
+      });
+    }
+  }
 
   app.use((err: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (res.headersSent) return next(err);
