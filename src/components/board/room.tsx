@@ -1,11 +1,18 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { toast } from "sonner";
 import { Canvas } from "./canvas";
 import { useCanvasStore } from "@/store/canvas-store";
 import { RouteLoading } from "@/components/route-loading";
 import { apiFetch } from "@/lib/utils";
-import type { BoardCanvasData } from "@/lib/types";
+import { applyRemoteBoardUpdate } from "@/lib/board-remote-sync";
+import {
+  acquireBoardSocket,
+  joinBoardRoom,
+  releaseBoardSocket,
+  getBoardSocket,
+  type BoardUpdatedEvent,
+} from "@/lib/board-socket";
+import { fetchCurrentUser } from "@/lib/auth-client";
 
 interface RoomProps {
   roomId: string;
@@ -17,6 +24,7 @@ interface RoomProps {
 
 export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) {
   const [ready, setReady] = useState(false);
+  const [socketLive, setSocketLive] = useState(false);
   const queryClient = useQueryClient();
   const loadBoard = useCanvasStore((s) => s.loadBoard);
   const saveBoard = useCanvasStore((s) => s.saveBoard);
@@ -57,58 +65,90 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
     };
   }, [ready, roomId, saveBoard, queryClient]);
 
+  useLayoutEffect(() => {
+    if (!ready) return;
+    acquireBoardSocket();
+    joinBoardRoom(roomId);
+  }, [ready, roomId]);
+
   useEffect(() => {
     if (!ready) return;
-    let remoteUpdatedAt = 0;
 
-    const pollRemote = async () => {
+    let cancelled = false;
+    let remoteUpdatedAt = 0;
+    let currentUserId: string | null = null;
+
+    void fetchCurrentUser().then((user) => {
+      currentUserId = user?.id ?? null;
+    });
+
+    const pullRemote = async (options: { userId?: string; userName?: string; notify?: boolean } = {}) => {
       try {
-        const remote = await apiFetch<{ canvasData: BoardCanvasData | null; updatedAt: string }>(
+        const remote = await apiFetch<{ canvasData: import("@/lib/types").BoardCanvasData | null; updatedAt: string }>(
           `/api/boards/${roomId}/content`
         );
         const updatedAt = new Date(remote.updatedAt).getTime();
         if (updatedAt <= remoteUpdatedAt) return;
         remoteUpdatedAt = updatedAt;
-
-        const state = useCanvasStore.getState();
-        if (state.saveStatus === "saving") return;
-        if (!remote.canvasData?.layerIds?.length) return;
-        if (state.lastSavedAt && updatedAt <= state.lastSavedAt + 2000) return;
-
-        const prevLayers = state.layers;
-        const nextLayers = remote.canvasData.layers;
-        const changedIds = remote.canvasData.layerIds.filter((id) => {
-          const before = prevLayers[id];
-          const after = nextLayers[id];
-          if (!before || !after) return !!after;
-          return before.x !== after.x || before.y !== after.y || before.value !== after.value || before.fill !== after.fill;
-        }).slice(0, 10);
-
-        useCanvasStore.setState({
-          layers: nextLayers,
-          layerIds: remote.canvasData.layerIds,
-          connections: remote.canvasData.connections || [],
-          versions: remote.canvasData.versions || [],
-          layerComments: remote.canvasData.layerComments || {},
-          reactions: remote.canvasData.reactions || {},
-          brandColors: remote.canvasData.brandColors || useCanvasStore.getState().brandColors,
-          selection: [],
-        });
-
-        if (changedIds.length > 0) {
-          useCanvasStore.getState().flashLayers(changedIds);
-          toast.message("Le board a été mis à jour");
-        }
-      } catch {}
+        await applyRemoteBoardUpdate(remote, options);
+      } catch {
+        /* offline or auth */
+      }
     };
 
-    const interval = setInterval(pollRemote, 12000);
-    return () => clearInterval(interval);
+    const socket = getBoardSocket();
+    if (!socket) return;
+
+    const onConnect = () => {
+      if (!cancelled) setSocketLive(true);
+      socket.emit("board:join", { boardId: roomId });
+    };
+    const onDisconnect = () => {
+      if (!cancelled) setSocketLive(false);
+    };
+
+    const onBoardUpdated = (event: BoardUpdatedEvent) => {
+      if (event.boardId !== roomId) return;
+      if (currentUserId && event.userId === currentUserId) return;
+      void pullRemote({ userId: event.userId, userName: event.userName });
+    };
+
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
+    socket.on("board:updated", onBoardUpdated);
+    if (socket.connected) onConnect();
+
+    const pollInterval = setInterval(() => {
+      if (socket.connected) return;
+      void pullRemote();
+    }, 8000);
+
+    return () => {
+      cancelled = true;
+      clearInterval(pollInterval);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
+      socket.off("board:updated", onBoardUpdated);
+      releaseBoardSocket();
+    };
   }, [ready, roomId]);
 
   if (!ready) {
     return <RouteLoading label="Chargement du canvas..." />;
   }
 
-  return <Canvas template={template} title={title} boardId={boardId} isPublic={isPublic} />;
+  return (
+    <>
+      {socketLive && (
+        <div
+          className="pointer-events-none fixed bottom-3 left-3 z-[60] flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-2.5 py-1 text-[10px] font-medium text-emerald-700 ring-1 ring-emerald-500/20 dark:text-emerald-300"
+          title="Collaboration temps réel active"
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+          Live
+        </div>
+      )}
+      <Canvas template={template} title={title} boardId={boardId} isPublic={isPublic} />
+    </>
+  );
 }

@@ -38,7 +38,7 @@ Rendez-vous sur `http://localhost:3000`.
 
 - **Auth** : BetterAuth (Email/Mot de passe) avec Adaptateur Prisma.
 - **Base de données** : NeonDB (PostgreSQL) via Prisma ORM.
-- **Temps Réel** : Présence HTTP + auto-save (WebSocket à venir via Socket.io).
+- **Temps Réel** : Socket.io (curseurs + sync board instantanée). Fallback HTTP si WebSocket indisponible.
 - **État** : Zustand (canvas local) + Prisma (persistance board).
 - **Canvas** : Moteur SVG performant avec transformations matricielles (Zoom/Pan).
 - **Styling** : Tailwind CSS + shadcn/ui.

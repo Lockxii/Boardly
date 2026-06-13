@@ -8,6 +8,8 @@ import { fetchLinkPreview } from "./link-preview.js";
 import { fetchMusicPreviewHandler } from "./music-preview.js";
 import { buildTemplateCanvas } from "./board-seeds.js";
 import { chatWithFred, isFredConfigured, streamChatWithFred } from "./fred-ai.js";
+import { getBoardAccess } from "./board-access.js";
+import { emitBoardUpdated } from "./socket.js";
 
 function getAppOrigin() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
@@ -39,25 +41,6 @@ function requireAuth(handler: (req: express.Request, res: express.Response, user
       });
     }
   };
-}
-
-type BoardAccess = {
-  board: NonNullable<Awaited<ReturnType<typeof prisma.board.findUnique>>>;
-  role: "owner" | "editor";
-  isOwner: boolean;
-};
-
-async function getBoardAccess(boardId: string, user: { id: string; email: string }): Promise<BoardAccess | null> {
-  const board = await prisma.board.findUnique({ where: { id: boardId } });
-  if (!board) return null;
-  if (board.authorId === user.id) {
-    return { board, role: "owner", isOwner: true };
-  }
-  const member = await prisma.boardMember.findFirst({
-    where: { boardId, email: user.email },
-  });
-  if (!member) return null;
-  return { board, role: "editor", isOwner: false };
 }
 
 function serializeBoard(
@@ -402,6 +385,13 @@ export function createApp() {
         canvasData,
         thumbnail: typeof thumbnail === "string" ? thumbnail : access.board.thumbnail,
       },
+    });
+
+    emitBoardUpdated({
+      boardId,
+      updatedAt: updated.updatedAt.toISOString(),
+      userId: user.id,
+      userName: user.name,
     });
 
     res.json({
