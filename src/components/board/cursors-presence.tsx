@@ -22,14 +22,17 @@ export function CursorsPresence({
   const targetsRef = useRef<Record<string, { x: number; y: number }>>({});
   const lastEmitRef = useRef(0);
   const socketLiveRef = useRef(false);
+  const cursorRef = useRef(cursor);
+
+  useEffect(() => {
+    cursorRef.current = cursor;
+  }, [cursor]);
 
   useEffect(() => {
     let cancelled = false;
 
     const socket = getBoardSocket();
-    if (!socket) return;
-
-    joinBoardRoom(boardId);
+    if (socket) joinBoardRoom(boardId);
 
     const upsertOther = (user: RemotePresence) => {
       setOthers((prev) => {
@@ -76,28 +79,31 @@ export function CursorsPresence({
 
     const onConnect = () => {
       socketLiveRef.current = true;
-      socket.emit("board:join", { boardId });
+      socket?.emit("board:join", { boardId });
     };
     const onDisconnect = () => {
       socketLiveRef.current = false;
     };
 
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
-    socket.on("presence:state", onPresenceState);
-    socket.on("presence:join", onPresenceJoin);
-    socket.on("presence:cursor", onPresenceCursor);
-    socket.on("presence:leave", onPresenceLeave);
-    if (socket.connected) onConnect();
+    if (socket) {
+      socket.on("connect", onConnect);
+      socket.on("disconnect", onDisconnect);
+      socket.on("presence:state", onPresenceState);
+      socket.on("presence:join", onPresenceJoin);
+      socket.on("presence:cursor", onPresenceCursor);
+      socket.on("presence:leave", onPresenceLeave);
+      if (socket.connected) onConnect();
+    }
 
     const httpFallback = async () => {
       if (socketLiveRef.current) return;
       try {
+        const latestCursor = cursorRef.current;
         await apiFetch(`/api/boards/${boardId}/presence`, {
           method: "POST",
           body: JSON.stringify({
-            cursorX: cursor?.x ?? null,
-            cursorY: cursor?.y ?? null,
+            cursorX: latestCursor?.x ?? null,
+            cursorY: latestCursor?.y ?? null,
           }),
         });
         const data = await apiFetch<RemotePresence[]>(`/api/boards/${boardId}/presence`);
@@ -120,12 +126,12 @@ export function CursorsPresence({
     return () => {
       cancelled = true;
       clearInterval(fallbackInterval);
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-      socket.off("presence:state", onPresenceState);
-      socket.off("presence:join", onPresenceJoin);
-      socket.off("presence:cursor", onPresenceCursor);
-      socket.off("presence:leave", onPresenceLeave);
+      socket?.off("connect", onConnect);
+      socket?.off("disconnect", onDisconnect);
+      socket?.off("presence:state", onPresenceState);
+      socket?.off("presence:join", onPresenceJoin);
+      socket?.off("presence:cursor", onPresenceCursor);
+      socket?.off("presence:leave", onPresenceLeave);
     };
   }, [boardId]);
 

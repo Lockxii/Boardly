@@ -96,12 +96,9 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
       }
     };
 
-    const socket = getBoardSocket();
-    if (!socket) return;
-
     const onConnect = () => {
       if (!cancelled) setSocketLive(true);
-      socket.emit("board:join", { boardId: roomId });
+      socket?.emit("board:join", { boardId: roomId });
     };
     const onDisconnect = () => {
       if (!cancelled) setSocketLive(false);
@@ -113,22 +110,25 @@ export function Room({ roomId, template, title, boardId, isPublic }: RoomProps) 
       void pullRemote({ userId: event.userId, userName: event.userName });
     };
 
-    socket.on("connect", onConnect);
-    socket.on("disconnect", onDisconnect);
-    socket.on("board:updated", onBoardUpdated);
-    if (socket.connected) onConnect();
+    const socket = getBoardSocket();
+    if (socket) {
+      socket.on("connect", onConnect);
+      socket.on("disconnect", onDisconnect);
+      socket.on("board:updated", onBoardUpdated);
+      if (socket.connected) onConnect();
+    }
 
     const pollInterval = setInterval(() => {
-      if (socket.connected) return;
+      if (socket?.connected) return;
       void pullRemote();
     }, 8000);
 
     return () => {
       cancelled = true;
       clearInterval(pollInterval);
-      socket.off("connect", onConnect);
-      socket.off("disconnect", onDisconnect);
-      socket.off("board:updated", onBoardUpdated);
+      socket?.off("connect", onConnect);
+      socket?.off("disconnect", onDisconnect);
+      socket?.off("board:updated", onBoardUpdated);
       releaseBoardSocket();
     };
   }, [ready, roomId]);

@@ -18,8 +18,16 @@ let socket: Socket | null = null;
 let refCount = 0;
 let activeBoardId: string | null = null;
 
+function getSocketUrl() {
+  const configuredUrl = (import.meta.env.VITE_SOCKET_URL || "").trim();
+  if (configuredUrl) return configuredUrl;
+  if (import.meta.env.DEV) return window.location.origin;
+  return null;
+}
+
 function createSocket() {
-  const url = import.meta.env.VITE_SOCKET_URL || window.location.origin;
+  const url = getSocketUrl();
+  if (!url) return null;
   return io(url, {
     path: "/socket.io",
     transports: ["websocket", "polling"],
@@ -37,6 +45,7 @@ export function acquireBoardSocket() {
   refCount += 1;
   if (!socket) {
     socket = createSocket();
+    if (!socket) return null;
   } else if (!socket.connected) {
     socket.connect();
   }

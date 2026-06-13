@@ -60,3 +60,13 @@ Rendez-vous sur `http://localhost:3000`.
     - Sélection multiple (Lasso).
     - Suppression (Touche Suppr ou Bouton).
 - **Modèles** : Choix entre Vide, Grille ou Plan (Blueprint) à la création.
+
+## Déploiement Vercel + Socket.io
+
+Vercel déploie l'API Express comme une Function serverless, donc le serveur Socket.io local (`server/index.ts`) ne tourne pas en production Vercel. Par défaut, Boardly désactive donc Socket.io sur Vercel et garde la collaboration via fallback HTTP.
+
+Pour avoir du vrai WebSocket en production, déployez le serveur Node ailleurs (Railway, Fly, Render, VPS), puis ajoutez dans Vercel :
+
+```env
+VITE_SOCKET_URL="https://votre-api-socket.example.com"
+```
