@@ -2,7 +2,7 @@ import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 import { z } from "zod";
 import { resolveVisionAssets, type VisionAssetInput } from "./fred-vision.js";
 
-const FRED_MODEL = process.env.FRED_AI_MODEL || "gemini-2.0-flash";
+const FRED_MODEL = process.env.FRED_AI_MODEL || "gemini-2.5-flash";
 
 const NoteItemSchema = z.union([
   z.string().min(1).max(500),
