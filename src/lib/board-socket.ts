@@ -111,11 +111,11 @@ export function joinBoardRoom(boardId: string) {
     joinedBoardId = null;
   }
   activeBoardId = boardId;
+  joinedBoardId = boardId;
 
   const join = () => {
     socket?.emit("board:join", { boardId }, (ack?: JoinAck) => {
-      if (ack?.ok) joinedBoardId = boardId;
-      else joinedBoardId = null;
+      if (ack?.ok === false) joinedBoardId = null;
     });
   };
 
@@ -127,6 +127,10 @@ export function joinBoardRoom(boardId: string) {
 
 export function getBoardSocket() {
   return socket;
+}
+
+export function getActiveBoardId() {
+  return activeBoardId;
 }
 
 export function isBoardSocketConnected() {

@@ -997,7 +997,6 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
         onLayerRotatePointerDown={onLayerRotatePointerDown}
         onChange={(id, val) => updateLayerText(id, val)}
       />
-      {roomId && <CursorsPresence boardId={roomId} camera={camera} readOnly={readOnly} />}
       <svg
         id="board-canvas"
         className="w-[100vw] h-[100vh] overscroll-none"
@@ -1048,6 +1047,7 @@ export function Canvas({ template, title, boardId, roomId, readOnly = false, isP
           <CanvasOverlay translateGhost={translateGhost} cursorPoint={cursorPoint} />
         </g>
       </svg>
+      {roomId && <CursorsPresence boardId={roomId} camera={camera} readOnly={readOnly} />}
     </main>
   );
 }

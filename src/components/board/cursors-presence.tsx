@@ -5,10 +5,20 @@ import { apiFetch } from "@/lib/utils";
 import {
   cursorColorForUser,
   getBoardSocket,
-  isBoardRoomJoined,
+  getActiveBoardId,
   joinBoardRoom,
   type RemotePresence,
 } from "@/lib/board-socket";
+
+function normalizePresence(user: Partial<RemotePresence> & { userId: string }): RemotePresence {
+  return {
+    connectionId: user.connectionId || `user:${user.userId}`,
+    userId: user.userId,
+    userName: user.userName || "Collaborateur",
+    cursorX: user.cursorX ?? null,
+    cursorY: user.cursorY ?? null,
+  };
+}
 
 function mergePresence(existing: RemotePresence[], incoming: RemotePresence[]) {
   const map = new Map(existing.map((user) => [user.connectionId, user]));
@@ -29,13 +39,30 @@ export function CursorsPresence({
 }) {
   const [others, setOthers] = useState<RemotePresence[]>([]);
   const [renderPos, setRenderPos] = useState<Record<string, { x: number; y: number }>>({});
-  const cursor = useCanvasStore((s) => s.cursor);
   const targetsRef = useRef<Record<string, { x: number; y: number }>>({});
-  const cursorRef = useRef(cursor);
+  const cursorRef = useRef<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
-    cursorRef.current = cursor;
-  }, [cursor]);
+    if (readOnly) return;
+
+    let raf = 0;
+    const onMove = (e: MouseEvent) => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const { camera: cam } = useCanvasStore.getState();
+        cursorRef.current = {
+          x: Math.round((e.clientX - cam.x) / cam.zoom),
+          y: Math.round((e.clientY - cam.y) / cam.zoom),
+        };
+      });
+    };
+
+    window.addEventListener("mousemove", onMove, { passive: true });
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      cancelAnimationFrame(raf);
+    };
+  }, [readOnly]);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,28 +78,52 @@ export function CursorsPresence({
       }
     };
 
-    const upsertOther = (user: RemotePresence, snap = false) => {
+    const upsertOther = (raw: Partial<RemotePresence> & { userId: string }, snap = false) => {
+      const user = normalizePresence(raw);
       setOthers((prev) => mergePresence(prev, [user]));
       if (user.cursorX != null && user.cursorY != null) {
         setTarget(user.connectionId, user.cursorX, user.cursorY, snap);
       }
     };
 
-    const removeOther = (connectionId: string) => {
-      setOthers((prev) => prev.filter((p) => p.connectionId !== connectionId));
-      delete targetsRef.current[connectionId];
-      setRenderPos((prev) => {
-        if (!prev[connectionId]) return prev;
-        const next = { ...prev };
-        delete next[connectionId];
-        return next;
-      });
+    const removeOther = (payload: { connectionId?: string; userId?: string }) => {
+      if (payload.connectionId) {
+        setOthers((prev) => prev.filter((p) => p.connectionId !== payload.connectionId));
+        delete targetsRef.current[payload.connectionId];
+        setRenderPos((prev) => {
+          if (!prev[payload.connectionId!]) return prev;
+          const next = { ...prev };
+          delete next[payload.connectionId!];
+          return next;
+        });
+        return;
+      }
+      if (payload.userId) {
+        setOthers((prev) => {
+          for (const user of prev) {
+            if (user.userId === payload.userId) {
+              delete targetsRef.current[user.connectionId];
+            }
+          }
+          return prev.filter((p) => p.userId !== payload.userId);
+        });
+        setRenderPos((prev) => {
+          const next = { ...prev };
+          for (const connectionId of Object.keys(next)) {
+            if (connectionId.startsWith(`user:${payload.userId}`) || connectionId === `http:${payload.userId}`) {
+              delete next[connectionId];
+            }
+          }
+          return next;
+        });
+      }
     };
 
     const onPresenceState = (users: RemotePresence[]) => {
       if (cancelled) return;
-      setOthers(users);
-      for (const user of users) {
+      const normalized = users.map((user) => normalizePresence(user));
+      setOthers(normalized);
+      for (const user of normalized) {
         if (user.cursorX != null && user.cursorY != null) {
           setTarget(user.connectionId, user.cursorX, user.cursorY, true);
         }
@@ -89,9 +140,9 @@ export function CursorsPresence({
       upsertOther(user, true);
     };
 
-    const onPresenceLeave = ({ connectionId }: { connectionId: string }) => {
+    const onPresenceLeave = (payload: { connectionId?: string; userId?: string }) => {
       if (cancelled) return;
-      removeOther(connectionId);
+      removeOther(payload);
     };
 
     const onConnect = () => {
@@ -123,11 +174,7 @@ export function CursorsPresence({
         const data = await apiFetch<RemotePresence[]>(`/api/boards/${boardId}/presence`);
         if (cancelled) return;
 
-        const normalized = data.map((user) => ({
-          ...user,
-          connectionId: user.connectionId || `http:${user.userId}`,
-        }));
-
+        const normalized = data.map((user) => normalizePresence(user));
         setOthers((prev) => mergePresence(prev, normalized));
         for (const user of normalized) {
           if (user.cursorX != null && user.cursorY != null) {
@@ -140,7 +187,7 @@ export function CursorsPresence({
     };
 
     void syncHttpPresence();
-    const httpInterval = setInterval(syncHttpPresence, 1000);
+    const httpInterval = setInterval(syncHttpPresence, 800);
 
     return () => {
       cancelled = true;
@@ -159,7 +206,7 @@ export function CursorsPresence({
     const emit = () => {
       const latest = cursorRef.current;
       const socket = getBoardSocket();
-      if (socket?.connected && isBoardRoomJoined(boardId)) {
+      if (socket?.connected && getActiveBoardId() === boardId) {
         socket.emit("presence:cursor", {
           boardId,
           cursorX: latest?.x ?? null,
@@ -193,41 +240,37 @@ export function CursorsPresence({
     return () => cancelAnimationFrame(raf);
   }, []);
 
-  const visibleOthers = others.filter((user) => renderPos[user.connectionId]);
+  const visibleOthers = others.filter(
+    (user) => renderPos[user.connectionId] && user.cursorX != null && user.cursorY != null
+  );
   if (visibleOthers.length === 0) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[30] overflow-hidden">
-      <div
-        className="absolute left-0 top-0 origin-top-left"
-        style={{
-          transform: `translate(${camera.x}px, ${camera.y}px) scale(${camera.zoom})`,
-          willChange: "transform",
-        }}
-      >
-        {visibleOthers.map((user) => {
-          const pos = renderPos[user.connectionId];
-          if (!pos) return null;
-          const color = cursorColorForUser(user.userId);
-          return (
-            <div
-              key={user.connectionId}
-              className="absolute flex items-start gap-1 remote-cursor"
-              style={{ transform: `translate3d(${pos.x}px, ${pos.y}px, 0)` }}
+    <div className="pointer-events-none fixed inset-0 z-[45] overflow-hidden">
+      {visibleOthers.map((user) => {
+        const pos = renderPos[user.connectionId];
+        if (!pos) return null;
+        const x = pos.x * camera.zoom + camera.x;
+        const y = pos.y * camera.zoom + camera.y;
+        const color = cursorColorForUser(user.userId);
+        return (
+          <div
+            key={user.connectionId}
+            className="absolute flex items-start gap-1 remote-cursor"
+            style={{ transform: `translate3d(${x}px, ${y}px, 0)` }}
+          >
+            <svg width="16" height="20" viewBox="0 0 16 20" className="drop-shadow-sm">
+              <path d="M0 0 L0 14 L4 10 L7 16 L9 15 L6 9 L12 9 Z" fill={color} />
+            </svg>
+            <span
+              className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm"
+              style={{ backgroundColor: color }}
             >
-              <svg width="16" height="20" viewBox="0 0 16 20" className="drop-shadow-sm">
-                <path d="M0 0 L0 14 L4 10 L7 16 L9 15 L6 9 L12 9 Z" fill={color} />
-              </svg>
-              <span
-                className="rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm"
-                style={{ backgroundColor: color }}
-              >
-                {user.userName}
-              </span>
-            </div>
-          );
-        })}
-      </div>
+              {user.userName}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
