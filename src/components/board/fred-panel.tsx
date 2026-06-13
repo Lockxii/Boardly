@@ -46,23 +46,11 @@ import {
   type FredPanelLayout,
 } from "@/lib/fred-chats";
 import { cn } from "@/lib/utils";
+import { FredAvatar } from "@/components/fred-avatar";
 
 const MIN_WIDTH = 300;
 const MIN_HEIGHT = 360;
 const DEFAULT_LAYOUT: FredPanelLayout = { x: 16, y: 64, width: 384, height: 520 };
-
-function FredAvatar({ className }: { className?: string }) {
-  return (
-    <div
-      className={cn(
-        "flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 text-sm font-bold text-white shadow-md shadow-blue-600/25",
-        className
-      )}
-    >
-      F
-    </div>
-  );
-}
 
 type FredPanelProps = {
   onClose: () => void;
@@ -416,7 +404,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
       >
         <div className="flex min-w-0 flex-1 items-center gap-2">
           <GripHorizontal className="h-4 w-4 shrink-0 text-neutral-400" />
-          <FredAvatar className="h-7 w-7 text-xs" />
+          <FredAvatar size={28} className="h-7 w-7" />
           <div className="min-w-0">
             <h3 className="truncate text-sm font-semibold tracking-tight">Fred AI</h3>
             <button
@@ -505,7 +493,7 @@ export function FredPanel({ onClose, boardTitle, boardTemplate, boardId = "" }: 
           const isUser = msg.role === "user";
           return (
             <div key={msg.id} className={cn("flex gap-2", isUser ? "flex-row-reverse" : "flex-row")}>
-              {!isUser && <FredAvatar className="mt-0.5 h-7 w-7 shrink-0 text-xs" />}
+              {!isUser && <FredAvatar size={28} className="mt-0.5 h-7 w-7" />}
               <div className={cn("max-w-[88%] space-y-2", isUser && "items-end")}>
                 {msg.linkedLayerIds && msg.linkedLayerIds.length > 0 && (
                   <button

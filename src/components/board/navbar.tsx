@@ -1,4 +1,5 @@
-import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation, Bot } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation } from "lucide-react";
+import { FredIcon } from "@/components/fred-avatar";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
 import { BoardlyBrand } from "@/components/boardly-brand";
@@ -317,7 +318,7 @@ function NavbarContent({
             title="Fred AI (Shift+A)"
             className={btnSize}
           >
-            <Bot className={iconSize} />
+            <FredIcon size={vertical ? 18 : compact ? 18 : 22} />
           </NavIconButton>
         )}
         <NavIconButton active={isChatOpen} onClick={() => setIsChatOpen(!isChatOpen)} title="Discussion" className={btnSize}>
