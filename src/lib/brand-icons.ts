@@ -38,7 +38,7 @@ export const LINK_CARD_GAP = 4;
 
 function defaultCardWidth(provider?: LinkProviderId) {
   if (provider === "tiktok") return 220;
-  if (provider === "twitter") return 320;
+  if (provider === "twitter") return 420;
   if (isMusicLinkProvider(provider)) return 240;
   return 280;
 }
@@ -84,6 +84,11 @@ export function getLinkLayerDimensions(preview: {
   const hasImage = !!preview.image;
   const provider = preview.provider;
   const width = defaultCardWidth(provider);
+
+  if (provider === "twitter" && !hasImage) {
+    return { width, height: 462 };
+  }
+
   const hasSubtitle = !!(preview.author || preview.description);
   const bodyHeight = estimateLinkBodyHeight(preview.title || (preview.image ? "Link" : ""), hasSubtitle, provider);
   const chrome = bodyHeight + LINK_URL_STRIP_HEIGHT + LINK_CARD_GAP;

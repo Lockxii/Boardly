@@ -1,4 +1,4 @@
-import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation, RefreshCw } from "lucide-react";
 import { FredIcon } from "@/components/fred-avatar";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
@@ -14,8 +14,19 @@ import { FloatingDock, useFloatingDock } from "./floating-dock";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuLabel, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { apiFetch } from "@/lib/utils";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCanvasStore } from "@/store/canvas-store";
+import { applyRemoteBoardUpdate } from "@/lib/board-remote-sync";
+import type { Board, BoardCanvasData } from "@/lib/types";
+
+const TWITTER_BOARD_TEMPLATE = "twitter-bookmarks";
+
+type TwitterImportResult = {
+  board: Board;
+  canvasData: BoardCanvasData;
+  updatedAt: string;
+  importedCount: number;
+};
 
 interface NavbarProps {
   title: string;
@@ -27,6 +38,7 @@ interface NavbarProps {
 }
 
 export function Navbar({ title, boardId, template, isPublic = false, readOnly = false, isOwner = false }: NavbarProps) {
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [newTitle, setNewTitle] = useState(title);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -40,6 +52,26 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
   const updateTitleMutation = useMutation({
     mutationFn: (newT: string) => apiFetch(`/api/boards/${actualBoardId}/title`, { method: "PUT", body: JSON.stringify({ title: newT }) }),
     onError: () => setNewTitle(title),
+  });
+
+  const refreshTwitterMutation = useMutation({
+    mutationFn: () =>
+      apiFetch<TwitterImportResult>("/api/integrations/twitter/import", {
+        method: "POST",
+      }),
+    onSuccess: async (result) => {
+      queryClient.invalidateQueries({ queryKey: ["boards"] });
+      if (result.board.id === actualBoardId) {
+        await applyRemoteBoardUpdate(
+          { canvasData: result.canvasData, updatedAt: result.updatedAt },
+          { notify: false, preserveSelection: true }
+        );
+      }
+      toast.success(`${result.importedCount} tweet${result.importedCount > 1 ? "s" : ""} synchronisé${result.importedCount > 1 ? "s" : ""}`);
+    },
+    onError: (error) => {
+      toast.error(error instanceof Error ? error.message : "Synchronisation Twitter impossible");
+    },
   });
 
   const handleExport = async () => {
@@ -175,6 +207,9 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
           handleExportPNG={handleExportPNG}
           handleExportSVG={handleExportSVG}
           setShowPresentation={setShowPresentation}
+          isTwitterBoard={template === TWITTER_BOARD_TEMPLATE}
+          isRefreshingTwitter={refreshTwitterMutation.isPending}
+          onRefreshTwitter={() => refreshTwitterMutation.mutate()}
         />
       </FloatingDock>
       {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
@@ -213,6 +248,9 @@ function NavbarContent({
   handleExportPNG,
   handleExportSVG,
   setShowPresentation,
+  isTwitterBoard,
+  isRefreshingTwitter,
+  onRefreshTwitter,
 }: {
   title: string;
   isEditing: boolean;
@@ -236,6 +274,9 @@ function NavbarContent({
   handleExportPNG: () => void;
   handleExportSVG: () => void;
   setShowPresentation: (show: boolean) => void;
+  isTwitterBoard: boolean;
+  isRefreshingTwitter: boolean;
+  onRefreshTwitter: () => void;
 }) {
   const { vertical, compact } = useFloatingDock();
   const iconOnly = vertical || compact;
@@ -315,6 +356,16 @@ function NavbarContent({
         {!readOnly && (
           <NavIconButton onClick={() => setShowPresentation(true)} title="Présentation (Shift+P)" className={btnSize}>
             <Presentation className={iconSize} />
+          </NavIconButton>
+        )}
+        {!readOnly && isOwner && isTwitterBoard && (
+          <NavIconButton
+            onClick={onRefreshTwitter}
+            title="Rafraîchir les tweets"
+            className={btnSize}
+            disabled={isRefreshingTwitter}
+          >
+            <RefreshCw className={`${iconSize} ${isRefreshingTwitter ? "animate-spin" : ""}`} />
           </NavIconButton>
         )}
         {!readOnly && (

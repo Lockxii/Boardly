@@ -66,6 +66,7 @@ export type CanvasVersion = {
 };
 
 export type Color = { r: number; g: number; b: number };
+export type LinkMediaType = "photo" | "video" | "animated_gif";
 
 export type Layer = {
   type: LayerType;
@@ -88,6 +89,8 @@ export type Layer = {
   linkImageWidth?: number;
   linkImageHeight?: number;
   linkVideoId?: string;
+  linkVideoSrc?: string;
+  linkMediaType?: LinkMediaType;
   checklist?: ChecklistItem[];
   groupId?: string;
   textColor?: string;
@@ -182,6 +185,8 @@ export type LinkPreview = {
   imageWidth?: number;
   imageHeight?: number;
   videoId?: string;
+  videoSrc?: string;
+  mediaType?: LinkMediaType;
 };
 
 export type MusicPreview = {

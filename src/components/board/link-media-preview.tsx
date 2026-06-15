@@ -14,7 +14,7 @@ import {
 import { unmuteEmbedPlayer, setEmbedPlayerMuted } from "@/lib/embed-player";
 import { isMusicLinkProvider, type LinkProviderId } from "@/lib/link-providers";
 import { apiFetch } from "@/lib/utils";
-import type { LinkPreview, MusicPreview } from "@/lib/types";
+import type { LinkMediaType, LinkPreview, MusicPreview } from "@/lib/types";
 
 const HOVER_DELAY_MS = 250;
 const PREVIEW_PROGRESS_STEP = 0.004;
@@ -25,6 +25,8 @@ type LinkMediaPreviewProps = {
   url?: string;
   title?: string;
   videoId?: string;
+  videoSrc?: string;
+  mediaType?: LinkMediaType;
   height: number;
   readOnly?: boolean;
   onImageLoad?: (e: React.SyntheticEvent<HTMLImageElement>) => void;
@@ -38,6 +40,8 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   url,
   title,
   videoId,
+  videoSrc,
+  mediaType,
   height,
   readOnly,
   onImageLoad,
@@ -45,7 +49,9 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   brandBadge,
 }: LinkMediaPreviewProps) {
   const isMusic = isMusicLinkProvider(provider);
-  const isVideo = isVideoLinkProvider(provider);
+  const isNativeVideo = provider === "twitter" && !!videoSrc && (mediaType === "video" || mediaType === "animated_gif");
+  const isEmbedVideo = isVideoLinkProvider(provider);
+  const isVideo = isEmbedVideo || isNativeVideo;
   const isTwitterVideo = provider === "twitter";
   const canPlayMusic = isMusic && supportsMusicPlayback(provider);
 
@@ -63,6 +69,7 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   );
 
   const videoIframeRef = useRef<HTMLIFrameElement>(null);
+  const nativeVideoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const rafRef = useRef<number | null>(null);
   const resolveRef = useRef<Promise<void> | null>(null);
@@ -73,8 +80,8 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   }, [provider, url, videoId]);
 
   const videoEmbedUrl = useMemo(
-    () => (isVideo ? getVideoEmbedUrl(provider, url, { videoId: resolvedVideoId, origin }) : null),
-    [isVideo, provider, url, resolvedVideoId, origin],
+    () => (isEmbedVideo ? getVideoEmbedUrl(provider, url, { videoId: resolvedVideoId, origin }) : null),
+    [isEmbedVideo, provider, url, resolvedVideoId, origin],
   );
 
   const stopProgress = useCallback(() => {
@@ -129,19 +136,24 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
     stopMusic();
     setMusicEmbedUrl(null);
     setAudioSrc(null);
-    if (videoIframeRef.current && isVideo) {
+    if (videoIframeRef.current && isEmbedVideo) {
       setEmbedPlayerMuted(videoIframeRef.current, provider, true);
     }
-  }, [stopMusic, provider, isVideo]);
+    if (nativeVideoRef.current) {
+      nativeVideoRef.current.pause();
+      nativeVideoRef.current.currentTime = 0;
+      nativeVideoRef.current.muted = true;
+    }
+  }, [stopMusic, provider, isEmbedVideo]);
 
   const handleEnter = useCallback(() => {
     if (readOnly) return;
     setHovering(true);
-    if (isVideo && provider === "tiktok" && !resolvedVideoId) {
+    if (isEmbedVideo && provider === "tiktok" && !resolvedVideoId) {
       void resolveTikTokId();
     }
     if (isMusic && !musicPlaying) startFakeProgress();
-  }, [readOnly, isVideo, provider, resolvedVideoId, resolveTikTokId, isMusic, musicPlaying, startFakeProgress]);
+  }, [readOnly, isEmbedVideo, provider, resolvedVideoId, resolveTikTokId, isMusic, musicPlaying, startFakeProgress]);
 
   const handleLeave = useCallback(() => {
     setHovering(false);
@@ -150,22 +162,33 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   }, [stopAllAudio]);
 
   useEffect(() => {
-    if (!hovering || readOnly || !videoEmbedUrl) {
+    if (!hovering || readOnly || (!videoEmbedUrl && !isNativeVideo)) {
       if (!hovering) setShowVideoEmbed(false);
       return;
     }
     const timer = setTimeout(() => setShowVideoEmbed(true), HOVER_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [hovering, readOnly, videoEmbedUrl]);
+  }, [hovering, readOnly, videoEmbedUrl, isNativeVideo]);
+
+  useEffect(() => {
+    if (!showVideoEmbed || !isNativeVideo || !nativeVideoRef.current) return;
+    const video = nativeVideoRef.current;
+    video.muted = !soundOn || mediaType === "animated_gif";
+    void video.play().catch(() => undefined);
+    return () => {
+      video.pause();
+      video.currentTime = 0;
+    };
+  }, [showVideoEmbed, isNativeVideo, soundOn, mediaType, videoSrc]);
 
   useEffect(() => () => {
     stopProgress();
   }, [stopProgress]);
 
   const handleVideoIframeLoad = useCallback(() => {
-    if (!soundOn || !videoIframeRef.current || !isVideo) return;
+    if (!soundOn || !videoIframeRef.current || !isEmbedVideo) return;
     unmuteEmbedPlayer(videoIframeRef.current, provider);
-  }, [soundOn, provider, isVideo]);
+  }, [soundOn, provider, isEmbedVideo]);
 
   const playAudioPreview = useCallback(async (previewUrl: string, duration?: number) => {
     setMusicEmbedUrl(null);
@@ -250,7 +273,20 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         return;
       }
 
-      if (isVideo) {
+      if (isNativeVideo) {
+        const nextSoundOn = mediaType === "animated_gif" ? false : !soundOn;
+        setSoundOn(nextSoundOn);
+        if (nativeVideoRef.current) {
+          nativeVideoRef.current.muted = !nextSoundOn;
+          void nativeVideoRef.current.play().catch(() => {
+            if (nativeVideoRef.current) nativeVideoRef.current.muted = true;
+            setSoundOn(false);
+          });
+        }
+        return;
+      }
+
+      if (isEmbedVideo) {
         const nextSoundOn = !soundOn;
         setSoundOn(nextSoundOn);
         if (nextSoundOn && videoIframeRef.current) {
@@ -260,15 +296,15 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         }
       }
     },
-    [readOnly, isMusic, musicPlaying, startFakeProgress, startMusic, isVideo, soundOn, provider],
+    [readOnly, isMusic, musicPlaying, startFakeProgress, startMusic, isNativeVideo, mediaType, soundOn, isEmbedVideo, provider],
   );
 
   const bars = isMusic ? generateWaveformBars(url || src) : [];
   const accent = provider !== "generic" ? LINK_PROVIDER_ACCENT[provider] : "#2563EB";
   const duration = trackDuration ?? (isMusic ? fakeTrackDurationSeconds(url || src) : 0);
   const currentTime = Math.floor(duration * progress);
-  const isResolvingTikTok = isVideo && provider === "tiktok" && hovering && !resolvedVideoId;
-  const canToggleVideoSound = isVideo && !isTwitterVideo;
+  const isResolvingTikTok = isEmbedVideo && provider === "tiktok" && hovering && !resolvedVideoId;
+  const canToggleVideoSound = (isNativeVideo && mediaType !== "animated_gif") || (isEmbedVideo && !isTwitterVideo);
 
   return (
     <div
@@ -284,9 +320,10 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         alt=""
         className={`h-full w-full transition-transform duration-300 ${
           isMusic ? "object-cover scale-105" : "object-contain"
-        } ${hovering && isMusic && !musicPlaying ? "scale-110 blur-[2px]" : ""} ${showVideoEmbed && videoEmbedUrl ? "opacity-0" : "opacity-100"}`}
+        } ${hovering && isMusic && !musicPlaying ? "scale-110 blur-[2px]" : ""} ${showVideoEmbed && (videoEmbedUrl || isNativeVideo) ? "opacity-0" : "opacity-100"}`}
         onLoad={onImageLoad}
         onError={onImageError}
+        draggable={false}
       />
 
       {isMusic && (
@@ -382,7 +419,21 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
         />
       )}
 
-      {canToggleVideoSound && showVideoEmbed && !!videoEmbedUrl && !readOnly && (
+      {isNativeVideo && videoSrc && showVideoEmbed && (
+        <video
+          ref={nativeVideoRef}
+          key={videoSrc}
+          src={videoSrc}
+          poster={src}
+          className="pointer-events-none absolute inset-0 h-full w-full bg-black object-contain"
+          muted={!soundOn || mediaType === "animated_gif"}
+          loop
+          playsInline
+          preload="metadata"
+        />
+      )}
+
+      {canToggleVideoSound && showVideoEmbed && !!(videoEmbedUrl || videoSrc) && !readOnly && (
         <button
           type="button"
           className={`absolute top-2 right-2 z-10 rounded-md p-1.5 pointer-events-auto transition-colors ${

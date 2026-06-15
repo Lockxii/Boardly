@@ -4,7 +4,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { getViewportCanvasBounds, isLayerInViewport } from "@/lib/motion-utils";
 import { isHtmlLayerType } from "@/lib/html-layer-types";
 import type { Layer } from "@/lib/types";
-import { LinkCardBody, LinkCardImage, LinkUrlEdge } from "./link-card-parts";
+import { LinkCardBody, LinkCardImage, LinkTweetEmbed, LinkUrlEdge } from "./link-card-parts";
 import { estimateLinkBodyHeight, LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT, resolveLinkProvider } from "@/lib/brand-icons";
 
 const fontMap: Record<string, string> = {
@@ -114,12 +114,14 @@ function HtmlLayerItem({
 
   const linkCardHeight =
     layer.type === "Link" ? Math.max(0, layer.height - LINK_URL_STRIP_HEIGHT - LINK_CARD_GAP) : 0;
+  const resolvedLinkProvider = layer.type === "Link" ? resolveLinkProvider(layer.linkProvider, layer.url) : "generic";
+  const isTwitterEmbedOnly = layer.type === "Link" && resolvedLinkProvider === "twitter" && !layer.linkImage;
   const linkBodyHeight =
     layer.type === "Link"
       ? estimateLinkBodyHeight(
           layer.linkTitle || layer.url || "",
           !!(layer.linkAuthor || layer.linkDescription),
-          resolveLinkProvider(layer.linkProvider, layer.url),
+          resolvedLinkProvider,
         )
       : 0;
   const linkImageHeight =
@@ -153,7 +155,9 @@ function HtmlLayerItem({
               boxShadow: "0 4px 14px rgba(15, 23, 42, 0.12)",
             }}
           >
-            {layer.linkImage ? (
+            {isTwitterEmbedOnly ? (
+              <LinkTweetEmbed layer={layer} height={linkCardHeight} />
+            ) : layer.linkImage ? (
               <LinkCardImage
                 src={layer.linkImage}
                 provider={layer.linkProvider}
@@ -163,12 +167,14 @@ function HtmlLayerItem({
                 imageWidth={layer.linkImageWidth}
                 imageHeight={layer.linkImageHeight}
                 linkVideoId={layer.linkVideoId}
+                linkVideoSrc={layer.linkVideoSrc}
+                linkMediaType={layer.linkMediaType}
                 linkTitle={layer.linkTitle}
                 readOnly={readOnly || isLocked}
                 onNaturalSize={(w, h) => fitLinkLayerToImage(id, w, h)}
               />
             ) : null}
-            <LinkCardBody layer={layer} />
+            {!isTwitterEmbedOnly && <LinkCardBody layer={layer} />}
           </div>
           <LinkUrlEdge
             url={layer.url}

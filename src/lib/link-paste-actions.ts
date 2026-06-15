@@ -62,6 +62,8 @@ export async function refreshLinkLayerPreview(id: string) {
       linkImageWidth: preview.imageWidth,
       linkImageHeight: preview.imageHeight,
       linkVideoId: preview.videoId,
+      linkVideoSrc: preview.videoSrc,
+      linkMediaType: preview.mediaType,
     });
     toast.success("Aperçu actualisé", { id: toastId });
   } catch {

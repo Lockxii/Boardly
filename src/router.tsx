@@ -97,6 +97,20 @@ const shareRoute = createRoute({
   ),
 });
 
+import { PrivacyPage, TermsPage } from "./routes/legal";
+
+const termsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/terms",
+  component: TermsPage,
+});
+
+const privacyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: "/privacy",
+  component: PrivacyPage,
+});
+
 // 404
 import { NotFoundPage } from "./routes/not-found";
 
@@ -113,6 +127,8 @@ const routeTree = rootRoute.addChildren([
   dashboardRoute,
   boardRoute,
   shareRoute,
+  termsRoute,
+  privacyRoute,
   notFoundRoute,
 ]);
 

@@ -13,7 +13,7 @@ export const LINK_PROVIDER_ACCENT: Record<LinkProvider, string> = {
 };
 
 export function isVideoLinkProvider(provider?: string) {
-  return provider === "youtube" || provider === "tiktok" || provider === "vimeo" || provider === "twitter";
+  return provider === "youtube" || provider === "tiktok" || provider === "vimeo";
 }
 
 function hashSeed(seed: string) {

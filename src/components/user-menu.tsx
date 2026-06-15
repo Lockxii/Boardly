@@ -1,7 +1,9 @@
-import { useState } from "react";
-import { LogOut, Settings } from "lucide-react";
+import { useEffect, useState } from "react";
+import { LogOut, Plug, Settings } from "lucide-react";
+import { toast } from "sonner";
 import { getInitials } from "@/lib/utils";
 import { SettingsDialog } from "@/components/settings-dialog";
+import { TwitterIntegrationDialog } from "@/components/twitter-integration-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,7 +21,20 @@ type UserMenuProps = {
 
 export function UserMenu({ user, onSignOut }: UserMenuProps) {
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [integrationsOpen, setIntegrationsOpen] = useState(false);
   const label = user?.name || user?.email || "Compte";
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const twitter = params.get("twitter");
+    if (!twitter) return;
+    setIntegrationsOpen(true);
+    if (twitter === "connected") toast.success("Twitter connecté");
+    if (twitter === "error") toast.error("Connexion Twitter impossible");
+    params.delete("twitter");
+    const search = params.toString();
+    window.history.replaceState({}, "", `${window.location.pathname}${search ? `?${search}` : ""}`);
+  }, []);
 
   return (
     <>
@@ -47,6 +62,10 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
             <Settings className="h-4 w-4" />
             Paramètres
           </DropdownMenuItem>
+          <DropdownMenuItem className="gap-2 cursor-pointer rounded-lg" onClick={() => setIntegrationsOpen(true)}>
+            <Plug className="h-4 w-4" />
+            Intégrations
+          </DropdownMenuItem>
           <DropdownMenuItem
             className="gap-2 cursor-pointer rounded-lg text-red-600 focus:text-red-600"
             onClick={onSignOut}
@@ -58,6 +77,7 @@ export function UserMenu({ user, onSignOut }: UserMenuProps) {
       </DropdownMenu>
 
       <SettingsDialog user={user} open={settingsOpen} onOpenChange={setSettingsOpen} />
+      <TwitterIntegrationDialog open={integrationsOpen} onOpenChange={setIntegrationsOpen} />
     </>
   );
 }

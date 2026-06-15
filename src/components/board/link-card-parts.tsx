@@ -12,7 +12,7 @@ import {
   type LinkProvider,
 } from "@/lib/brand-icons";
 import { LinkMediaPreview } from "@/components/board/link-media-preview";
-import { youtubeIdFromUrl } from "@/lib/link-media-utils";
+import { getVideoEmbedUrl, resolveVideoId, youtubeIdFromUrl } from "@/lib/link-media-utils";
 
 function BrandLogo({
   provider,
@@ -61,6 +61,8 @@ export function LinkCardImage({
   imageWidth,
   imageHeight,
   linkVideoId,
+  linkVideoSrc,
+  linkMediaType,
   linkTitle,
   readOnly,
   onNaturalSize,
@@ -73,6 +75,8 @@ export function LinkCardImage({
   imageWidth?: number;
   imageHeight?: number;
   linkVideoId?: string;
+  linkVideoSrc?: string;
+  linkMediaType?: Layer["linkMediaType"];
   linkTitle?: string;
   readOnly?: boolean;
   onNaturalSize?: (width: number, height: number) => void;
@@ -96,6 +100,8 @@ export function LinkCardImage({
       url={url}
       title={linkTitle}
       videoId={linkVideoId}
+      videoSrc={linkVideoSrc}
+      mediaType={linkMediaType}
       height={imageHeightPx}
       readOnly={readOnly}
       brandBadge={brandBadge}
@@ -112,6 +118,41 @@ export function LinkCardImage({
         }
       }}
     />
+  );
+}
+
+export function LinkTweetEmbed({
+  layer,
+  height,
+}: {
+  layer: Layer;
+  height: number;
+}) {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  const embedUrl = getVideoEmbedUrl("twitter", layer.url, {
+    videoId: resolveVideoId("twitter", layer.url, layer.linkVideoId),
+    origin,
+  });
+
+  if (!embedUrl) {
+    return <LinkCardBody layer={layer} />;
+  }
+
+  return (
+    <div
+      className="relative shrink-0 overflow-hidden bg-white dark:bg-neutral-950"
+      style={{ height }}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
+      <iframe
+        src={embedUrl}
+        title={layer.linkTitle || "Tweet"}
+        className="h-full w-full border-0 bg-white dark:bg-neutral-950"
+        allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
+        referrerPolicy="strict-origin-when-cross-origin"
+        loading="lazy"
+      />
+    </div>
   );
 }
 

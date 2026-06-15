@@ -532,6 +532,8 @@ export function LandingPage() {
           <div className="flex gap-6 text-sm font-medium text-neutral-600 dark:text-neutral-400">
             <a href="https://twitter.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition">Twitter</a>
             <a href="https://github.com" target="_blank" rel="noopener noreferrer" className="hover:text-black dark:hover:text-white transition">GitHub</a>
+            <Link to="/terms" className="hover:text-black dark:hover:text-white transition">Terms</Link>
+            <Link to="/privacy" className="hover:text-black dark:hover:text-white transition">Privacy</Link>
             <Link to="/auth/sign-in" className="hover:text-black dark:hover:text-white transition">Connexion</Link>
           </div>
         </div>
