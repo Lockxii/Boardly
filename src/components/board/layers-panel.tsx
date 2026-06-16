@@ -5,6 +5,7 @@ import {
   Diamond, Star, Pencil, GripVertical, Trash2, Link2, Frame, Minus, Columns3,
 } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
+import { useDraggable } from "@/lib/use-draggable";
 
 const ICON_MAP: Record<string, typeof Square> = {
   Rectangle: Square,
@@ -33,6 +34,7 @@ export function LayersPanel() {
   const setCamera = useCanvasStore((s) => s.setCamera);
   const camera = useCanvasStore((s) => s.camera);
   const [hoverId, setHoverId] = useState<string | null>(null);
+  const drag = useDraggable<HTMLDivElement>({ storageKey: "layers-panel" });
 
   if (layerIds.length === 0) {
     return (
@@ -66,8 +68,9 @@ export function LayersPanel() {
   };
 
   return (
-    <div className="absolute left-16 top-1/2 -translate-y-1/2 bg-white dark:bg-neutral-800 p-2 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 w-64 max-h-[70vh] flex flex-col pointer-events-auto">
-      <div className="px-2 py-1 border-b border-neutral-100 dark:border-neutral-700 mb-2">
+    <div ref={drag.ref} style={drag.style} className="absolute left-16 top-1/2 -translate-y-1/2 bg-white dark:bg-neutral-800 p-2 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 w-64 max-h-[70vh] flex flex-col pointer-events-auto">
+      <div {...drag.handleProps} className="flex items-center gap-1.5 px-2 py-1 border-b border-neutral-100 dark:border-neutral-700 mb-2" title="Déplacer le panneau">
+        <GripVertical className="h-3.5 w-3.5 text-neutral-300 dark:text-neutral-600" />
         <span className="text-xs font-bold uppercase text-neutral-500">Calques</span>
       </div>
       {hoverId && layers[hoverId] && (

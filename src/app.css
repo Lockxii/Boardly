@@ -264,18 +264,3 @@
   transition: all 0.15s ease-out;
 }
 
-/* Live emoji burst reactions */
-@keyframes emoji-burst-float {
-  0% { opacity: 0; transform: translate(-50%, -50%) scale(0.4); }
-  15% { opacity: 1; transform: translate(-50%, -50%) scale(1.15); }
-  35% { transform: translate(-50%, calc(-50% - 18px)) scale(1); }
-  100% { opacity: 0; transform: translate(-50%, calc(-50% - 90px)) scale(0.9); }
-}
-.emoji-burst {
-  position: absolute;
-  font-size: 30px;
-  line-height: 1;
-  user-select: none;
-  will-change: transform, opacity;
-  animation: emoji-burst-float 1.1s ease-out forwards;
-}

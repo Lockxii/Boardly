@@ -216,8 +216,6 @@ export function CursorsPresence({
   const remoteLayerAnimationFrameRef = useRef(0);
   const lastCanvasEmitAtRef = useRef(0);
   const canvasEmitTimerRef = useRef(0);
-  const burstContainerRef = useRef<HTMLDivElement>(null);
-  const spawnReactionRef = useRef<(emoji: string) => void>(() => {});
   const lastCameraSentAtRef = useRef(0);
   const lastSentCameraRef = useRef<PresenceCamera | null>(null);
   const slashOpenRef = useRef(false);
@@ -451,30 +449,12 @@ export function CursorsPresence({
       remoteLayerAnimationFrameRef.current = requestAnimationFrame(step);
     };
 
-    const spawnBurst = (screenX: number, screenY: number, emoji: string) => {
-      const container = burstContainerRef.current;
-      if (!container) return;
-      const span = document.createElement("span");
-      span.className = "emoji-burst";
-      span.textContent = emoji;
-      span.style.left = `${screenX}px`;
-      span.style.top = `${screenY}px`;
-      span.addEventListener("animationend", () => span.remove());
-      container.appendChild(span);
-    };
-
     const openPresence = () => {
       if (cancelled || document.hidden || presenceRef.current) return;
       presenceRef.current = createPresenceConnection(boardId, {
         onOpen: () => {
           publishCurrentCursor();
           flushQueuedCanvas();
-          scheduleIdleDisconnect();
-        },
-        onReaction: ({ x, y, emoji }) => {
-          if (cancelled) return;
-          const cam = useCanvasStore.getState().camera;
-          spawnBurst(x * cam.zoom + cam.x, y * cam.zoom + cam.y, emoji);
           scheduleIdleDisconnect();
         },
         onTimer: (timer) => {
@@ -575,14 +555,6 @@ export function CursorsPresence({
 
     markRealtimeActivityRef.current = markRealtimeActivity;
 
-    spawnReactionRef.current = (emoji: string) => {
-      const canvas = currentPointerOrViewportCenter();
-      const cam = useCanvasStore.getState().camera;
-      spawnBurst(canvas.x * cam.zoom + cam.x, canvas.y * cam.zoom + cam.y, emoji);
-      markRealtimeActivity();
-      presenceRef.current?.sendReaction(emoji, canvas.x, canvas.y);
-    };
-
     useCanvasStore.getState().setLiveActions({
       setLaser: (on) => {
         markRealtimeActivity();
@@ -641,7 +613,6 @@ export function CursorsPresence({
     return () => {
       cancelled = true;
       markRealtimeActivityRef.current = () => {};
-      spawnReactionRef.current = () => {};
       const store = useCanvasStore.getState();
       store.setLiveActions(null);
       store.setLivePeers([]);
@@ -814,8 +785,6 @@ export function CursorsPresence({
   return (
     <>
       <div ref={containerRef} className="pointer-events-none fixed inset-0 z-[45] overflow-hidden" />
-      <div ref={burstContainerRef} className="pointer-events-none fixed inset-0 z-[46] overflow-hidden" />
-      {!readOnly && <ReactionTray onPick={(emoji) => spawnReactionRef.current(emoji)} />}
       {!readOnly && slashOpen && (
         <SlashMenu
           screen={slashScreenRef.current}
@@ -829,25 +798,5 @@ export function CursorsPresence({
         />
       )}
     </>
-  );
-}
-
-const REACTION_EMOJIS = ["🎉", "❤️", "👍", "😂", "🔥", "👀"];
-
-function ReactionTray({ onPick }: { onPick: (emoji: string) => void }) {
-  return (
-    <div className="pointer-events-auto fixed bottom-4 left-1/2 z-[46] flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-neutral-200/80 bg-white/90 px-1.5 py-1 shadow-lg backdrop-blur dark:border-neutral-700/80 dark:bg-neutral-900/90">
-      {REACTION_EMOJIS.map((emoji) => (
-        <button
-          key={emoji}
-          type="button"
-          onClick={() => onPick(emoji)}
-          className="rounded-full px-1.5 py-0.5 text-lg leading-none transition-transform hover:scale-125 active:scale-95"
-          aria-label={`Réaction ${emoji}`}
-        >
-          {emoji}
-        </button>
-      ))}
-    </div>
   );
 }
