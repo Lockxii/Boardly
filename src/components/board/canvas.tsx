@@ -85,8 +85,8 @@ export function Canvas({
 
   // Actions are stable references in Zustand — read once, they never trigger renders.
   const {
-    setCamera, setCanvasState, setShowCommandPalette, setShowSearch, toggleSnapToGrid,
-    setSelection, setCursor, insertLayer, deleteLayers, duplicateLayers,
+    setCamera, setCanvasState, setShowCommandPalette,
+    setSelection, setCursor, insertLayer,
     updateLayerText, undo, redo, addAuditEntry, setReadOnly,
   } = useCanvasStore.getState();
 
@@ -794,8 +794,8 @@ export function Canvas({
   }, [setCanvasState]);
 
   // Keyboard shortcuts
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
+  const keyHandlerRef = React.useRef<(e: KeyboardEvent) => void>(() => {});
+  keyHandlerRef.current = (e: KeyboardEvent) => {
       const ae = document.activeElement as HTMLElement;
       const isInput = ae?.tagName === "TEXTAREA" || ae?.tagName === "INPUT" || ae?.isContentEditable;
 
@@ -893,10 +893,15 @@ export function Canvas({
         case "ArrowLeft": e.preventDefault(); store.nudgeLayers(e.shiftKey ? -10 : -1, 0); break;
         case "ArrowRight": e.preventDefault(); store.nudgeLayers(e.shiftKey ? 10 : 1, 0); break;
       }
-    }
+  };
+
+  // Bind the keydown listener ONCE; the handler is read from a ref so it always
+  // sees fresh state without re-subscribing on every camera/layer change.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => keyHandlerRef.current(e);
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [camera, setCamera, setCanvasState, setSelection, showShortcuts, layers, layerIds, copyLayers, pasteLayers, undo, redo, insertLayer]);
+  }, []);
 
   // Space to pan with momentum
   useEffect(() => {
