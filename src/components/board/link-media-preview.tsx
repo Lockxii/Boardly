@@ -50,8 +50,12 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
 }: LinkMediaPreviewProps) {
   const isMusic = isMusicLinkProvider(provider);
   const isNativeVideo = provider === "twitter" && !!videoSrc && (mediaType === "video" || mediaType === "animated_gif");
+  // Twitter videos with no captured native mp4 (broadcasts/DRM, or media imported
+  // before variants were captured) fall back to the Twitter embed iframe on hover.
+  const isTwitterEmbedFallback =
+    provider === "twitter" && !videoSrc && (mediaType === "video" || mediaType === "animated_gif");
   const isEmbedVideo = isVideoLinkProvider(provider);
-  const isVideo = isEmbedVideo || isNativeVideo;
+  const isVideo = isEmbedVideo || isNativeVideo || isTwitterEmbedFallback;
   const isTwitterVideo = provider === "twitter";
   const canPlayMusic = isMusic && supportsMusicPlayback(provider);
 
@@ -80,8 +84,11 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
   }, [provider, url, videoId]);
 
   const videoEmbedUrl = useMemo(
-    () => (isEmbedVideo ? getVideoEmbedUrl(provider, url, { videoId: resolvedVideoId, origin }) : null),
-    [isEmbedVideo, provider, url, resolvedVideoId, origin],
+    () =>
+      isEmbedVideo || isTwitterEmbedFallback
+        ? getVideoEmbedUrl(provider, url, { videoId: resolvedVideoId, origin })
+        : null,
+    [isEmbedVideo, isTwitterEmbedFallback, provider, url, resolvedVideoId, origin],
   );
 
   const stopProgress = useCallback(() => {

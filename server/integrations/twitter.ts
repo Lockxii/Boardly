@@ -210,8 +210,12 @@ export async function fetchTwitterBookmarks(account: TwitterAccount) {
 
   return tweets.slice(0, maxBookmarks).map<LinkPreview>((tweet) => {
     const author = tweet.author_id ? users.get(tweet.author_id) : undefined;
-    const firstMediaKey = tweet.attachments?.media_keys?.[0];
-    const item = firstMediaKey ? media.get(firstMediaKey) : undefined;
+    const mediaItems = (tweet.attachments?.media_keys || [])
+      .map((key) => media.get(key))
+      .filter((m): m is NonNullable<typeof m> => !!m);
+    // Prefer a video/animated_gif when the tweet mixes media (the video isn't
+    // always the first media_key); otherwise fall back to the first media.
+    const item = mediaItems.find((m) => m.type === "video" || m.type === "animated_gif") || mediaItems[0];
     const mediaType = normalizeTwitterMediaType(item?.type);
     const videoSrc = isPlayableTwitterMedia(mediaType) ? bestTwitterVideoVariantUrl(item) : undefined;
     const image = item?.url || item?.preview_image_url || "";
