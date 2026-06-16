@@ -81,6 +81,9 @@ export function LayersPanel() {
               key={id}
               value={id}
               onClick={() => focusLayer(id)}
+              // While the panel itself is being dragged, make framer's layout
+              // animation instant so the rows track the container (no lag).
+              transition={drag.dragging ? { duration: 0 } : undefined}
               className="flex items-center gap-2 p-2 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 group cursor-pointer"
             >
               <GripVertical className="h-4 w-4 text-neutral-400 group-hover:text-neutral-600 shrink-0 cursor-grab active:cursor-grabbing" />

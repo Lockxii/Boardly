@@ -15,12 +15,12 @@ import {
   type DockAnchor,
   type DockState,
   centerAnchor,
+  clampDockPos,
   dockAnchorClasses,
   dockAnchorStyle,
   isVerticalDock,
   loadDockState,
   saveDockState,
-  snapPointerToAnchor,
 } from "@/lib/floating-dock";
 
 type FloatingDockContextValue = {
@@ -104,13 +104,13 @@ export const FloatingDock = memo(function FloatingDock({
     (e: React.PointerEvent) => {
       if (!dragging) return;
       setDragging(false);
-      const anchor = snapPointerToAnchor(
-        e.clientX,
-        e.clientY,
-        window.innerWidth,
-        window.innerHeight,
+      const rect = panelRef.current?.getBoundingClientRect();
+      const size = rect ? { w: rect.width, h: rect.height } : undefined;
+      const pos = clampDockPos(
+        { x: e.clientX - dragOffset.current.x, y: e.clientY - dragOffset.current.y },
+        size,
       );
-      setState((prev) => ({ ...prev, anchor }));
+      setState((prev) => ({ ...prev, pos }));
       try {
         (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
       } catch {
@@ -129,7 +129,7 @@ export const FloatingDock = memo(function FloatingDock({
   }, [isCompactMode]);
 
   const snapToCenter = useCallback(() => {
-    setState((prev) => ({ ...prev, anchor: centerAnchor(prev.anchor) }));
+    setState((prev) => ({ ...prev, pos: null, anchor: centerAnchor(prev.anchor) }));
   }, []);
 
   const toggleIcon = (() => {
@@ -152,7 +152,7 @@ export const FloatingDock = memo(function FloatingDock({
     return <ChevronRight className="h-3.5 w-3.5" />;
   })();
 
-  const dockPositionClass = dragging ? "" : dockAnchorClasses(state.anchor);
+  const dockPositionClass = dragging || state.pos ? "" : dockAnchorClasses(state.anchor);
 
   const panelStyle: React.CSSProperties = dragging
     ? {
@@ -163,7 +163,16 @@ export const FloatingDock = memo(function FloatingDock({
         width: "max-content",
         maxWidth: "calc(100vw - 2rem)",
       }
-    : { zIndex, ...dockAnchorStyle(state.anchor) };
+    : state.pos
+      ? {
+          position: "fixed",
+          left: state.pos.x,
+          top: state.pos.y,
+          zIndex,
+          width: "max-content",
+          maxWidth: "calc(100vw - 2rem)",
+        }
+      : { zIndex, ...dockAnchorStyle(state.anchor) };
 
   return (
     <FloatingDockContext.Provider

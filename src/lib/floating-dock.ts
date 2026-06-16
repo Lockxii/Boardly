@@ -10,11 +10,25 @@ export type DockAnchor =
 
 export type DockState = {
   anchor: DockAnchor;
+  /** Free position once the user has dragged the dock (overrides the anchor). */
+  pos?: { x: number; y: number } | null;
   /** Minimal pill (zoom bar) */
   collapsed: boolean;
   /** Tight layout — logo + tools grouped (navbar) */
   compact: boolean;
 };
+
+/** Keep a dock fully on-screen so its grip is always grabbable. */
+export function clampDockPos(pos: { x: number; y: number }, size?: { w: number; h: number }) {
+  if (typeof window === "undefined") return pos;
+  const w = size?.w ?? 0;
+  const h = size?.h ?? 0;
+  const margin = 8;
+  return {
+    x: Math.min(Math.max(margin, pos.x), Math.max(margin, window.innerWidth - w - margin)),
+    y: Math.min(Math.max(margin, pos.y), Math.max(margin, window.innerHeight - h - margin)),
+  };
+}
 
 export function isVerticalDock(anchor: DockAnchor) {
   return anchor === "left-center" || anchor === "right-center";
@@ -92,8 +106,13 @@ export function loadDockState(
       };
     }
     const parsed = JSON.parse(raw) as Partial<DockState & { collapsed?: boolean }>;
+    const pos =
+      parsed.pos && typeof parsed.pos.x === "number" && typeof parsed.pos.y === "number"
+        ? clampDockPos(parsed.pos)
+        : null;
     return {
       anchor: parsed.anchor || defaultAnchor,
+      pos,
       collapsed: !!parsed.collapsed && !parsed.compact,
       compact: parsed.compact ?? defaults?.compact ?? !!parsed.collapsed,
     };
