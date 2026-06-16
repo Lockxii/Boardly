@@ -20,6 +20,7 @@ type PresenceHandlers = {
   onCursor?: (user: RemotePresence) => void;
   onLeave?: (payload: { connectionId?: string; userId?: string }) => void;
   onCanvas?: (update: LiveCanvasUpdate) => void;
+  onReaction?: (payload: { x: number; y: number; emoji: string }) => void;
 };
 
 type LiveblocksPresence = {
@@ -162,6 +163,16 @@ export function createPresenceConnection(boardId: string, handlers: PresenceHand
           updatedAt: event.updatedAt,
           canvasData: event.canvasData as BoardCanvasData,
         });
+        return;
+      }
+
+      if (
+        event.type === "reaction:burst" &&
+        typeof event.x === "number" &&
+        typeof event.y === "number" &&
+        typeof event.emoji === "string"
+      ) {
+        handlers.onReaction?.({ x: event.x, y: event.y, emoji: event.emoji });
       }
     })
   );
@@ -189,6 +200,11 @@ export function createPresenceConnection(boardId: string, handlers: PresenceHand
     sendCanvasPatch: (patch: BoardLivePatch) => {
       if (boardRoom.getStatus() === "disconnected") return false;
       boardRoom.broadcastEvent({ type: "canvas:patch", patch, updatedAt: patch.updatedAt } as unknown as LiveblocksRoomEvent);
+      return true;
+    },
+    sendReaction: (emoji: string, x: number, y: number) => {
+      if (boardRoom.getStatus() === "disconnected") return false;
+      boardRoom.broadcastEvent({ type: "reaction:burst", emoji, x, y } as unknown as LiveblocksRoomEvent);
       return true;
     },
     close: () => {
