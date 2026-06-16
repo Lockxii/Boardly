@@ -1,19 +1,13 @@
-import { createRouter, createRootRouteWithContext, createRoute, redirect, Outlet } from "@tanstack/react-router";
-import { QueryClient, useQuery, queryOptions } from "@tanstack/react-query";
-import { lazy, Suspense } from "react";
+import { createRouter, createRootRouteWithContext, createRoute, redirect } from "@tanstack/react-router";
+import { QueryClient, queryOptions } from "@tanstack/react-query";
 import { fetchCurrentUser } from "./lib/auth-client";
 import type { User } from "./lib/types";
-import { RouteLoading } from "./components/route-loading";
-
-// Auth hook
-export function useCurrentUser() {
-  return useQuery<User | null>({
-    queryKey: ["auth", "me"],
-    queryFn: fetchCurrentUser,
-    retry: false,
-    staleTime: 5 * 60 * 1000,
-  });
-}
+import {
+  BoardRouteComponent,
+  DashboardRouteComponent,
+  RootRouteComponent,
+  ShareRouteComponent,
+} from "./router-components";
 
 // Auth query options for beforeLoad
 const authQueryOptions = () =>
@@ -25,7 +19,7 @@ const authQueryOptions = () =>
 
 // Root route
 const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
-  component: () => <Outlet />,
+  component: RootRouteComponent,
 });
 
 // Index / Landing — eager (first page users see)
@@ -51,9 +45,6 @@ const signInRoute = createRoute({
   component: SignInPage,
 });
 
-// Dashboard — lazy loaded
-const LazyDashboard = lazy(() => import("./routes/dashboard").then((m) => ({ default: m.DashboardPage })));
-
 const dashboardRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/dashboard",
@@ -61,15 +52,8 @@ const dashboardRoute = createRoute({
     const user = await context.queryClient.ensureQueryData(authQueryOptions()).catch(() => null);
     if (!user) throw redirect({ to: "/auth/sign-in", search: { redirect: location.href } });
   },
-  component: () => (
-    <Suspense fallback={<RouteLoading />}>
-      <LazyDashboard />
-    </Suspense>
-  ),
+  component: DashboardRouteComponent,
 });
-
-// Board — lazy loaded (heaviest route)
-const LazyBoard = lazy(() => import("./routes/board").then((m) => ({ default: m.BoardPage })));
 
 const boardRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -78,23 +62,13 @@ const boardRoute = createRoute({
     const user = await context.queryClient.ensureQueryData(authQueryOptions()).catch(() => null);
     if (!user) throw redirect({ to: "/auth/sign-in", search: { redirect: location.href } });
   },
-  component: () => (
-    <Suspense fallback={<RouteLoading />}>
-      <LazyBoard />
-    </Suspense>
-  ),
+  component: BoardRouteComponent,
 });
-
-const LazyShare = lazy(() => import("./routes/share").then((m) => ({ default: m.SharePage })));
 
 const shareRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "/share/$boardId",
-  component: () => (
-    <Suspense fallback={<RouteLoading />}>
-      <LazyShare />
-    </Suspense>
-  ),
+  component: ShareRouteComponent,
 });
 
 import { PrivacyPage, TermsPage } from "./routes/legal";
@@ -138,3 +112,9 @@ export const router = createRouter({
   defaultPreload: "intent",
   scrollRestoration: true,
 });
+
+declare module "@tanstack/react-router" {
+  interface Register {
+    router: typeof router;
+  }
+}

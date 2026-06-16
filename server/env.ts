@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./load-env.js";
 import { z } from "zod";
 
 /**
@@ -28,6 +28,8 @@ const envSchema = z.object({
   LIVEBLOCKS_SECRET_KEY: z.string().optional(),
   LIVEBLOCKS_SECRET: z.string().optional(),
   GOOGLE_AI_API_KEY: z.string().optional(),
+  BLOB_READ_WRITE_TOKEN: z.string().optional(),
+  BLOB_STORE_ID: z.string().optional(),
   PORT: z.string().optional(),
 });
 

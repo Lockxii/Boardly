@@ -1,7 +1,8 @@
 import { useCanvasStore } from "@/store/use-canvas-store";
 import { Button } from "@/components/ui/button";
 import { Minus, Plus, RotateCcw, ZoomIn } from "lucide-react";
-import { FloatingDock, useFloatingDock } from "./floating-dock";
+import { FloatingDock } from "./floating-dock";
+import { useFloatingDock } from "./floating-dock-context";
 
 export function ZoomControls() {
   const { camera, setCamera } = useCanvasStore();

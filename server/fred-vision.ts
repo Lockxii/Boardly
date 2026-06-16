@@ -1,3 +1,4 @@
+import { get as getBlob } from "@vercel/blob";
 import { prisma } from "./prisma.js";
 import { safeFetch } from "./url-guard.js";
 
@@ -20,6 +21,21 @@ const FETCH_TIMEOUT_MS = 8_000;
 
 const ALLOWED_MIMES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 
+async function streamToBuffer(stream: ReadableStream<Uint8Array>) {
+  const reader = stream.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    if (!value) continue;
+    total += value.byteLength;
+    if (total > MAX_BYTES) return null;
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks);
+}
+
 function parseDataUrl(dataUrl: string): ResolvedVisionAsset | null {
   const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
   if (!match) return null;
@@ -35,7 +51,20 @@ async function readFileAttachment(fileId: string): Promise<ResolvedVisionAsset |
   const attachment = await prisma.chatAttachment.findUnique({ where: { id: fileId } });
   if (!attachment) return null;
 
+  if (attachment.storageProvider === "vercel_blob" && (attachment.pathname || attachment.url)) {
+    const blobLocator = attachment.pathname ?? attachment.url;
+    if (!blobLocator) return null;
+    const result = await getBlob(blobLocator, { access: "private" });
+    if (!result || result.statusCode !== 200) return null;
+    const mimeType = (result.blob.contentType || attachment.type || "image/jpeg").split(";")[0].toLowerCase();
+    if (!ALLOWED_MIMES.has(mimeType) || result.blob.size > MAX_BYTES) return null;
+    const buffer = await streamToBuffer(result.stream);
+    if (!buffer) return null;
+    return { label: attachment.name || "Fichier", mimeType, data: buffer.toString("base64") };
+  }
+
   const base64 = attachment.data;
+  if (!base64) return null;
   const matches = base64.match(/^data:([^;]+);base64,(.+)$/);
   if (matches) {
     const mimeType = matches[1].toLowerCase();

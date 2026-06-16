@@ -281,7 +281,7 @@ export function Canvas({
         if (pasteGhostPreview) URL.revokeObjectURL(pasteGhostPreview);
         setPasteGhostPreview(null);
         const point = pastePointRef.current ?? getDefaultPastePoint(camera);
-        await insertImagesAt(imageFiles, point);
+        await insertImagesAt(imageFiles, point, boardId);
         return;
       }
 
@@ -315,7 +315,7 @@ export function Canvas({
     };
     window.addEventListener("paste", onPaste);
     return () => window.removeEventListener("paste", onPaste);
-  }, [insertTextAt, pasteLayers, camera, readOnly, pasteGhostPreview]);
+  }, [insertTextAt, pasteLayers, camera, readOnly, pasteGhostPreview, boardId]);
 
   useEffect(() => {
     if (readOnly) return;
@@ -348,14 +348,14 @@ export function Canvas({
       const { urls, imageFiles } = extractDropPayload(e.dataTransfer);
 
       if (imageFiles.length > 0) {
-        await insertImagesAt(imageFiles, point);
+        await insertImagesAt(imageFiles, point, boardId);
       }
 
       if (urls.length > 0) {
         await pasteUrlsAt(urls, point);
       }
     },
-    [camera, clearDropPreview, readOnly],
+    [camera, clearDropPreview, readOnly, boardId],
   );
 
   const handleDragEnter = useCallback(
@@ -1109,6 +1109,7 @@ export function Canvas({
       <StatusBar />
       <HtmlLayerOverlay
         camera={camera}
+        boardId={boardId}
         readOnly={readOnly}
         onLayerPointerDown={onLayerPointerDown}
         onLayerResizePointerDown={onResizeHandlePointerDown}

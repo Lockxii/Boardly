@@ -1,4 +1,5 @@
 import { compressImageFile } from "@/lib/canvas-utils";
+import { uploadDataUrl } from "@/lib/upload-file";
 
 const IMAGE_EXT = /\.(jpe?g|png|gif|webp|svg|bmp|avif|heic|heif)$/i;
 
@@ -27,10 +28,18 @@ export async function getDataUrlDimensions(src: string) {
   return { width: img.naturalWidth, height: img.naturalHeight };
 }
 
-export async function prepareImageFromFile(file: File) {
-  const src = await compressImageFile(file);
-  const { width: naturalWidth, height: naturalHeight } = await getDataUrlDimensions(src);
+export async function prepareImageFromFile(file: File, boardId?: string) {
+  const dataUrl = await compressImageFile(file);
+  const { width: naturalWidth, height: naturalHeight } = await getDataUrlDimensions(dataUrl);
   const { width, height } = getImageDisplaySize(naturalWidth, naturalHeight);
+  const uploadName = `${(file.name || "image").replace(/\.[^.]+$/, "")}.jpg`;
+  const { url: src } = await uploadDataUrl({
+    name: uploadName,
+    type: "image/jpeg",
+    size: Math.ceil(dataUrl.length * 0.75),
+    data: dataUrl,
+    boardId,
+  });
   return { src, width, height, name: file.name };
 }
 

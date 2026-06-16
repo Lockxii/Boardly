@@ -1,6 +1,4 @@
-import { config } from "dotenv";
-
-config();
+import "./load-env.js";
 
 import { createServer } from "http";
 import app from "./app.js";

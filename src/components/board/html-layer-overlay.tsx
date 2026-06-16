@@ -1,11 +1,12 @@
 import { memo, useMemo, useRef, useEffect, useState } from "react";
-import { Lock, Mic } from "lucide-react";
+import { Lock } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { getViewportCanvasBounds, isLayerInViewport } from "@/lib/motion-utils";
 import { isHtmlLayerType } from "@/lib/html-layer-types";
 import type { Layer } from "@/lib/types";
 import { LinkCardBody, LinkCardImage, LinkTweetEmbed, LinkUrlEdge } from "./link-card-parts";
 import { estimateLinkBodyHeight, LINK_CARD_GAP, LINK_URL_STRIP_HEIGHT, resolveLinkProvider } from "@/lib/brand-icons";
+import { AudioLayerPlayer } from "./audio-layer-player";
 
 const fontMap: Record<string, string> = {
   "font-sans": "Inter, sans-serif",
@@ -14,15 +15,9 @@ const fontMap: Record<string, string> = {
   "font-handwriting": '"Comic Sans MS", "Chalkboard SE", sans-serif',
 };
 
-function formatAudioDuration(totalSeconds?: number) {
-  const safeSeconds = Math.max(0, Math.round(totalSeconds || 0));
-  const minutes = Math.floor(safeSeconds / 60);
-  const seconds = safeSeconds % 60;
-  return `${minutes}:${String(seconds).padStart(2, "0")}`;
-}
-
 type HtmlLayerOverlayProps = {
   camera: { x: number; y: number; zoom: number };
+  boardId?: string;
   readOnly?: boolean;
   onLayerPointerDown: (e: React.PointerEvent, layerId: string) => void;
   onLayerResizePointerDown: (
@@ -39,6 +34,7 @@ function HtmlLayerItem({
   selected,
   highlighted,
   readOnly,
+  boardId,
   onLayerPointerDown,
   onLayerResizePointerDown,
   onLayerRotatePointerDown,
@@ -49,6 +45,7 @@ function HtmlLayerItem({
   selected: boolean;
   highlighted: boolean;
   readOnly?: boolean;
+  boardId?: string;
   onLayerPointerDown: (e: React.PointerEvent, layerId: string) => void;
   onLayerResizePointerDown: (
     e: React.PointerEvent,
@@ -208,26 +205,7 @@ function HtmlLayerItem({
       )}
 
       {layer.type === "Audio" && (
-        <div
-          className="flex h-full w-full items-center gap-2 border border-neutral-200 bg-white px-3 shadow-sm dark:border-neutral-700 dark:bg-neutral-900"
-          style={{ borderRadius: cornerRadius || 12 }}
-        >
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300">
-            <Mic className="h-4 w-4" />
-          </span>
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
-              Note vocale · {formatAudioDuration(layer.audioDuration)}
-            </div>
-            <audio
-              src={layer.src}
-              controls
-              preload="metadata"
-              onPointerDown={(e) => e.stopPropagation()}
-              className="mt-0.5 h-8 w-full"
-            />
-          </div>
-        </div>
+        <AudioLayerPlayer id={id} layer={layer} selected={selected} readOnly={readOnly || isLocked} boardId={boardId} />
       )}
 
       {layer.type === "Note" && (
@@ -317,6 +295,7 @@ function HtmlLayerItem({
 
 export const HtmlLayerOverlay = memo(function HtmlLayerOverlay({
   camera,
+  boardId,
   readOnly,
   onLayerPointerDown,
   onLayerResizePointerDown,
@@ -359,6 +338,7 @@ export const HtmlLayerOverlay = memo(function HtmlLayerOverlay({
               selected={selection.includes(id)}
               highlighted={highlightedLayerIds.includes(id)}
               readOnly={readOnly}
+              boardId={boardId}
               onLayerPointerDown={onLayerPointerDown}
               onLayerResizePointerDown={onLayerResizePointerDown}
               onLayerRotatePointerDown={onLayerRotatePointerDown}

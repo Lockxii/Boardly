@@ -7,7 +7,7 @@ import {
   prepareImageFromFile,
 } from "@/lib/image-insert";
 
-export async function insertImagesAt(files: File[], point: { x: number; y: number }) {
+export async function insertImagesAt(files: File[], point: { x: number; y: number }, boardId?: string) {
   const images = files.filter(isImageFile);
   if (images.length === 0) {
     toast.error("Format non supporté — glisse une image (JPG, PNG, GIF, WebP…)");
@@ -19,7 +19,7 @@ export async function insertImagesAt(files: File[], point: { x: number; y: numbe
   );
 
   try {
-    const prepared = await Promise.all(images.map((file) => prepareImageFromFile(file)));
+    const prepared = await Promise.all(images.map((file) => prepareImageFromFile(file, boardId)));
     const positions = layoutImagePasteGrid(
       prepared.map((item) => ({ width: item.width, height: item.height })),
       point.x,

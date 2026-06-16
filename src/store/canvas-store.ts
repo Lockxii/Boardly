@@ -140,9 +140,12 @@ interface CanvasStore {
   // History (post-action snapshots)
   undoStack: HistorySnapshot[];
   redoStack: HistorySnapshot[];
+  historyBatch: { key: string; snapshot: HistorySnapshot } | null;
   canUndo: boolean;
   canRedo: boolean;
   pushHistory: () => void;
+  beginHistoryBatch: (key: string) => void;
+  endHistoryBatch: (key?: string) => void;
   undo: () => void;
   redo: () => void;
 
@@ -224,6 +227,12 @@ export function serializeCanvasDataSnapshot(data: Partial<BoardCanvasData>) {
     brandColors: data.brandColors || ["#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"],
   });
 }
+
+function snapshotsEqual(a: HistorySnapshot, b: HistorySnapshot) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+let nudgeHistoryTimer: ReturnType<typeof setTimeout> | null = null;
 
 export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // Data
@@ -345,6 +354,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   // History — dual-stack undo/redo. pushHistory() saves the PRE-mutation state.
   undoStack: [],
   redoStack: [],
+  historyBatch: null,
   canUndo: false,
   canRedo: false,
 
@@ -362,7 +372,35 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
   },
 
+  beginHistoryBatch: (key) => {
+    const state = get();
+    if (state.historyBatch?.key === key) return;
+    if (state.historyBatch) get().endHistoryBatch(state.historyBatch.key);
+    set({ historyBatch: { key, snapshot: takeSnapshot(state) } });
+  },
+
+  endHistoryBatch: (key) => {
+    const state = get();
+    const batch = state.historyBatch;
+    if (!batch || (key && batch.key !== key)) return;
+    const current = takeSnapshot(state);
+    if (snapshotsEqual(batch.snapshot, current)) {
+      set({ historyBatch: null });
+      return;
+    }
+    const newUndoStack = [...state.undoStack, batch.snapshot];
+    if (newUndoStack.length > 100) newUndoStack.shift();
+    set({
+      historyBatch: null,
+      undoStack: newUndoStack,
+      redoStack: [],
+      canUndo: true,
+      canRedo: false,
+    });
+  },
+
   undo: () => {
+    if (get().historyBatch) get().endHistoryBatch();
     const state = get();
     if (state.undoStack.length === 0) return;
     // Save current state to redo stack
@@ -382,6 +420,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
 
   redo: () => {
+    if (get().historyBatch) get().endHistoryBatch();
     const state = get();
     if (state.redoStack.length === 0) return;
     // Save current state to undo stack
@@ -662,12 +701,15 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         [id]: {
           type: "Audio",
           x: Math.round(centerX - 130),
-          y: Math.round(centerY - 32),
+          y: Math.round(centerY - 58),
           width: 260,
-          height: 64,
+          height: 116,
           fill: "#ffffff",
           src,
+          value: "Note vocale",
           audioDuration: durationSec,
+          audioTrimStart: 0,
+          audioTrimEnd: durationSec,
           cornerRadius: 12,
         },
       },
@@ -866,7 +908,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   nudgeLayers: (dx, dy) => {
     const state = get();
     if (state.selection.length === 0) return;
-    get().pushHistory();
+    const hasMovableLayer = state.selection.some((id) => {
+      const layer = state.layers[id];
+      return layer && !layer.locked;
+    });
+    if (!hasMovableLayer) return;
+    get().beginHistoryBatch("nudge");
+    if (nudgeHistoryTimer) clearTimeout(nudgeHistoryTimer);
+    nudgeHistoryTimer = setTimeout(() => {
+      nudgeHistoryTimer = null;
+      useCanvasStore.getState().endHistoryBatch("nudge");
+    }, 350);
     set((s) => {
       const newLayers = { ...s.layers };
       for (const id of s.selection) {
@@ -1053,6 +1105,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       commentsLayerId: null,
       undoStack: [],
       redoStack: [],
+      historyBatch: null,
       canUndo: false,
       canRedo: false,
       selection: [],
@@ -1079,6 +1132,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         brandColors: data.brandColors || ["#2563EB", "#F59E0B", "#10B981", "#EF4444", "#8B5CF6"],
         undoStack: [],
         redoStack: [],
+        historyBatch: null,
         canUndo: false,
         canRedo: false,
         selection: [],

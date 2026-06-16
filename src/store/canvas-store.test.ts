@@ -13,6 +13,9 @@ function reset() {
     selection: [],
     undoStack: [],
     redoStack: [],
+    historyBatch: null,
+    canUndo: false,
+    canRedo: false,
     auditLog: [],
     highlightedLayerIds: [],
   });
@@ -66,5 +69,20 @@ describe("canvas-store undo/redo (dual-stack history)", () => {
 
     useCanvasStore.getState().undo();
     expect(useCanvasStore.getState().layers[id].fill).toBe("#000000");
+  });
+
+  it("batches continuous layer updates into one undo entry", () => {
+    const id = useCanvasStore.getState().insertLayer("Rectangle", 0, 0)!;
+    useCanvasStore.getState().beginHistoryBatch("style:strokeWidth");
+    useCanvasStore.getState().updateLayer(id, { strokeWidth: 2 });
+    useCanvasStore.getState().updateLayer(id, { strokeWidth: 8 });
+    useCanvasStore.getState().updateLayer(id, { strokeWidth: 14 });
+    useCanvasStore.getState().endHistoryBatch("style:strokeWidth");
+
+    expect(useCanvasStore.getState().layers[id].strokeWidth).toBe(14);
+    const undoCount = useCanvasStore.getState().undoStack.length;
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().layers[id].strokeWidth).toBeUndefined();
+    expect(undoCount).toBe(2);
   });
 });

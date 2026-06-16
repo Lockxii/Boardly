@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, createContext, useContext, type ReactNode } from "react";
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ChevronDown,
@@ -22,22 +22,7 @@ import {
   loadDockState,
   saveDockState,
 } from "@/lib/floating-dock";
-
-type FloatingDockContextValue = {
-  vertical: boolean;
-  compact: boolean;
-  anchor: DockAnchor;
-};
-
-const FloatingDockContext = createContext<FloatingDockContextValue>({
-  vertical: false,
-  compact: true,
-  anchor: "top-center",
-});
-
-export function useFloatingDock() {
-  return useContext(FloatingDockContext);
-}
+import { FloatingDockContext } from "./floating-dock-context";
 
 type FloatingDockProps = {
   id: string;

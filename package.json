@@ -17,6 +17,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "db:push": "prisma db push",
+    "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:reset-users": "node scripts/reset-users.js"
@@ -35,6 +36,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.76.0",
     "@tanstack/react-router": "^1.120.3",
+    "@vercel/blob": "^2.4.0",
     "better-auth": "^1.4.7",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

@@ -1,7 +1,5 @@
 import { cn } from "@/lib/utils";
-import { BLUEPRINT, getTemplateLabel, BOARD_TEMPLATES } from "@/lib/template-styles";
-
-export { getTemplateLabel, BOARD_TEMPLATES };
+import { BLUEPRINT } from "@/lib/template-styles";
 
 export function TemplatePreview({ template, className }: { template: string; className?: string }) {
   return (

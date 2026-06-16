@@ -6,6 +6,7 @@ import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useDraggable } from "@/lib/use-draggable";
+import { dataUrlFromBlob, uploadDataUrl } from "@/lib/upload-file";
 import { toast } from "sonner";
 
 interface ChatPanelProps {
@@ -61,18 +62,15 @@ export function ChatPanel({ boardId, onClose }: ChatPanelProps) {
     if (!file) return;
     if (file.size > 8 * 1024 * 1024) { toast.error("Fichier trop volumineux (max 8 MB)"); return; }
     setIsUploading(true);
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const base64Data = ev.target?.result as string;
-      try {
-        const res = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, type: file.type, size: file.size, data: base64Data, boardId }), credentials: "include" });
-        if (!res.ok) throw new Error("Upload failed");
-        const { url } = await res.json();
-        setAttachment({ type: file.type.startsWith("image/") ? "image" : "file", url, name: file.name });
-      } catch (error) { toast.error("Erreur lors de l'envoi du fichier."); }
-      finally { setIsUploading(false); }
-    };
-    reader.readAsDataURL(file);
+    try {
+      const data = await dataUrlFromBlob(file);
+      const { url } = await uploadDataUrl({ name: file.name, type: file.type, size: file.size, data, boardId });
+      setAttachment({ type: file.type.startsWith("image/") ? "image" : "file", url, name: file.name });
+    } catch {
+      toast.error("Erreur lors de l'envoi du fichier.");
+    } finally {
+      setIsUploading(false);
+    }
     e.target.value = "";
   };
 

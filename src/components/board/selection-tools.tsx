@@ -16,6 +16,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { NOTE_COLORS } from "@/lib/canvas-utils";
 import { refreshLinkLayerPreview } from "@/lib/link-paste-actions";
 import { useDraggable } from "@/lib/use-draggable";
+import type { Layer } from "@/lib/types";
 
 const FONTS = [
   { value: "font-sans", label: "Sans" },
@@ -131,11 +132,19 @@ export const SelectionTools = memo(() => {
   useEffect(() => { if (!isDraggingSlider) setLocalStrokeWidth(currentStrokeWidth); }, [currentStrokeWidth, isDraggingSlider]);
   useEffect(() => { if (!isDraggingSlider) setLocalCornerRadius(currentCornerRadius); }, [currentCornerRadius, isDraggingSlider]);
 
-  const applyToSelection = useCallback((updates: Record<string, unknown>) => {
+  const applyToSelection = useCallback((updates: Partial<Layer>, options: { history?: boolean } = {}) => {
     const state = useCanvasStore.getState();
     if (state.selection.length === 0) return;
-    state.pushHistory();
+    if (options.history !== false) state.pushHistory();
     state.selection.forEach((id) => state.updateLayer(id, updates));
+  }, []);
+
+  const beginHistoryBatch = useCallback((key: string) => {
+    useCanvasStore.getState().beginHistoryBatch(key);
+  }, []);
+
+  const endHistoryBatch = useCallback((key: string) => {
+    useCanvasStore.getState().endHistoryBatch(key);
   }, []);
 
   const applyDomStyle = (command: string, value?: string) => {
@@ -160,8 +169,8 @@ export const SelectionTools = memo(() => {
 
   const setFill = useCallback((fill: string) => applyToSelection({ fill }), [applyToSelection]);
   const setStroke = useCallback((stroke: string) => applyToSelection({ stroke }), [applyToSelection]);
-  const setStrokeWidth = useCallback((width: number) => applyToSelection({ strokeWidth: width }), [applyToSelection]);
-  const setCornerRadius = useCallback((radius: number) => applyToSelection({ cornerRadius: radius }), [applyToSelection]);
+  const setStrokeWidth = useCallback((width: number, history = true) => applyToSelection({ strokeWidth: width }, { history }), [applyToSelection]);
+  const setCornerRadius = useCallback((radius: number, history = true) => applyToSelection({ cornerRadius: radius }, { history }), [applyToSelection]);
 
   const setTextColor = useCallback((color: string) => {
     if (applyDomStyle("foreColor", color)) return;
@@ -176,7 +185,7 @@ export const SelectionTools = memo(() => {
   const setAlignX = useCallback((align: "left" | "center" | "right") => applyToSelection({ alignX: align }), [applyToSelection]);
   const setAlignY = useCallback((align: "top" | "center" | "bottom") => applyToSelection({ alignY: align }), [applyToSelection]);
   const setFontFamily = useCallback((font: string) => applyToSelection({ fontFamily: font }), [applyToSelection]);
-  const setFontSize = useCallback((size: number) => applyToSelection({ fontSize: size }), [applyToSelection]);
+  const setFontSize = useCallback((size: number, history = true) => applyToSelection({ fontSize: size }, { history }), [applyToSelection]);
 
   const toggleBold = useCallback(() => {
     if (applyDomStyle("bold")) return;
@@ -288,12 +297,60 @@ export const SelectionTools = memo(() => {
                     <span className="text-xs text-neutral-500 font-medium">Contour</span>
                     <div className="flex gap-2 items-center">
                       <input type="color" value={currentStroke} className="h-8 w-10 shrink-0 cursor-pointer rounded border border-neutral-200" onChange={(e) => setStroke(e.target.value)} />
-                      <input type="range" min="0" max="20" value={localStrokeWidth} className="flex-1 h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer" onPointerDown={(e) => { e.stopPropagation(); setIsDraggingSlider(true); }} onPointerUp={() => setIsDraggingSlider(false)} onChange={(e) => { setLocalStrokeWidth(parseInt(e.target.value)); setStrokeWidth(parseInt(e.target.value)); }} />
+                      <input
+                        type="range"
+                        min="0"
+                        max="20"
+                        value={localStrokeWidth}
+                        className="flex-1 h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer"
+                        onPointerDown={(e) => {
+                          e.stopPropagation();
+                          beginHistoryBatch("selection:strokeWidth");
+                          setIsDraggingSlider(true);
+                        }}
+                        onPointerUp={() => {
+                          endHistoryBatch("selection:strokeWidth");
+                          setIsDraggingSlider(false);
+                        }}
+                        onPointerCancel={() => {
+                          endHistoryBatch("selection:strokeWidth");
+                          setIsDraggingSlider(false);
+                        }}
+                        onChange={(e) => {
+                          const value = parseInt(e.target.value);
+                          setLocalStrokeWidth(value);
+                          setStrokeWidth(value, false);
+                        }}
+                      />
                     </div>
                   </div>
                   <div className="space-y-2">
                     <span className="text-xs text-neutral-500 font-medium">Arrondi</span>
-                    <input type="range" min="0" max="100" value={localCornerRadius} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer" onPointerDown={(e) => { e.stopPropagation(); setIsDraggingSlider(true); }} onPointerUp={() => setIsDraggingSlider(false)} onChange={(e) => { setLocalCornerRadius(parseInt(e.target.value)); setCornerRadius(parseInt(e.target.value)); }} />
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={localCornerRadius}
+                      className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer"
+                      onPointerDown={(e) => {
+                        e.stopPropagation();
+                        beginHistoryBatch("selection:cornerRadius");
+                        setIsDraggingSlider(true);
+                      }}
+                      onPointerUp={() => {
+                        endHistoryBatch("selection:cornerRadius");
+                        setIsDraggingSlider(false);
+                      }}
+                      onPointerCancel={() => {
+                        endHistoryBatch("selection:cornerRadius");
+                        setIsDraggingSlider(false);
+                      }}
+                      onChange={(e) => {
+                        const value = parseInt(e.target.value);
+                        setLocalCornerRadius(value);
+                        setCornerRadius(value, false);
+                      }}
+                    />
                   </div>
                 </div>
               </DropdownMenuContent>
@@ -317,7 +374,16 @@ export const SelectionTools = memo(() => {
                     </Select>
                     <div className="flex items-center gap-1 border border-neutral-200 rounded px-2 w-20">
                       <span className="text-[10px] text-neutral-500">px</span>
-                      <Input type="number" className="h-8 text-xs border-none p-0 focus-visible:ring-0 text-right" value={currentFontSize} onChange={(e) => setFontSize(Number(e.target.value))} min={8} max={200} />
+                      <Input
+                        type="number"
+                        className="h-8 text-xs border-none p-0 focus-visible:ring-0 text-right"
+                        value={currentFontSize}
+                        onFocus={() => beginHistoryBatch("selection:fontSize")}
+                        onBlur={() => endHistoryBatch("selection:fontSize")}
+                        onChange={(e) => setFontSize(Number(e.target.value), false)}
+                        min={8}
+                        max={200}
+                      />
                     </div>
                   </div>
                   <div className="flex items-center justify-between gap-1 bg-neutral-100 dark:bg-neutral-900 p-1 rounded-md">

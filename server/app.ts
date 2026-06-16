@@ -4,8 +4,11 @@ import rateLimit from "express-rate-limit";
 import { randomBytes } from "crypto";
 import { existsSync } from "fs";
 import path from "path";
+import { Readable } from "stream";
+import type { ReadableStream as WebReadableStream } from "stream/web";
 import { fileURLToPath } from "url";
 import { Liveblocks } from "@liveblocks/node";
+import { get as getBlob, put as putBlob } from "@vercel/blob";
 import { toNodeHandler, fromNodeHeaders } from "better-auth/node";
 import { nanoid } from "nanoid";
 import type { Prisma } from "@prisma/client";
@@ -53,6 +56,44 @@ function generateShareToken() {
 /** Sanitize a filename for use in a Content-Disposition header. */
 function sanitizeFilename(name: string) {
   return name.replace(/[^\w.\- ]+/g, "_").slice(0, 100) || "file";
+}
+
+function filenameExtension(name: string, mime: string) {
+  const cleanName = name.toLowerCase().split("?")[0];
+  const existing = cleanName.match(/\.([a-z0-9]{1,8})$/)?.[1];
+  if (existing) return existing;
+  switch (mime) {
+    case "image/jpeg": return "jpg";
+    case "image/png": return "png";
+    case "image/webp": return "webp";
+    case "image/gif": return "gif";
+    case "audio/webm": return "webm";
+    case "audio/ogg": return "ogg";
+    case "audio/mpeg": return "mp3";
+    case "audio/mp4": return "m4a";
+    case "audio/wav": return "wav";
+    default: return "bin";
+  }
+}
+
+function makeBlobPath({
+  boardId,
+  userId,
+  name,
+  mime,
+}: {
+  boardId: string | null;
+  userId: string;
+  name: string;
+  mime: string;
+}) {
+  const scope = boardId ? `boards/${boardId}` : `users/${userId}`;
+  const base = sanitizeFilename(name).replace(/\.[a-z0-9]{1,8}$/i, "") || "upload";
+  return `${scope}/${Date.now()}-${base}.${filenameExtension(name, mime)}`;
+}
+
+function blobStorageConfigured() {
+  return Boolean(process.env.BLOB_READ_WRITE_TOKEN || (process.env.BLOB_STORE_ID && process.env.VERCEL_OIDC_TOKEN));
 }
 
 /**
@@ -807,12 +848,29 @@ export function createApp() {
       return res.status(413).json({ error: "Fichier trop volumineux" });
     }
 
+    const buffer = Buffer.from(base64, "base64");
+    const blobEnabled = blobStorageConfigured();
+    const blob = blobEnabled
+      ? await putBlob(
+          makeBlobPath({ boardId: attachmentBoardId, userId: user.id, name, mime }),
+          buffer,
+          {
+            access: "private",
+            addRandomSuffix: true,
+            contentType: mime,
+          },
+        )
+      : null;
+
     const attachment = await prisma.chatAttachment.create({
       data: {
         name: name || "image",
         type: mime,
         size: size ?? bytes,
-        data,
+        data: blob ? null : data,
+        storageProvider: blob ? "vercel_blob" : "database",
+        url: blob?.url ?? null,
+        pathname: blob?.pathname ?? null,
         boardId: attachmentBoardId,
         userId: user.id,
       },
@@ -842,9 +900,7 @@ export function createApp() {
         if (!user) return res.status(401).json({ error: "Non autorisé" });
       }
 
-      const parsed = parseDataUrl(attachment.data);
-      const rawMime = (parsed ? parsed.mime : attachment.type || "").split(";")[0].trim().toLowerCase();
-      const buffer = Buffer.from(parsed ? parsed.base64 : attachment.data, "base64");
+      const rawMime = (attachment.type || "").split(";")[0].trim().toLowerCase();
 
       // Only serve known-safe image/audio types inline. Anything else is forced
       // to a download with a neutral content-type, and nosniff prevents browser
@@ -856,6 +912,36 @@ export function createApp() {
         "Content-Disposition",
         `${safeMime === "application/octet-stream" ? "attachment" : "inline"}; filename="${sanitizeFilename(attachment.name)}"`,
       );
+
+      if (attachment.storageProvider === "vercel_blob" && (attachment.pathname || attachment.url)) {
+        const ifNoneMatch = typeof req.headers["if-none-match"] === "string" ? req.headers["if-none-match"] : undefined;
+        const range = typeof req.headers.range === "string" ? req.headers.range : undefined;
+        const result = await getBlob(attachment.pathname || attachment.url!, {
+          access: "private",
+          ifNoneMatch,
+          headers: range ? { Range: range } : undefined,
+        });
+        if (!result) return res.status(404).json({ error: "Not found" });
+        if (result.statusCode === 304) {
+          if (result.blob.etag) res.setHeader("ETag", result.blob.etag);
+          return res.status(304).end();
+        }
+        const upstreamStatus = result.headers.get("content-range") ? 206 : 200;
+        const contentLength = result.headers.get("content-length");
+        const contentRange = result.headers.get("content-range");
+        const acceptRanges = result.headers.get("accept-ranges");
+        if (contentLength) res.setHeader("Content-Length", contentLength);
+        if (contentRange) res.setHeader("Content-Range", contentRange);
+        if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
+        if (result.blob.etag) res.setHeader("ETag", result.blob.etag);
+        res.setHeader("Cache-Control", "private, max-age=0, must-revalidate");
+        res.status(upstreamStatus);
+        return Readable.fromWeb(result.stream as unknown as WebReadableStream<Uint8Array>).pipe(res);
+      }
+
+      if (!attachment.data) return res.status(404).json({ error: "Not found" });
+      const parsed = parseDataUrl(attachment.data);
+      const buffer = Buffer.from(parsed ? parsed.base64 : attachment.data, "base64");
       res.send(buffer);
     } catch (error) {
       console.error(`API ${req.method} ${req.path}:`, error);

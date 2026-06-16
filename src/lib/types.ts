@@ -108,6 +108,8 @@ export type Layer = {
   locked?: boolean;
   /** Voice note: duration in seconds (audio src lives in `src`). */
   audioDuration?: number;
+  audioTrimStart?: number;
+  audioTrimEnd?: number;
 };
 
 export type Presence = {

@@ -1,8 +1,6 @@
 import { cn } from "@/lib/utils";
 import fredAiIcon from "@/assets/fred-ai.png";
 
-export const FRED_AI_ICON = fredAiIcon;
-
 type FredAvatarProps = {
   className?: string;
   size?: number;

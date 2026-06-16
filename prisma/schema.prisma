@@ -169,14 +169,17 @@ model Presence {
 }
 
 model ChatAttachment {
-  id        String   @id @default(cuid())
-  boardId   String?
-  userId    String?
-  name      String
-  type      String
-  size      Int
-  data      String
-  createdAt DateTime @default(now())
+  id              String   @id @default(cuid())
+  boardId         String?
+  userId          String?
+  name            String
+  type            String
+  size            Int
+  data            String?
+  url             String?
+  pathname        String?
+  storageProvider String   @default("database")
+  createdAt       DateTime @default(now())
 
   board Board? @relation(fields: [boardId], references: [id], onDelete: Cascade)
   user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)

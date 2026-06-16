@@ -41,6 +41,18 @@ export function ensureBoardSchema() {
           ALTER TABLE "chat_attachment" ADD COLUMN IF NOT EXISTS "userId" TEXT;
         `);
         await prisma.$executeRawUnsafe(`
+          ALTER TABLE "chat_attachment" ADD COLUMN IF NOT EXISTS "url" TEXT;
+        `);
+        await prisma.$executeRawUnsafe(`
+          ALTER TABLE "chat_attachment" ADD COLUMN IF NOT EXISTS "pathname" TEXT;
+        `);
+        await prisma.$executeRawUnsafe(`
+          ALTER TABLE "chat_attachment" ADD COLUMN IF NOT EXISTS "storageProvider" TEXT NOT NULL DEFAULT 'database';
+        `);
+        await prisma.$executeRawUnsafe(`
+          ALTER TABLE "chat_attachment" ALTER COLUMN "data" DROP NOT NULL;
+        `);
+        await prisma.$executeRawUnsafe(`
           CREATE INDEX IF NOT EXISTS "chat_attachment_boardId_idx" ON "chat_attachment" ("boardId");
         `);
         await prisma.$executeRawUnsafe(`

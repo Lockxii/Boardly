@@ -3,7 +3,8 @@ import { Link } from "@tanstack/react-router";
 import { Clock, Trash2, Users, Copy, Plus, FolderOpen } from "lucide-react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { TemplatePreview, getTemplateLabel } from "@/components/template-preview";
+import { TemplatePreview } from "@/components/template-preview";
+import { getTemplateLabel } from "@/lib/template-styles";
 import { BoardMetaDialog } from "@/components/board-meta-dialog";
 import type { Board } from "@/lib/types";
 

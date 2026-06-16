@@ -15,7 +15,9 @@ import type { Layer, LayerType } from "@/lib/types";
 import { compressImageFile } from "@/lib/canvas-utils";
 import { getDefaultPastePoint, pasteUrlsAt } from "@/lib/link-paste-actions";
 import { LinkPasteDialog } from "./link-paste-dialog";
-import { FloatingDock, useFloatingDock } from "./floating-dock";
+import { FloatingDock } from "./floating-dock";
+import { useFloatingDock } from "./floating-dock-context";
+import { dataUrlFromBlob, uploadDataUrl } from "@/lib/upload-file";
 
 export function Toolbar({ boardId }: { boardId?: string }) {
   const readOnly = useCanvasStore((s) => s.readOnly);
@@ -103,16 +105,21 @@ function ToolbarContent({
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const toastId = toast.loading("Envoi de l'image…");
     try {
-      const src = await compressImageFile(file);
-      insertImage(src);
+      const data = await compressImageFile(file);
+      const uploadName = `${(file.name || "image").replace(/\.[^.]+$/, "")}.jpg`;
+      const { url } = await uploadDataUrl({
+        name: uploadName,
+        type: "image/jpeg",
+        size: Math.ceil(data.length * 0.75),
+        data,
+        boardId,
+      });
+      insertImage(url);
+      toast.success("Image ajoutée", { id: toastId });
     } catch {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const src = event.target?.result as string;
-        if (src) insertImage(src);
-      };
-      reader.readAsDataURL(file);
+      toast.error("Échec de l'envoi de l'image", { id: toastId });
     }
     e.target.value = "";
   };
@@ -120,12 +127,7 @@ function ToolbarContent({
   const handleVoiceComplete = async (blob: Blob, durationSec: number) => {
     const toastId = toast.loading("Envoi de la note vocale…");
     try {
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-      });
+      const dataUrl = await dataUrlFromBlob(blob);
       const res = await fetch("/api/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
