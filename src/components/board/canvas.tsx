@@ -406,7 +406,17 @@ export function Canvas({
     useCanvasStore.setState((s) => {
       const layer = s.layers[layerId];
       if (!layer) return s;
-      const points = [...(layer.points || []), [point.x, point.y, pressure]];
+      const pts = layer.points || [];
+      // Decimate: ignore points within ~1px of the previous one. This bounds the
+      // points array and skips a full-layers-map clone for sub-pixel jitter,
+      // without any visible change to the rendered stroke.
+      const last = pts[pts.length - 1];
+      if (last) {
+        const dx = point.x - last[0];
+        const dy = point.y - last[1];
+        if (dx * dx + dy * dy < 1) return s;
+      }
+      const points = [...pts, [point.x, point.y, pressure]];
       return { layers: { ...s.layers, [layerId]: { ...layer, points } } };
     });
   }, []);
