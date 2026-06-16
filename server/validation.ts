@@ -21,12 +21,17 @@ export function parseOrThrow<S extends z.ZodTypeAny>(schema: S, data: unknown): 
   return result.data;
 }
 
-/** Allowed image MIME types for chat attachment uploads. */
+/** Allowed MIME types for uploads (chat images + voice notes). */
 export const ALLOWED_UPLOAD_MIMES = new Set([
   "image/jpeg",
   "image/png",
   "image/webp",
   "image/gif",
+  "audio/webm",
+  "audio/ogg",
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/wav",
 ]);
 
 /** Max decoded upload size (bytes). Chat images should be small. */

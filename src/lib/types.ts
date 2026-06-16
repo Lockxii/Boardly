@@ -12,7 +12,8 @@ export type LayerType =
   | "Line"
   | "Frame"
   | "Link"
-  | "Column";
+  | "Column"
+  | "Audio";
 
 export type ChecklistItem = {
   id: string;
@@ -105,6 +106,8 @@ export type Layer = {
   cornerRadius?: number;
   rotation?: number;
   locked?: boolean;
+  /** Voice note: duration in seconds (audio src lives in `src`). */
+  audioDuration?: number;
 };
 
 export type Presence = {

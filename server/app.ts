@@ -55,6 +55,20 @@ function sanitizeFilename(name: string) {
   return name.replace(/[^\w.\- ]+/g, "_").slice(0, 100) || "file";
 }
 
+/**
+ * Parse a base64 data URL into its MIME (params like ";codecs=opus" stripped)
+ * and raw base64 body. Robust to media-type parameters (e.g. audio/webm).
+ */
+function parseDataUrl(value: string): { mime: string; base64: string } | null {
+  if (!value.startsWith("data:")) return null;
+  const comma = value.indexOf(",");
+  if (comma < 0) return null;
+  const meta = value.slice(5, comma);
+  if (!/;base64$/i.test(meta)) return null;
+  const mime = meta.replace(/;base64$/i, "").split(";")[0].trim().toLowerCase();
+  return { mime, base64: value.slice(comma + 1) };
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 function getLiveblocksSecret() {
@@ -762,13 +776,9 @@ export function createApp() {
     const { name, type, size, data } = parseOrThrow(uploadSchema, req.body);
 
     // Resolve the real MIME + raw base64 from either a data URL or raw bytes.
-    let mime = type.toLowerCase();
-    let base64 = data;
-    const dataUrl = data.match(/^data:([^;]+);base64,(.+)$/);
-    if (dataUrl) {
-      mime = dataUrl[1].toLowerCase();
-      base64 = dataUrl[2];
-    }
+    const parsed = parseDataUrl(data);
+    const mime = (parsed ? parsed.mime : type.split(";")[0]).trim().toLowerCase();
+    const base64 = parsed ? parsed.base64 : data;
 
     if (!ALLOWED_UPLOAD_MIMES.has(mime)) {
       return res.status(415).json({ error: "Type de fichier non autorisé" });
@@ -789,10 +799,9 @@ export function createApp() {
     const attachment = await prisma.chatAttachment.findUnique({ where: { id: fileId } });
     if (!attachment) return res.status(404).json({ error: "Not found" });
 
-    const base64 = attachment.data;
-    const matches = base64.match(/^data:([^;]+);base64,(.+)$/);
-    const rawMime = (matches ? matches[1] : attachment.type || "").toLowerCase();
-    const buffer = Buffer.from(matches ? matches[2] : base64, "base64");
+    const parsed = parseDataUrl(attachment.data);
+    const rawMime = (parsed ? parsed.mime : attachment.type || "").split(";")[0].trim().toLowerCase();
+    const buffer = Buffer.from(parsed ? parsed.base64 : attachment.data, "base64");
 
     // Only serve known-safe image types inline. Anything else (e.g. an attacker
     // storing text/html) is forced to a download with a neutral content-type,

@@ -149,6 +149,7 @@ interface CanvasStore {
   insertLinkLayersBatch: (items: { preview: LinkPreview; x: number; y: number }[]) => string[];
   insertImageLayersBatch: (items: { src: string; x: number; y: number; width: number; height: number }[]) => string[];
   insertColorCards: (colors: string[], point: { x: number; y: number }) => string[];
+  insertAudioCard: (src: string, durationSec: number) => string;
   fitLinkLayerToImage: (id: string, naturalWidth: number, naturalHeight: number) => void;
   deleteLayers: (ids?: string[]) => void;
   restoreTrashEntry: (entryId: string) => void;
@@ -643,6 +644,34 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
     get().addAuditEntry("created", newIds.length === 1 ? "Couleur" : `Couleur x${newIds.length}`);
     return newIds;
+  },
+
+  insertAudioCard: (src, durationSec) => {
+    get().pushHistory();
+    const id = nanoid();
+    const centerX = (window.innerWidth / 2 - get().camera.x) / get().camera.zoom;
+    const centerY = (window.innerHeight / 2 - get().camera.y) / get().camera.zoom;
+    set((s) => ({
+      layers: {
+        ...s.layers,
+        [id]: {
+          type: "Audio",
+          x: Math.round(centerX - 130),
+          y: Math.round(centerY - 32),
+          width: 260,
+          height: 64,
+          fill: "#ffffff",
+          src,
+          audioDuration: durationSec,
+          cornerRadius: 12,
+        },
+      },
+      layerIds: [...s.layerIds, id],
+      selection: [id],
+      canvasState: { mode: "none" },
+    }));
+    get().addAuditEntry("created", "Note vocale");
+    return id;
   },
 
   fitLinkLayerToImage: (id, naturalWidth, naturalHeight) => {

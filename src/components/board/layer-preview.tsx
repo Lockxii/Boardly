@@ -339,6 +339,33 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
           <image href={layer.src} width={layer.width} height={layer.height} preserveAspectRatio="none" clipPath={`url(#clip-${id})`} />
         </g>
       )}
+      {layer.type === "Audio" && (
+        <foreignObject x={x} y={y} width={layer.width} height={layer.height} transform={foRotation} style={{ overflow: "visible" }}>
+          <XhtmlDiv
+            style={{
+              width: layer.width,
+              height: layer.height,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              padding: "0 12px",
+              background: layer.fill || "#ffffff",
+              border: "1px solid #e5e7eb",
+              borderRadius: cornerRadius || 12,
+              boxShadow: "0 1px 3px rgba(0,0,0,0.12)",
+            }}
+          >
+            <span style={{ fontSize: 18, flexShrink: 0 }}>🎤</span>
+            <audio
+              src={layer.src}
+              controls
+              preload="metadata"
+              onPointerDown={(e) => e.stopPropagation()}
+              style={{ height: 34, flex: 1, minWidth: 0 }}
+            />
+          </XhtmlDiv>
+        </foreignObject>
+      )}
 
       {(layerComments > 0 || reactions.length > 0) && (
         <g transform={layerTransform}>

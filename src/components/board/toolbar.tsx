@@ -2,9 +2,11 @@ import { useCanvasStore } from "@/store/canvas-store";
 import {
   MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil,
   Triangle as TriangleIcon, MoveRight, Diamond, Star, Layers, Eraser, Shapes, PenTool, Plus,
-  Hand, Minus, Frame, Link2, Columns3,
+  Hand, Minus, Frame, Link2, Columns3, Mic,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { useVoiceRecorder } from "@/lib/use-voice-recorder";
 import { nanoid } from "nanoid";
 import { useRef, useState } from "react";
 import { LayersPanel } from "./layers-panel";
@@ -107,6 +109,35 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
       reader.readAsDataURL(file);
     }
     e.target.value = "";
+  };
+
+  const handleVoiceComplete = async (blob: Blob, durationSec: number) => {
+    const toastId = toast.loading("Envoi de la note vocale…");
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ name: `note-vocale-${Date.now()}.webm`, type: blob.type, size: blob.size, data: dataUrl }),
+      });
+      if (!res.ok) throw new Error();
+      const { url } = (await res.json()) as { url: string };
+      useCanvasStore.getState().insertAudioCard(url, durationSec);
+      toast.success("Note vocale ajoutée", { id: toastId });
+    } catch {
+      toast.error("Échec de l'envoi de la note vocale", { id: toastId });
+    }
+  };
+  const voice = useVoiceRecorder(handleVoiceComplete);
+  const toggleVoice = () => {
+    if (voice.recording) voice.stop();
+    else void voice.start().catch(() => toast.error("Micro indisponible"));
   };
 
   const dismissConnectionTools = useCanvasStore((s) => s.dismissConnectionTools);
@@ -263,6 +294,19 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
               title="Carte lien"
             >
               <Link2 className="h-4.5 w-4.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-9 w-9 rounded-lg ${voice.recording ? "bg-red-500 text-white hover:bg-red-600" : "hover:bg-neutral-100 dark:hover:bg-neutral-700"}`}
+              onClick={toggleVoice}
+              title={voice.recording ? `Arrêter l'enregistrement (${voice.elapsed}s)` : "Note vocale"}
+            >
+              {voice.recording ? (
+                <span className="text-[11px] font-semibold tabular-nums">{voice.elapsed}s</span>
+              ) : (
+                <Mic className="h-4.5 w-4.5" />
+              )}
             </Button>
           </motion.div>
         )}
