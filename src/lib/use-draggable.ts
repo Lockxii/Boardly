@@ -8,7 +8,13 @@ function loadPos(storageKey?: string): Pos | null {
     const raw = window.localStorage.getItem(`boardly-drag-${storageKey}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Pos;
-    if (typeof parsed?.x === "number" && typeof parsed?.y === "number") return parsed;
+    if (typeof parsed?.x !== "number" || typeof parsed?.y !== "number") return null;
+    // Clamp so the panel's grip is never stranded off-screen (e.g. after a
+    // resize or a stale saved position).
+    return {
+      x: Math.min(Math.max(8, parsed.x), Math.max(8, window.innerWidth - 60)),
+      y: Math.min(Math.max(8, parsed.y), Math.max(8, window.innerHeight - 40)),
+    };
   } catch {
     /* ignore */
   }

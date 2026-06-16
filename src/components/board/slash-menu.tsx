@@ -1,38 +1,49 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { StickyNote, Type, Frame as FrameIcon, Square, Circle, Columns3, MessageCircle } from "lucide-react";
+import {
+  StickyNote, Type, Frame as FrameIcon, Square, Circle, Columns3, MessageCircle,
+  Triangle as TriangleIcon, Diamond, Star, MoveRight, Minus, Image as ImageIcon, Link2, Mic, Pencil,
+} from "lucide-react";
 import type { LayerType } from "@/lib/types";
 
-type InsertCommand = {
-  id: string;
-  label: string;
-  keywords: string;
-  icon: typeof StickyNote;
-  type: LayerType;
-  width?: number;
-  height?: number;
-};
+type Command =
+  | { id: string; label: string; keywords: string; icon: typeof StickyNote; kind: "insert"; type: LayerType; width?: number; height?: number }
+  | { id: string; label: string; keywords: string; icon: typeof StickyNote; kind: "tool"; tool: "image" | "link" | "voice" }
+  | { id: string; label: string; keywords: string; icon: typeof StickyNote; kind: "pencil" };
 
-const COMMANDS: InsertCommand[] = [
-  { id: "note", label: "Note", keywords: "note sticky post-it", icon: StickyNote, type: "Note", width: 200, height: 200 },
-  { id: "text", label: "Texte", keywords: "texte titre", icon: Type, type: "Text", width: 220, height: 48 },
-  { id: "frame", label: "Cadre", keywords: "cadre section frame", icon: FrameIcon, type: "Frame", width: 400, height: 300 },
-  { id: "column", label: "Colonne", keywords: "colonne column liste", icon: Columns3, type: "Column", width: 300, height: 500 },
-  { id: "rectangle", label: "Rectangle", keywords: "rectangle carré forme", icon: Square, type: "Rectangle", width: 160, height: 120 },
-  { id: "ellipse", label: "Ellipse", keywords: "ellipse cercle rond", icon: Circle, type: "Ellipse", width: 140, height: 140 },
+const COMMANDS: Command[] = [
+  { id: "note", label: "Note", keywords: "note sticky post-it", icon: StickyNote, kind: "insert", type: "Note", width: 200, height: 200 },
+  { id: "text", label: "Texte", keywords: "texte titre", icon: Type, kind: "insert", type: "Text", width: 220, height: 48 },
+  { id: "frame", label: "Cadre", keywords: "cadre section frame", icon: FrameIcon, kind: "insert", type: "Frame", width: 400, height: 300 },
+  { id: "column", label: "Colonne", keywords: "colonne column liste", icon: Columns3, kind: "insert", type: "Column", width: 300, height: 500 },
+  { id: "rectangle", label: "Rectangle", keywords: "rectangle carré forme", icon: Square, kind: "insert", type: "Rectangle", width: 160, height: 120 },
+  { id: "ellipse", label: "Ellipse", keywords: "ellipse cercle rond", icon: Circle, kind: "insert", type: "Ellipse", width: 140, height: 140 },
+  { id: "triangle", label: "Triangle", keywords: "triangle forme", icon: TriangleIcon, kind: "insert", type: "Triangle", width: 140, height: 120 },
+  { id: "diamond", label: "Losange", keywords: "losange diamant diamond forme", icon: Diamond, kind: "insert", type: "Diamond", width: 140, height: 120 },
+  { id: "star", label: "Étoile", keywords: "etoile star forme", icon: Star, kind: "insert", type: "Star", width: 140, height: 140 },
+  { id: "arrow", label: "Flèche", keywords: "fleche arrow", icon: MoveRight, kind: "insert", type: "Arrow", width: 160, height: 80 },
+  { id: "line", label: "Ligne", keywords: "ligne line trait", icon: Minus, kind: "insert", type: "Line", width: 160, height: 8 },
+  { id: "image", label: "Image", keywords: "image photo upload", icon: ImageIcon, kind: "tool", tool: "image" },
+  { id: "link", label: "Carte lien", keywords: "lien link url carte", icon: Link2, kind: "tool", tool: "link" },
+  { id: "voice", label: "Note vocale", keywords: "vocal voix audio enregistrer micro", icon: Mic, kind: "tool", tool: "voice" },
+  { id: "pencil", label: "Crayon", keywords: "crayon dessin pencil draw", icon: Pencil, kind: "pencil" },
 ];
 
-type Row = { kind: "chat"; text: string } | { kind: "insert"; cmd: InsertCommand };
+type Row = { kind: "chat"; text: string } | { kind: "command"; cmd: Command };
 
 export function SlashMenu({
   screen,
   canHandleChat,
   onInsert,
+  onTool,
+  onPencil,
   onChat,
   onClose,
 }: {
   screen: { x: number; y: number };
   canHandleChat: boolean;
   onInsert: (type: LayerType, width?: number, height?: number) => void;
+  onTool: (tool: "image" | "link" | "voice") => void;
+  onPencil: () => void;
   onChat: (text: string) => void;
   onClose: () => void;
 }) {
@@ -44,7 +55,7 @@ export function SlashMenu({
     const q = query.trim().toLowerCase();
     const matches = COMMANDS.filter((c) => !q || c.label.toLowerCase().includes(q) || c.keywords.includes(q));
     const chatRow: Row[] = canHandleChat && query.trim() ? [{ kind: "chat", text: query.trim() }] : [];
-    return [...chatRow, ...matches.map((cmd) => ({ kind: "insert", cmd }) as Row)];
+    return [...chatRow, ...matches.map((cmd) => ({ kind: "command", cmd }) as Row)];
   }, [query, canHandleChat]);
 
   useEffect(() => {
@@ -57,8 +68,15 @@ export function SlashMenu({
       onClose();
       return;
     }
-    if (row.kind === "chat") onChat(row.text);
-    else onInsert(row.cmd.type, row.cmd.width, row.cmd.height);
+    if (row.kind === "chat") {
+      onChat(row.text);
+    } else if (row.cmd.kind === "insert") {
+      onInsert(row.cmd.type, row.cmd.width, row.cmd.height);
+    } else if (row.cmd.kind === "tool") {
+      onTool(row.cmd.tool);
+    } else {
+      onPencil();
+    }
     onClose();
   };
 

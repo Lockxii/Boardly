@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useVoiceRecorder } from "@/lib/use-voice-recorder";
 import { nanoid } from "nanoid";
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { LayersPanel } from "./layers-panel";
 import { motion } from "framer-motion";
 import type { Layer, LayerType } from "@/lib/types";
@@ -139,6 +139,17 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
     if (voice.recording) voice.stop();
     else void voice.start().catch(() => toast.error("Micro indisponible"));
   };
+
+  // Bridge: the slash (/) menu requests image/link/voice tools hosted here.
+  const requestTool = useCanvasStore((s) => s.requestTool);
+  useEffect(() => {
+    if (!requestTool) return;
+    if (requestTool === "image") fileInputRef.current?.click();
+    else if (requestTool === "link") onOpenLinkDialog();
+    else if (requestTool === "voice") toggleVoice();
+    useCanvasStore.getState().setRequestTool(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestTool]);
 
   const dismissConnectionTools = useCanvasStore((s) => s.dismissConnectionTools);
 

@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import {
   MousePointer2, Square, Circle, Type, StickyNote, Pencil, Eraser,
   Layers, Grid3X3, Map, Keyboard, Home, Hand, Minus, Frame, Link2, Camera,
-  Plus, MoveRight, Diamond, Star, Triangle as TriangleIcon, Search, Presentation, Bot
+  Plus, MoveRight, Diamond, Star, Triangle as TriangleIcon, Search, Presentation, Bot, RotateCcw
 } from "lucide-react";
 
 interface Command {
@@ -50,6 +50,7 @@ export function CommandPalette() {
     { id: "presentation", label: "Mode présentation", shortcut: "Shift+P", icon: Presentation, action: () => { setShowPresentation(true); setShowCommandPalette(false); }, category: "Vue" },
     { id: "fred", label: "Fred AI", shortcut: "Shift+A", icon: Bot, action: () => { setShowFredPanel(true); setShowCommandPalette(false); }, category: "Aide" },
     { id: "resetzoom", label: "Réinitialiser Zoom", shortcut: "Ctrl+0", icon: Map, action: () => { setCamera({ x: 0, y: 0, zoom: 1 }); setShowCommandPalette(false); }, category: "Vue" },
+    { id: "resetlayout", label: "Réinitialiser la disposition des panneaux", icon: RotateCcw, action: () => { try { Object.keys(localStorage).filter((k) => k.startsWith("boardly-dock-") || k.startsWith("boardly-drag-")).forEach((k) => localStorage.removeItem(k)); } catch { /* ignore */ } setShowCommandPalette(false); window.location.reload(); }, category: "Vue" },
     // Navigation
     { id: "home", label: "Accueil", icon: Home, action: () => { navigate({ to: "/" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "dashboard", label: "Dashboard", icon: Home, action: () => { navigate({ to: "/dashboard" }); setShowCommandPalette(false); }, category: "Navigation" },

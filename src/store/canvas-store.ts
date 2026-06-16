@@ -66,6 +66,9 @@ interface CanvasStore {
   setFollowingUserId: (userId: string | null) => void;
   livePeers: { userId: string; userName: string; connectionId: string }[];
   setLivePeers: (peers: { userId: string; userName: string; connectionId: string }[]) => void;
+  /** Bridge for the slash menu to trigger toolbar-hosted tools (image/link/voice). */
+  requestTool: "image" | "link" | "voice" | null;
+  setRequestTool: (tool: "image" | "link" | "voice" | null) => void;
   /** Send hooks wired by the presence layer while connected (null when offline). */
   liveActions: {
     setLaser: (on: boolean) => void;
@@ -281,6 +284,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   setFollowingUserId: (followingUserId) => set({ followingUserId }),
   livePeers: [],
   setLivePeers: (livePeers) => set({ livePeers }),
+  requestTool: null,
+  setRequestTool: (requestTool) => set({ requestTool }),
   liveActions: null,
   setLiveActions: (liveActions) => set({ liveActions }),
 

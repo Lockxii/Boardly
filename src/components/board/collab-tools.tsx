@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type HTMLAttributes } from "react";
 import { Timer, Play, Pause, RotateCcw, Zap, X, GripVertical } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { cursorColorForUser, type TimerEventPayload } from "@/lib/board-socket";
@@ -18,7 +18,7 @@ function sendTimer(timer: TimerEventPayload) {
   useCanvasStore.getState().liveActions?.sendTimer(timer);
 }
 
-function TimerWidget() {
+function TimerWidget({ dragHandle }: { dragHandle: HTMLAttributes<HTMLSpanElement> }) {
   const liveTimer = useCanvasStore((s) => s.liveTimer);
   const [now, setNow] = useState(() => Date.now());
   const [open, setOpen] = useState(false);
@@ -50,16 +50,21 @@ function TimerWidget() {
   if (!liveTimer) {
     return (
       <div className="relative">
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-3 py-1.5 text-xs font-medium shadow-sm backdrop-blur transition-colors hover:bg-neutral-50 dark:border-neutral-700/80 dark:bg-neutral-900/90 dark:hover:bg-neutral-800"
-        >
-          <Timer className="h-3.5 w-3.5" /> Minuteur
-        </button>
+        <div className="flex items-center rounded-full border border-neutral-200/80 bg-white/90 pl-1.5 shadow-sm backdrop-blur dark:border-neutral-700/80 dark:bg-neutral-900/90">
+          <span {...dragHandle} className="text-neutral-300 dark:text-neutral-600" title="Déplacer">
+            <GripVertical className="h-3.5 w-3.5" />
+          </span>
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-neutral-50 dark:hover:bg-neutral-800"
+          >
+            <Timer className="h-3.5 w-3.5" /> Minuteur
+          </button>
+        </div>
         {open && (
           <div className="absolute right-0 top-full mt-1.5 flex flex-col gap-1.5 rounded-xl border border-neutral-200/80 bg-white p-1.5 shadow-lg dark:border-neutral-700/80 dark:bg-neutral-900">
-            <div className="flex gap-1">
+            <div className="flex justify-center gap-1">
               {PRESET_MINUTES.map((m) => (
                 <button
                   key={m}
@@ -80,7 +85,7 @@ function TimerWidget() {
                   setCustomMin("");
                 }
               }}
-              className="flex items-center gap-1 border-t border-neutral-100 pt-1.5 dark:border-neutral-800"
+              className="flex items-center justify-center gap-1 border-t border-neutral-100 pt-1.5 dark:border-neutral-800"
             >
               <input
                 type="number"
@@ -109,7 +114,10 @@ function TimerWidget() {
   const done = !liveTimer.paused && remaining <= 0;
 
   return (
-    <div className="flex items-center gap-1.5 rounded-full border border-neutral-200/80 bg-white/90 px-2 py-1 shadow-sm backdrop-blur dark:border-neutral-700/80 dark:bg-neutral-900/90">
+    <div className="flex items-center gap-1 rounded-full border border-neutral-200/80 bg-white/90 px-1.5 py-1 shadow-sm backdrop-blur dark:border-neutral-700/80 dark:bg-neutral-900/90">
+      <span {...dragHandle} className="text-neutral-300 dark:text-neutral-600" title="Déplacer">
+        <GripVertical className="h-3.5 w-3.5" />
+      </span>
       <span className={`min-w-[44px] text-center text-sm font-semibold tabular-nums ${done ? "animate-pulse text-red-500" : ""}`}>
         {formatMs(Math.max(0, remaining))}
       </span>
@@ -191,16 +199,8 @@ export function CollabTools() {
   const drag = useDraggable<HTMLDivElement>({ storageKey: "collab-tools" });
   return (
     <div ref={drag.ref} style={drag.style} className="pointer-events-auto fixed right-4 top-20 z-40 flex flex-col items-end gap-2">
-      <button
-        {...drag.handleProps}
-        type="button"
-        title="Déplacer"
-        className="flex h-5 items-center rounded-full border border-neutral-200/80 bg-white/90 px-1.5 text-neutral-300 shadow-sm backdrop-blur hover:text-neutral-500 dark:border-neutral-700/80 dark:bg-neutral-900/90 dark:text-neutral-600"
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </button>
       <PresenceBar />
-      <TimerWidget />
+      <TimerWidget dragHandle={drag.handleProps} />
     </div>
   );
 }

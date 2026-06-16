@@ -793,6 +793,12 @@ export function CursorsPresence({
             const pt = slashPointRef.current;
             useCanvasStore.getState().insertLayer(type, Math.round(pt.x), Math.round(pt.y), w, h);
           }}
+          onTool={(tool) => useCanvasStore.getState().setRequestTool(tool)}
+          onPencil={() => {
+            const store = useCanvasStore.getState();
+            store.setCanvasState({ mode: "pencil" });
+            store.setPencilTool("draw");
+          }}
           onChat={sendCursorChat}
           onClose={() => setSlashOpen(false)}
         />
