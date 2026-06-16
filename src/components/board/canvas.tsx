@@ -1,4 +1,5 @@
 import { useCanvasStore } from "@/store/canvas-store";
+import { useShallow } from "zustand/react/shallow";
 import { pointerEventToCanvasPoint } from "@/lib/utils";
 import { nanoid } from "nanoid";
 import { Toolbar } from "./toolbar";
@@ -58,17 +59,36 @@ export function Canvas({
   isPublic?: boolean;
   isOwner?: boolean;
 }) {
+  // Subscribe ONLY to the reactive state this component renders with. Previously
+  // a selectorless useCanvasStore() re-rendered Canvas (and its whole subtree)
+  // on every store change — cursor moves, save-status flips, audit entries, etc.
   const {
-    camera, setCamera, canvasState, setCanvasState,
-    pencilTool,
-    showGrid, showMinimap, showCommandPalette, setShowCommandPalette,
-    setShowSearch,
-    snapToGrid, toggleSnapToGrid,
-    layerIds, layers, selection, setSelection, setCursor,
-    insertLayer, deleteLayers, duplicateLayers, updateLayer, updateLayerText, nudgeLayers,
-    pushHistory, undo, redo, canUndo, canRedo,
-    addAuditEntry, setReadOnly,
-  } = useCanvasStore();
+    camera, canvasState, pencilTool,
+    showGrid, showMinimap, showCommandPalette,
+    snapToGrid, layerIds, layers, selection, canUndo, canRedo,
+  } = useCanvasStore(
+    useShallow((s) => ({
+      camera: s.camera,
+      canvasState: s.canvasState,
+      pencilTool: s.pencilTool,
+      showGrid: s.showGrid,
+      showMinimap: s.showMinimap,
+      showCommandPalette: s.showCommandPalette,
+      snapToGrid: s.snapToGrid,
+      layerIds: s.layerIds,
+      layers: s.layers,
+      selection: s.selection,
+      canUndo: s.canUndo,
+      canRedo: s.canRedo,
+    })),
+  );
+
+  // Actions are stable references in Zustand — read once, they never trigger renders.
+  const {
+    setCamera, setCanvasState, setShowCommandPalette, setShowSearch, toggleSnapToGrid,
+    setSelection, setCursor, insertLayer, deleteLayers, duplicateLayers,
+    updateLayerText, undo, redo, addAuditEntry, setReadOnly,
+  } = useCanvasStore.getState();
 
   const pencilDraft = React.useRef<string | null>(null);
   const clipboardRef = React.useRef<Layer[]>([]);
@@ -110,15 +130,6 @@ export function Canvas({
 
   const pencilThickness = useCanvasStore((s) => s.pencilThickness);
   const lastUsedColor = useCanvasStore((s) => s.lastUsedColor);
-
-  // Helper: get layers as Map-like interface for compatibility
-  const layersMap = React.useMemo(() => {
-    const map = new Map<string, Layer>();
-    for (const [id, layer] of Object.entries(layers)) {
-      map.set(id, layer);
-    }
-    return map;
-  }, [layers]);
 
   const syncCursor = useCallback((point: { x: number; y: number } | null) => {
     const now = Date.now();
