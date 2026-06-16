@@ -3,6 +3,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { applyLiveBoardPatch, applyRemoteBoardUpdate, createBoardLivePatch, type BoardLivePatch } from "@/lib/board-remote-sync";
 import { cursorColorForUser, type PresenceCamera, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
+import { SlashMenu } from "./slash-menu";
 import type { BoardCanvasData, Layer } from "@/lib/types";
 
 const CURSOR_EMIT_INTERVAL_MS = 33;
@@ -219,10 +220,13 @@ export function CursorsPresence({
   const spawnReactionRef = useRef<(emoji: string) => void>(() => {});
   const lastCameraSentAtRef = useRef(0);
   const lastSentCameraRef = useRef<PresenceCamera | null>(null);
-  const chatDraftRef = useRef<string | null>(null);
-  const chatAnchorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-  const [chatDraft, setChatDraft] = useState<string | null>(null);
-  chatDraftRef.current = chatDraft;
+  const slashOpenRef = useRef(false);
+  const slashScreenRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const slashPointRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const slashHasPeersRef = useRef(false);
+  const chatClearTimerRef = useRef(0);
+  const [slashOpen, setSlashOpen] = useState(false);
+  slashOpenRef.current = slashOpen;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -643,6 +647,7 @@ export function CursorsPresence({
       store.setLivePeers([]);
       store.setLiveTimer(null);
       store.setFollowingUserId(null);
+      window.clearTimeout(chatClearTimerRef.current);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onLocalActivity);
       window.removeEventListener("pointerdown", onLocalActivity);
@@ -772,29 +777,38 @@ export function CursorsPresence({
     return () => cancelAnimationFrame(raf);
   }, [boardId, readOnly]);
 
-  // Cursor chat: press "/" to open a bubble that floats by your cursor.
+  // Slash menu: press "/" to insert an element at the cursor — or, when
+  // collaborating, send a cursor-chat message ("Dire …").
   useEffect(() => {
     if (readOnly) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "/") return;
       const ae = document.activeElement as HTMLElement | null;
       const inField = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable);
-      if (inField || chatDraftRef.current !== null) return;
+      if (inField || slashOpenRef.current) return;
       e.preventDefault();
-      const p = pointerRef.current;
       const cam = useCanvasStore.getState().camera;
-      chatAnchorRef.current = p
-        ? { x: p.x * cam.zoom + cam.x, y: p.y * cam.zoom + cam.y }
-        : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-      setChatDraft("");
+      const p = pointerRef.current ?? {
+        x: (window.innerWidth / 2 - cam.x) / cam.zoom,
+        y: (window.innerHeight / 2 - cam.y) / cam.zoom,
+      };
+      slashPointRef.current = p;
+      slashScreenRef.current = { x: p.x * cam.zoom + cam.x, y: p.y * cam.zoom + cam.y };
+      slashHasPeersRef.current = peersRef.current.size > 0;
+      setSlashOpen(true);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [readOnly]);
 
-  const closeChat = () => {
-    useCanvasStore.getState().liveActions?.sendChat(null);
-    setChatDraft(null);
+  const sendCursorChat = (text: string) => {
+    const trimmed = text.slice(0, 120);
+    useCanvasStore.getState().liveActions?.sendChat(trimmed);
+    window.clearTimeout(chatClearTimerRef.current);
+    chatClearTimerRef.current = window.setTimeout(
+      () => useCanvasStore.getState().liveActions?.sendChat(null),
+      5000,
+    );
   };
 
   return (
@@ -802,25 +816,16 @@ export function CursorsPresence({
       <div ref={containerRef} className="pointer-events-none fixed inset-0 z-[45] overflow-hidden" />
       <div ref={burstContainerRef} className="pointer-events-none fixed inset-0 z-[46] overflow-hidden" />
       {!readOnly && <ReactionTray onPick={(emoji) => spawnReactionRef.current(emoji)} />}
-      {!readOnly && chatDraft !== null && (
-        <input
-          autoFocus
-          value={chatDraft}
-          onChange={(e) => {
-            setChatDraft(e.target.value);
-            useCanvasStore.getState().liveActions?.sendChat(e.target.value || null);
+      {!readOnly && slashOpen && (
+        <SlashMenu
+          screen={slashScreenRef.current}
+          canHandleChat={slashHasPeersRef.current}
+          onInsert={(type, w, h) => {
+            const pt = slashPointRef.current;
+            useCanvasStore.getState().insertLayer(type, Math.round(pt.x), Math.round(pt.y), w, h);
           }}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === "Escape") {
-              e.preventDefault();
-              closeChat();
-            }
-          }}
-          onBlur={closeChat}
-          placeholder="Dis quelque chose… (Échap pour fermer)"
-          maxLength={120}
-          className="pointer-events-auto fixed z-[47] w-56 -translate-y-7 rounded-xl border border-neutral-300 bg-white/95 px-2.5 py-1 text-xs shadow-lg outline-none ring-2 ring-blue-500/30 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95"
-          style={{ left: chatAnchorRef.current.x, top: chatAnchorRef.current.y }}
+          onChat={sendCursorChat}
+          onClose={() => setSlashOpen(false)}
         />
       )}
     </>
