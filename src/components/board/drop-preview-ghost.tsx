@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ImageIcon, Link2, FileImage } from "lucide-react";
+import { Link2, FileImage } from "lucide-react";
 
 type DropPreviewGhostProps = {
   kind: "images" | "urls" | "mixed";

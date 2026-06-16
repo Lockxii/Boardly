@@ -1,4 +1,3 @@
-
 generator client {
   provider      = "prisma-client-js"
   binaryTargets = ["native", "linux-arm64-openssl-3.0.x"]
@@ -19,10 +18,11 @@ model User {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  sessions  Session[]
-  accounts  Account[]
-  boards    Board[]
-  presences Presence[]
+  sessions    Session[]
+  accounts    Account[]
+  boards      Board[]
+  presences   Presence[]
+  attachments ChatAttachment[]
 
   @@map("user")
 }
@@ -40,8 +40,8 @@ model Session {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([token])
-  @@map("session")
   @@index([userId])
+  @@map("session")
 }
 
 model Account {
@@ -62,8 +62,8 @@ model Account {
 
   idToken String?
 
-  @@map("account")
   @@index([userId])
+  @@map("account")
 }
 
 model Verification {
@@ -74,15 +74,15 @@ model Verification {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  @@map("verification")
   @@index([identifier])
+  @@map("verification")
 }
 
 model Board {
-  id        String   @id @default(cuid())
-  title     String
-  authorId  String
-  template  String   @default("blank")
+  id         String   @id @default(cuid())
+  title      String
+  authorId   String
+  template   String   @default("blank")
   canvasData Json?
   thumbnail  String?  @db.Text
   folder     String?
@@ -90,14 +90,15 @@ model Board {
   isPublic   Boolean  @default(false)
   shareToken String?  @unique
   rev        Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  author      User          @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  author      User             @relation(fields: [authorId], references: [id], onDelete: Cascade)
   objects     BoardObject[]
   connections Connection[]
   presences   Presence[]
   members     BoardMember[]
+  attachments ChatAttachment[]
 
   @@index([authorId])
   @@index([authorId, template])
@@ -169,11 +170,18 @@ model Presence {
 
 model ChatAttachment {
   id        String   @id @default(cuid())
+  boardId   String?
+  userId    String?
   name      String
   type      String
   size      Int
   data      String
   createdAt DateTime @default(now())
 
+  board Board? @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user  User?  @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([boardId])
+  @@index([userId])
   @@map("chat_attachment")
 }

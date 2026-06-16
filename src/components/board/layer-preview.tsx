@@ -93,6 +93,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isLocked) return;
     e.stopPropagation();
+    useCanvasStore.getState().pushHistory();
     setIsEditing(true);
   };
 
@@ -248,7 +249,7 @@ export const LayerPreview = memo(({ id, layer, onLayerPointerDown, onLayerResize
               url={layer.url}
               selected={isSelected}
               readOnly={readOnly || isLocked}
-              onChange={(nextUrl) => updateLayer(id, { url: nextUrl })}
+              onChange={(nextUrl) => updateLayer(id, { url: nextUrl }, { history: true })}
             />
           </XhtmlDiv>
         </foreignObject>

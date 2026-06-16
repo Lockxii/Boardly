@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "@tanstack/react-router";
-import { ArrowLeft } from "lucide-react";
 import { apiFetch } from "@/lib/utils";
 import { Canvas } from "@/components/board/canvas";
 import { useCanvasStore } from "@/store/canvas-store";

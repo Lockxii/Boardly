@@ -1,5 +1,5 @@
 import { memo, useMemo, useRef, useEffect, useState } from "react";
-import { Lock } from "lucide-react";
+import { Lock, Mic } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { getViewportCanvasBounds, isLayerInViewport } from "@/lib/motion-utils";
 import { isHtmlLayerType } from "@/lib/html-layer-types";
@@ -13,6 +13,13 @@ const fontMap: Record<string, string> = {
   "font-mono": "monospace",
   "font-handwriting": '"Comic Sans MS", "Chalkboard SE", sans-serif',
 };
+
+function formatAudioDuration(totalSeconds?: number) {
+  const safeSeconds = Math.max(0, Math.round(totalSeconds || 0));
+  const minutes = Math.floor(safeSeconds / 60);
+  const seconds = safeSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 type HtmlLayerOverlayProps = {
   camera: { x: number; y: number; zoom: number };
@@ -75,6 +82,7 @@ function HtmlLayerItem({
   const handleDoubleClick = (e: React.MouseEvent) => {
     if (isLocked || readOnly) return;
     e.stopPropagation();
+    useCanvasStore.getState().pushHistory();
     setIsEditing(true);
   };
 
@@ -180,7 +188,7 @@ function HtmlLayerItem({
             url={layer.url}
             selected={selected}
             readOnly={readOnly || isLocked}
-            onChange={(nextUrl) => updateLayer(id, { url: nextUrl })}
+            onChange={(nextUrl) => updateLayer(id, { url: nextUrl }, { history: true })}
           />
         </div>
       )}
@@ -197,6 +205,29 @@ function HtmlLayerItem({
             boxShadow: "0 2px 8px rgba(15, 23, 42, 0.1)",
           }}
         />
+      )}
+
+      {layer.type === "Audio" && (
+        <div
+          className="flex h-full w-full items-center gap-2 border border-neutral-200 bg-white px-3 shadow-sm dark:border-neutral-700 dark:bg-neutral-900"
+          style={{ borderRadius: cornerRadius || 12 }}
+        >
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-red-50 text-red-600 dark:bg-red-950/40 dark:text-red-300">
+            <Mic className="h-4 w-4" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-[11px] font-semibold text-neutral-600 dark:text-neutral-300">
+              Note vocale · {formatAudioDuration(layer.audioDuration)}
+            </div>
+            <audio
+              src={layer.src}
+              controls
+              preload="metadata"
+              onPointerDown={(e) => e.stopPropagation()}
+              className="mt-0.5 h-8 w-full"
+            />
+          </div>
+        </div>
       )}
 
       {layer.type === "Note" && (
@@ -297,7 +328,7 @@ export const HtmlLayerOverlay = memo(function HtmlLayerOverlay({
   const selection = useCanvasStore((s) => s.selection);
   const highlightedLayerIds = useCanvasStore((s) => s.highlightedLayerIds);
 
-  const viewport = useMemo(() => getViewportCanvasBounds(camera), [camera.x, camera.y, camera.zoom]);
+  const viewport = useMemo(() => getViewportCanvasBounds(camera), [camera]);
 
   const visibleIds = useMemo(() => {
     return layerIds.filter((id) => {

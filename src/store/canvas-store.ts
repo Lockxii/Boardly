@@ -166,7 +166,7 @@ interface CanvasStore {
   addChecklistItem: (layerId: string, text?: string) => void;
   toggleReaction: (layerId: string, emoji: string) => void;
   setBrandColors: (colors: string[]) => void;
-  updateLayer: (id: string, updates: Partial<Layer>) => void;
+  updateLayer: (id: string, updates: Partial<Layer>, options?: { history?: boolean }) => void;
   updateLayerText: (id: string, value: string) => void;
   reorderLayers: (newOrder: string[]) => void;
   nudgeLayers: (dx: number, dy: number) => void;
@@ -760,6 +760,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
 
   toggleChecklistItem: (layerId, itemId) => {
+    get().pushHistory();
     set((s) => {
       const layer = s.layers[layerId];
       if (!layer?.checklist) return s;
@@ -788,6 +789,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
 
   toggleReaction: (layerId, emoji) => {
+    get().pushHistory();
     set((s) => {
       const list = [...(s.reactions[layerId] || [])];
       const idx = list.findIndex((r) => r.emoji === emoji);
@@ -829,7 +831,8 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     state.addAuditEntry("created", "Copie");
   },
 
-  updateLayer: (id, updates) => {
+  updateLayer: (id, updates, options) => {
+    if (options?.history && get().layers[id]) get().pushHistory();
     set((s) => {
       if (!s.layers[id]) return s;
       return {
@@ -854,11 +857,16 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
 
   reorderLayers: (newOrder) => {
+    const state = get();
+    if (newOrder.length === state.layerIds.length && newOrder.every((id, index) => id === state.layerIds[index])) return;
+    get().pushHistory();
     set({ layerIds: newOrder });
   },
 
   nudgeLayers: (dx, dy) => {
     const state = get();
+    if (state.selection.length === 0) return;
+    get().pushHistory();
     set((s) => {
       const newLayers = { ...s.layers };
       for (const id of s.selection) {

@@ -64,6 +64,7 @@ export const uploadSchema = z.object({
   type: z.string().max(120).default(""),
   size: z.number().int().nonnegative().max(MAX_UPLOAD_BYTES).optional(),
   data: z.string().min(1),
+  boardId: z.string().min(1).max(128).optional(),
 });
 
 /**

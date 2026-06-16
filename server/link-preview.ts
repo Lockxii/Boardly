@@ -56,10 +56,6 @@ function pickTitle(html: string) {
   return m?.[1]?.trim() ?? "";
 }
 
-function normalizeHost(hostname: string) {
-  return hostname.replace(/^www\./, "").replace(/^m\./, "");
-}
-
 function detectProvider(url: URL): LinkProviderId {
   return detectLinkProviderFromUrl(url.toString());
 }

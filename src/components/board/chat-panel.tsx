@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, X, Paperclip, File as FileIcon, Loader2, Image as ImageIcon, Link2, MousePointer2, GripVertical } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Send, X, Paperclip, File as FileIcon, Loader2, Link2, MousePointer2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
@@ -8,9 +8,12 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { useDraggable } from "@/lib/use-draggable";
 import { toast } from "sonner";
 
-interface ChatPanelProps { onClose: () => void; }
+interface ChatPanelProps {
+  boardId?: string;
+  onClose: () => void;
+}
 
-export function ChatPanel({ onClose }: ChatPanelProps) {
+export function ChatPanel({ boardId, onClose }: ChatPanelProps) {
   const chatMessages = useCanvasStore((s) => s.chatMessages);
   const layers = useCanvasStore((s) => s.layers);
   const selection = useCanvasStore((s) => s.selection);
@@ -56,13 +59,13 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 10 * 1024 * 1024) { toast.error("Fichier trop volumineux (max 10MB)"); return; }
+    if (file.size > 8 * 1024 * 1024) { toast.error("Fichier trop volumineux (max 8 MB)"); return; }
     setIsUploading(true);
     const reader = new FileReader();
     reader.onload = async (ev) => {
       const base64Data = ev.target?.result as string;
       try {
-        const res = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, type: file.type, size: file.size, data: base64Data }), credentials: "include" });
+        const res = await fetch("/api/upload", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: file.name, type: file.type, size: file.size, data: base64Data, boardId }), credentials: "include" });
         if (!res.ok) throw new Error("Upload failed");
         const { url } = await res.json();
         setAttachment({ type: file.type.startsWith("image/") ? "image" : "file", url, name: file.name });
@@ -106,14 +109,14 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
                 <div className={`px-3 py-2 rounded-lg text-sm max-w-[90%] break-words ${isMe ? "bg-blue-500 text-white rounded-tr-none" : "bg-neutral-100 dark:bg-neutral-700 dark:text-white rounded-tl-none"}`}>
                   {msg.attachment && (
                     <div className="mb-2">
-                      {msg.attachment.type === "image" && msg.attachment.url.startsWith("data:image") ? (
+                      {msg.attachment.type === "image" ? (
                         <div className="cursor-pointer hover:opacity-90 transition" onClick={() => window.open(msg.attachment!.url, "_blank")}>
                           <img src={msg.attachment.url} alt="attachment" className="rounded-lg max-w-full h-auto max-h-60 object-contain bg-black/5 dark:bg-white/5 border border-neutral-200 dark:border-neutral-700" />
                         </div>
                       ) : (
                         <a href={msg.attachment.url} download={msg.attachment.name} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-neutral-100 dark:bg-neutral-800 border border-neutral-200 dark:border-neutral-700 rounded-lg hover:bg-neutral-200 dark:hover:bg-neutral-700 transition group">
                           <div className="h-10 w-10 bg-white dark:bg-neutral-900 rounded-md flex items-center justify-center shadow-sm">
-                            {msg.attachment.type === "image" ? <ImageIcon className="h-5 w-5 text-purple-500" /> : <FileIcon className="h-5 w-5 text-blue-500" />}
+                            <FileIcon className="h-5 w-5 text-blue-500" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate dark:text-neutral-200">{msg.attachment.name}</p>

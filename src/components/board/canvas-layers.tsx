@@ -3,7 +3,6 @@ import { useCanvasStore } from "@/store/canvas-store";
 import { getViewportCanvasBounds, isLayerInViewport } from "@/lib/motion-utils";
 import { isHtmlLayerType } from "@/lib/html-layer-types";
 import { LayerPreview } from "./layer-preview";
-import type { Layer } from "@/lib/types";
 
 type CanvasLayersProps = {
   camera: { x: number; y: number; zoom: number };
@@ -29,7 +28,7 @@ export const CanvasLayers = memo(function CanvasLayers({
   const highlightedLayerIds = useCanvasStore((s) => s.highlightedLayerIds);
   const dropTargetColumnId = useCanvasStore((s) => s.dropTargetColumnId);
 
-  const viewport = useMemo(() => getViewportCanvasBounds(camera), [camera.x, camera.y, camera.zoom]);
+  const viewport = useMemo(() => getViewportCanvasBounds(camera), [camera]);
 
   const visibleIds = useMemo(() => {
     return layerIds.filter((id) => {

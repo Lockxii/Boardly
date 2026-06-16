@@ -34,6 +34,18 @@ export function ensureBoardSchema() {
         await prisma.$executeRawUnsafe(`
           CREATE INDEX IF NOT EXISTS "board_authorId_template_idx" ON "board" ("authorId", "template");
         `);
+        await prisma.$executeRawUnsafe(`
+          ALTER TABLE "chat_attachment" ADD COLUMN IF NOT EXISTS "boardId" TEXT;
+        `);
+        await prisma.$executeRawUnsafe(`
+          ALTER TABLE "chat_attachment" ADD COLUMN IF NOT EXISTS "userId" TEXT;
+        `);
+        await prisma.$executeRawUnsafe(`
+          CREATE INDEX IF NOT EXISTS "chat_attachment_boardId_idx" ON "chat_attachment" ("boardId");
+        `);
+        await prisma.$executeRawUnsafe(`
+          CREATE INDEX IF NOT EXISTS "chat_attachment_userId_idx" ON "chat_attachment" ("userId");
+        `);
       } catch (error) {
         console.error("Schema sync failed:", error);
         throw error;

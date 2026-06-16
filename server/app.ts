@@ -147,6 +147,17 @@ function serializeBoard(
   };
 }
 
+function serializePublicCanvasData(canvasData: Prisma.JsonValue | null) {
+  if (!canvasData || typeof canvasData !== "object" || Array.isArray(canvasData)) return null;
+  const data = canvasData as Record<string, unknown>;
+  return {
+    layers: data.layers && typeof data.layers === "object" && !Array.isArray(data.layers) ? data.layers : {},
+    layerIds: Array.isArray(data.layerIds) ? data.layerIds.filter((id) => typeof id === "string") : [],
+    connections: Array.isArray(data.connections) ? data.connections : [],
+    brandColors: Array.isArray(data.brandColors) ? data.brandColors.filter((color) => typeof color === "string") : [],
+  };
+}
+
 /** Lazily backfill (and persist) a share token for boards created before the feature existed. */
 async function ensureShareToken(board: { id: string; shareToken: string | null }): Promise<string> {
   if (board.shareToken) return board.shareToken;
@@ -585,7 +596,7 @@ export function createApp() {
     const board = await prisma.board.findUnique({ where: { id: boardId } });
     if (!board?.isPublic) return res.status(404).json({ error: "Tableau non public" });
     res.json({
-      canvasData: board.canvasData ?? null,
+      canvasData: serializePublicCanvasData(board.canvasData),
       thumbnail: board.thumbnail,
       updatedAt: board.updatedAt,
     });
@@ -772,8 +783,16 @@ export function createApp() {
 
   // --- FILE UPLOAD ---
 
-  app.post("/api/upload", uploadLimiter, requireAuth(async (req, res) => {
-    const { name, type, size, data } = parseOrThrow(uploadSchema, req.body);
+  app.post("/api/upload", uploadLimiter, requireAuth(async (req, res, user) => {
+    await ensureBoardSchema();
+    const { name, type, size, data, boardId } = parseOrThrow(uploadSchema, req.body);
+
+    let attachmentBoardId: string | null = null;
+    if (boardId) {
+      const access = await getBoardAccess(boardId, user as { id: string; email: string });
+      if (!access) return res.status(403).json({ error: "Accès refusé" });
+      attachmentBoardId = boardId;
+    }
 
     // Resolve the real MIME + raw base64 from either a data URL or raw bytes.
     const parsed = parseDataUrl(data);
@@ -789,32 +808,62 @@ export function createApp() {
     }
 
     const attachment = await prisma.chatAttachment.create({
-      data: { name: name || "image", type: mime, size: size ?? bytes, data },
+      data: {
+        name: name || "image",
+        type: mime,
+        size: size ?? bytes,
+        data,
+        boardId: attachmentBoardId,
+        userId: user.id,
+      },
     });
     res.json({ url: `/api/file/${attachment.id}`, id: attachment.id });
   }));
 
-  app.get("/api/file/:fileId", requireAuth(async (req, res) => {
-    const fileId = String(req.params.fileId);
-    const attachment = await prisma.chatAttachment.findUnique({ where: { id: fileId } });
-    if (!attachment) return res.status(404).json({ error: "Not found" });
+  app.get("/api/file/:fileId", async (req, res) => {
+    try {
+      await ensureBoardSchema();
+      const fileId = String(req.params.fileId);
+      const attachment = await prisma.chatAttachment.findUnique({
+        where: { id: fileId },
+        include: { board: { select: { isPublic: true } } },
+      });
+      if (!attachment) return res.status(404).json({ error: "Not found" });
 
-    const parsed = parseDataUrl(attachment.data);
-    const rawMime = (parsed ? parsed.mime : attachment.type || "").split(";")[0].trim().toLowerCase();
-    const buffer = Buffer.from(parsed ? parsed.base64 : attachment.data, "base64");
+      if (attachment.boardId) {
+        if (!attachment.board?.isPublic) {
+          const user = await getSessionUser(req);
+          if (!user) return res.status(401).json({ error: "Non autorisé" });
+          const access = await getBoardAccess(attachment.boardId, user as { id: string; email: string });
+          if (!access) return res.status(403).json({ error: "Accès refusé" });
+        }
+      } else {
+        const user = await getSessionUser(req);
+        if (!user) return res.status(401).json({ error: "Non autorisé" });
+      }
 
-    // Only serve known-safe image types inline. Anything else (e.g. an attacker
-    // storing text/html) is forced to a download with a neutral content-type,
-    // and nosniff prevents the browser from re-interpreting it as HTML/script.
-    const safeMime = ALLOWED_UPLOAD_MIMES.has(rawMime) ? rawMime : "application/octet-stream";
-    res.setHeader("Content-Type", safeMime);
-    res.setHeader("X-Content-Type-Options", "nosniff");
-    res.setHeader(
-      "Content-Disposition",
-      `${safeMime === "application/octet-stream" ? "attachment" : "inline"}; filename="${sanitizeFilename(attachment.name)}"`,
-    );
-    res.send(buffer);
-  }));
+      const parsed = parseDataUrl(attachment.data);
+      const rawMime = (parsed ? parsed.mime : attachment.type || "").split(";")[0].trim().toLowerCase();
+      const buffer = Buffer.from(parsed ? parsed.base64 : attachment.data, "base64");
+
+      // Only serve known-safe image/audio types inline. Anything else is forced
+      // to a download with a neutral content-type, and nosniff prevents browser
+      // re-interpretation as HTML/script.
+      const safeMime = ALLOWED_UPLOAD_MIMES.has(rawMime) ? rawMime : "application/octet-stream";
+      res.setHeader("Content-Type", safeMime);
+      res.setHeader("X-Content-Type-Options", "nosniff");
+      res.setHeader(
+        "Content-Disposition",
+        `${safeMime === "application/octet-stream" ? "attachment" : "inline"}; filename="${sanitizeFilename(attachment.name)}"`,
+      );
+      res.send(buffer);
+    } catch (error) {
+      console.error(`API ${req.method} ${req.path}:`, error);
+      res.status(500).json({
+        error: error instanceof Error ? error.message : "Erreur serveur",
+      });
+    }
+  });
 
   if (process.env.SERVE_STATIC === "true") {
     const staticDir = path.resolve(__dirname, "../dist");

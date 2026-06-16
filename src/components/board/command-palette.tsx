@@ -4,8 +4,8 @@ import { useNavigate } from "@tanstack/react-router";
 import { toast } from "sonner";
 import {
   MousePointer2, Square, Circle, Type, StickyNote, Pencil, Eraser,
-  Layers, Grid3X3, Map, Keyboard, Home, Hand, Minus, Frame, Link2, Camera,
-  Plus, MoveRight, Diamond, Star, Triangle as TriangleIcon, Search, Presentation, Bot, RotateCcw
+  Grid3X3, Map, Keyboard, Home, Hand, Minus, Frame, Link2, Camera,
+  MoveRight, Diamond, Star, Triangle as TriangleIcon, Search, Presentation, Bot, RotateCcw, Mic
 } from "lucide-react";
 
 interface Command {
@@ -22,7 +22,7 @@ export function CommandPalette() {
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
-  const { setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setShowPresentation, setShowFredPanel, setCamera, createVersion, setConnectFromId } = useCanvasStore();
+  const { setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setShowPresentation, setShowFredPanel, setCamera, createVersion, setConnectFromId, setRequestTool } = useCanvasStore();
   const navigate = useNavigate();
 
   const commands: Command[] = useMemo(() => [
@@ -39,6 +39,7 @@ export function CommandPalette() {
     { id: "note", label: "Note", shortcut: "N", icon: StickyNote, action: () => { setCanvasState({ mode: "inserting", layerType: "Note" }); setShowCommandPalette(false); }, category: "Outils" },
     { id: "pencil", label: "Crayon", shortcut: "P", icon: Pencil, action: () => { setCanvasState({ mode: "pencil" }); useCanvasStore.getState().setPencilTool("draw"); setShowCommandPalette(false); }, category: "Outils" },
     { id: "eraser", label: "Gomme", shortcut: "X", icon: Eraser, action: () => { setCanvasState({ mode: "pencil" }); useCanvasStore.getState().setPencilTool("erase"); setShowCommandPalette(false); }, category: "Outils" },
+    { id: "voice", label: "Note vocale", icon: Mic, action: () => { setRequestTool("voice"); setShowCommandPalette(false); }, category: "Outils" },
     { id: "triangle", label: "Triangle", icon: TriangleIcon, action: () => { setCanvasState({ mode: "inserting", layerType: "Triangle" }); setShowCommandPalette(false); }, category: "Outils" },
     { id: "arrow", label: "Flèche", icon: MoveRight, action: () => { setCanvasState({ mode: "inserting", layerType: "Arrow" }); setShowCommandPalette(false); }, category: "Outils" },
     { id: "diamond", label: "Losange", icon: Diamond, action: () => { setCanvasState({ mode: "inserting", layerType: "Diamond" }); setShowCommandPalette(false); }, category: "Outils" },
@@ -55,7 +56,7 @@ export function CommandPalette() {
     { id: "home", label: "Accueil", icon: Home, action: () => { navigate({ to: "/" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "dashboard", label: "Dashboard", icon: Home, action: () => { navigate({ to: "/dashboard" }); setShowCommandPalette(false); }, category: "Navigation" },
     { id: "shortcuts", label: "Voir les raccourcis", icon: Keyboard, action: () => { setShowCommandPalette(false); alert(HELP_TEXT); }, category: "Aide" },
-  ], [setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setShowPresentation, setShowFredPanel, setCamera, navigate, createVersion, setConnectFromId]);
+  ], [setCanvasState, toggleGrid, toggleMinimap, setShowCommandPalette, setShowPresentation, setShowFredPanel, setCamera, navigate, createVersion, setConnectFromId, setRequestTool]);
 
   const filtered = useMemo(() => {
     if (!query) return commands;

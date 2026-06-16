@@ -58,4 +58,13 @@ describe("canvas-store undo/redo (dual-stack history)", () => {
     useCanvasStore.getState().undo();
     expect(useCanvasStore.getState().layerIds).toEqual([id]);
   });
+
+  it("layer updates can opt into undo history", () => {
+    const id = useCanvasStore.getState().insertLayer("Rectangle", 0, 0)!;
+    useCanvasStore.getState().updateLayer(id, { fill: "#ff0000" }, { history: true });
+    expect(useCanvasStore.getState().layers[id].fill).toBe("#ff0000");
+
+    useCanvasStore.getState().undo();
+    expect(useCanvasStore.getState().layers[id].fill).toBe("#000000");
+  });
 });

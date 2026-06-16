@@ -1,30 +1,45 @@
 import { useRef, useState } from "react";
 
+type VoiceRecorderState = "idle" | "recording" | "paused";
+
 /**
  * Minimal voice recorder around MediaRecorder. Calls onComplete with the
  * recorded blob + duration (seconds) when recording stops. Requires HTTPS
  * (or localhost) and microphone permission.
  */
 export function useVoiceRecorder(onComplete: (blob: Blob, durationSec: number) => void) {
-  const [recording, setRecording] = useState(false);
+  const [state, setState] = useState<VoiceRecorderState>("idle");
   const [elapsed, setElapsed] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const startedAtRef = useRef(0);
+  const accumulatedMsRef = useRef(0);
   const timerRef = useRef(0);
+
+  const currentElapsedMs = () => {
+    if (recorderRef.current?.state === "recording") {
+      return accumulatedMsRef.current + Date.now() - startedAtRef.current;
+    }
+    return accumulatedMsRef.current;
+  };
+
+  const updateElapsed = () => setElapsed(Math.round(currentElapsedMs() / 1000));
 
   const cleanup = () => {
     window.clearInterval(timerRef.current);
     timerRef.current = 0;
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
-    setRecording(false);
+    recorderRef.current = null;
+    accumulatedMsRef.current = 0;
+    startedAtRef.current = 0;
+    setState("idle");
     setElapsed(0);
   };
 
   const start = async () => {
-    if (recording) return;
+    if (recorderRef.current && recorderRef.current.state !== "inactive") return;
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       throw new Error("Enregistrement audio non supporté par ce navigateur");
     }
@@ -38,34 +53,64 @@ export function useVoiceRecorder(onComplete: (blob: Blob, durationSec: number) =
     };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
-      const durationSec = Math.max(1, Math.round((Date.now() - startedAtRef.current) / 1000));
+      const durationSec = Math.max(1, Math.round(currentElapsedMs() / 1000));
       cleanup();
       if (blob.size > 0) onComplete(blob, durationSec);
     };
     recorderRef.current = recorder;
     startedAtRef.current = Date.now();
+    accumulatedMsRef.current = 0;
     recorder.start();
-    setRecording(true);
+    setState("recording");
     setElapsed(0);
-    timerRef.current = window.setInterval(
-      () => setElapsed(Math.round((Date.now() - startedAtRef.current) / 1000)),
-      500,
-    );
+    timerRef.current = window.setInterval(updateElapsed, 500);
+  };
+
+  const pause = () => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "recording") return;
+    accumulatedMsRef.current += Date.now() - startedAtRef.current;
+    recorder.pause();
+    setState("paused");
+    updateElapsed();
+  };
+
+  const resume = () => {
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state !== "paused") return;
+    startedAtRef.current = Date.now();
+    recorder.resume();
+    setState("recording");
   };
 
   const stop = () => {
-    if (recorderRef.current && recorderRef.current.state === "recording") {
-      recorderRef.current.stop();
+    const recorder = recorderRef.current;
+    if (!recorder || recorder.state === "inactive") return;
+    if (recorder.state === "recording") {
+      accumulatedMsRef.current += Date.now() - startedAtRef.current;
     }
+    recorder.stop();
   };
 
   const cancel = () => {
-    if (recorderRef.current && recorderRef.current.state === "recording") {
-      recorderRef.current.onstop = null;
-      recorderRef.current.stop();
+    const recorder = recorderRef.current;
+    if (recorder && recorder.state !== "inactive") {
+      recorder.onstop = null;
+      recorder.stop();
     }
     cleanup();
   };
 
-  return { recording, elapsed, start, stop, cancel };
+  return {
+    state,
+    recording: state === "recording",
+    paused: state === "paused",
+    active: state !== "idle",
+    elapsed,
+    start,
+    pause,
+    resume,
+    stop,
+    cancel,
+  };
 }

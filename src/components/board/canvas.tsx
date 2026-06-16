@@ -29,7 +29,6 @@ import { PresentationMode } from "./presentation-mode";
 import { toast } from "sonner";
 import type { Layer, LayerType } from "@/lib/types";
 import { BLUEPRINT } from "@/lib/template-styles";
-import { compressDataUrl } from "@/lib/canvas-utils";
 import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
 import { extractPlainTextFromClipboard, extractUrlsFromClipboard } from "@/lib/clipboard-utils";
 import { parsePastedHexColors } from "@/lib/color-utils";
@@ -68,7 +67,7 @@ export function Canvas({
   const {
     camera, canvasState, pencilTool,
     showGrid, showMinimap, showCommandPalette,
-    snapToGrid, layerIds, layers, selection, canUndo, canRedo,
+    layerIds, layers, selection,
   } = useCanvasStore(
     useShallow((s) => ({
       camera: s.camera,
@@ -77,18 +76,15 @@ export function Canvas({
       showGrid: s.showGrid,
       showMinimap: s.showMinimap,
       showCommandPalette: s.showCommandPalette,
-      snapToGrid: s.snapToGrid,
       layerIds: s.layerIds,
       layers: s.layers,
       selection: s.selection,
-      canUndo: s.canUndo,
-      canRedo: s.canRedo,
     })),
   );
 
   // Actions are stable references in Zustand — read once, they never trigger renders.
   const {
-    setCamera, setCanvasState, setShowCommandPalette,
+    setCamera, setCanvasState,
     setSelection, setCursor, insertLayer,
     updateLayerText, undo, redo, addAuditEntry, setReadOnly,
   } = useCanvasStore.getState();
@@ -220,8 +216,9 @@ export function Canvas({
   }, [selection, layers]);
 
   useEffect(() => {
+    const previewCache = dropPreviewCacheRef.current;
     return () => {
-      for (const url of dropPreviewCacheRef.current.values()) URL.revokeObjectURL(url);
+      for (const url of previewCache.values()) URL.revokeObjectURL(url);
       if (pasteGhostPreview) URL.revokeObjectURL(pasteGhostPreview);
     };
   }, [pasteGhostPreview]);
@@ -1072,10 +1069,10 @@ export function Canvas({
       onDrop={handleCanvasDrop}
     >
       <Navbar title={title} boardId={boardId} template={template} isPublic={isPublic} readOnly={readOnly} isOwner={isOwner} />
-      {!readOnly && <Toolbar />}
+      {!readOnly && <Toolbar boardId={boardId} />}
       {!readOnly && <PencilToolbar />}
       {!readOnly && <ConnectionTools />}
-      {!readOnly && <SelectionTools camera={camera} />}
+      {!readOnly && <SelectionTools />}
       <ZoomControls />
       {!readOnly && <BrushPreview />}
       {showMinimap && <Minimap />}

@@ -1,6 +1,6 @@
 import { memo } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
-import { buildConnectionPath, getConnectionEndpoints, getConnectionStyle, getStrokeDasharray, getLayerEdgePoint, markerUrl } from "@/lib/connection-utils";
+import { buildConnectionPath, getConnectionEndpoints, getStrokeDasharray, getLayerEdgePoint, markerUrl } from "@/lib/connection-utils";
 import type { Layer } from "@/lib/types";
 
 type CanvasOverlayProps = {

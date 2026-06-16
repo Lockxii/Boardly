@@ -4,6 +4,7 @@ import { Reorder, useDragControls } from "framer-motion";
 import {
   Square, Circle, Type, StickyNote, Image as ImageIcon, Triangle, MoveRight,
   Diamond, Star, Pencil, GripVertical, Trash2, Link2, Frame, Minus, Columns3,
+  Mic,
 } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { useDraggable } from "@/lib/use-draggable";
@@ -24,7 +25,14 @@ const ICON_MAP: Record<string, typeof Square> = {
   Frame: Frame,
   Link: Link2,
   Column: Columns3,
+  Audio: Mic,
 };
+
+function formatDuration(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
 
 export function LayersPanel() {
   const layerIds = useCanvasStore((s) => s.layerIds);
@@ -92,6 +100,7 @@ export function LayersPanel() {
     const text = layer.value?.replace(/<[^>]*>/g, "").trim();
     if (text) return `${layer.type} · ${text.slice(0, 28)}`;
     if (layer.linkTitle) return `${layer.type} · ${layer.linkTitle.slice(0, 28)}`;
+    if (layer.type === "Audio") return `Note vocale · ${formatDuration(layer.audioDuration || 0)}`;
     return layer.type;
   };
 

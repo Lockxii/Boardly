@@ -1,4 +1,4 @@
-import { createClient, type Client, type JsonObject, type Room, type User } from "@liveblocks/client";
+import { createClient, type Client, type JsonObject, type User } from "@liveblocks/client";
 import type { BoardLivePatch } from "@/lib/board-remote-sync";
 import type { RemotePresence, TimerEventPayload } from "@/lib/board-socket";
 import type { BoardCanvasData } from "@/lib/types";
@@ -45,7 +45,6 @@ type LiveblocksUserMeta = {
 
 type LiveblocksRoomEvent = JsonObject;
 
-type BoardLiveblocksRoom = Room<LiveblocksPresence, LiveblocksStorage, LiveblocksUserMeta, LiveblocksRoomEvent>;
 type BoardLiveblocksUser = User<LiveblocksPresence, LiveblocksUserMeta>;
 
 let client: Client<LiveblocksUserMeta> | null = null;

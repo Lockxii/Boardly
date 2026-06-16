@@ -2,7 +2,7 @@ import { useCanvasStore } from "@/store/canvas-store";
 import {
   MousePointer2, Square, Circle, Type, StickyNote, Redo, Undo, Image as ImageIcon, Pencil,
   Triangle as TriangleIcon, MoveRight, Diamond, Star, Layers, Eraser, Shapes, PenTool, Plus,
-  Hand, Minus, Frame, Link2, Columns3, Mic,
+  Hand, Minus, Frame, Link2, Columns3, Mic, Pause, Play, CircleStop, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -17,7 +17,7 @@ import { getDefaultPastePoint, pasteUrlsAt } from "@/lib/link-paste-actions";
 import { LinkPasteDialog } from "./link-paste-dialog";
 import { FloatingDock, useFloatingDock } from "./floating-dock";
 
-export function Toolbar() {
+export function Toolbar({ boardId }: { boardId?: string }) {
   const readOnly = useCanvasStore((s) => s.readOnly);
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
 
@@ -36,7 +36,7 @@ export function Toolbar() {
           </>
         }
       >
-        <ToolbarContent onOpenLinkDialog={() => setLinkDialogOpen(true)} />
+        <ToolbarContent onOpenLinkDialog={() => setLinkDialogOpen(true)} boardId={boardId} />
       </FloatingDock>
       <LinkPasteDialog open={linkDialogOpen} onOpenChange={setLinkDialogOpen} onSubmit={handleLinkPasteGlobal} />
     </>
@@ -48,7 +48,13 @@ async function handleLinkPasteGlobal(urls: string[]) {
   await pasteUrlsAt(urls, getDefaultPastePoint(camera));
 }
 
-function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) {
+function ToolbarContent({
+  onOpenLinkDialog,
+  boardId,
+}: {
+  onOpenLinkDialog: () => void;
+  boardId?: string;
+}) {
   const canvasState = useCanvasStore((s) => s.canvasState);
   const setCanvasState = useCanvasStore((s) => s.setCanvasState);
   const pencilTool = useCanvasStore((s) => s.pencilTool);
@@ -124,7 +130,13 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ name: `note-vocale-${Date.now()}.webm`, type: blob.type, size: blob.size, data: dataUrl }),
+        body: JSON.stringify({
+          name: `note-vocale-${Date.now()}.webm`,
+          type: blob.type,
+          size: blob.size,
+          data: dataUrl,
+          boardId,
+        }),
       });
       if (!res.ok) throw new Error();
       const { url } = (await res.json()) as { url: string };
@@ -135,9 +147,11 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
     }
   };
   const voice = useVoiceRecorder(handleVoiceComplete);
+  const startVoice = () => void voice.start().catch(() => toast.error("Micro indisponible"));
   const toggleVoice = () => {
-    if (voice.recording) voice.stop();
-    else void voice.start().catch(() => toast.error("Micro indisponible"));
+    if (!voice.active) startVoice();
+    else if (voice.paused) voice.resume();
+    else voice.pause();
   };
 
   // Bridge: the slash (/) menu requests image/link/voice tools hosted here.
@@ -146,7 +160,7 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
     if (!requestTool) return;
     if (requestTool === "image") fileInputRef.current?.click();
     else if (requestTool === "link") onOpenLinkDialog();
-    else if (requestTool === "voice") toggleVoice();
+    else if (requestTool === "voice") startVoice();
     useCanvasStore.getState().setRequestTool(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestTool]);
@@ -165,6 +179,7 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
   };
 
   return (
+    <>
     <div className={`flex items-center ${vertical ? "flex-col gap-0.5 py-0.5" : "flex-row gap-0.5"}`}>
       <ToolButton
         isActive={
@@ -309,11 +324,11 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
             <Button
               variant="ghost"
               size="icon"
-              className={`h-9 w-9 rounded-lg ${voice.recording ? "bg-red-500 text-white hover:bg-red-600" : "hover:bg-neutral-100 dark:hover:bg-neutral-700"}`}
+              className={`h-9 w-9 rounded-lg ${voice.active ? "bg-red-500 text-white hover:bg-red-600" : "hover:bg-neutral-100 dark:hover:bg-neutral-700"}`}
               onClick={toggleVoice}
-              title={voice.recording ? `Arrêter l'enregistrement (${voice.elapsed}s)` : "Note vocale"}
+              title={voice.active ? `${voice.paused ? "Reprendre" : "Pause"} (${voice.elapsed}s)` : "Note vocale"}
             >
-              {voice.recording ? (
+              {voice.active ? (
                 <span className="text-[11px] font-semibold tabular-nums">{voice.elapsed}s</span>
               ) : (
                 <Mic className="h-4.5 w-4.5" />
@@ -322,6 +337,22 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
           </motion.div>
         )}
       </div>
+
+      <Button
+        variant="ghost"
+        size="icon"
+        className={`h-9 w-9 rounded-lg ${
+          voice.active ? "bg-red-500 text-white hover:bg-red-600" : "hover:bg-neutral-100 dark:hover:bg-neutral-700"
+        }`}
+        onClick={toggleVoice}
+        title={voice.active ? `${voice.paused ? "Reprendre" : "Pause"} l'enregistrement` : "Note vocale"}
+      >
+        {voice.active ? (
+          voice.paused ? <Play className="h-4.5 w-4.5" /> : <Pause className="h-4.5 w-4.5" />
+        ) : (
+          <Mic className="h-4.5 w-4.5" />
+        )}
+      </Button>
 
       <div className="relative">
         <ToolButton isActive={isDrawingActive || openMenu === "drawing"} onClick={() => toggleMenu("drawing")} icon={PenTool} title="Dessin" />
@@ -372,6 +403,77 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
       </Button>
 
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+    </div>
+    {voice.active && (
+      <VoiceRecorderPanel
+        elapsed={voice.elapsed}
+        paused={voice.paused}
+        onPause={voice.pause}
+        onResume={voice.resume}
+        onStop={voice.stop}
+        onCancel={voice.cancel}
+      />
+    )}
+    </>
+  );
+}
+
+function formatVoiceTime(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function VoiceRecorderPanel({
+  elapsed,
+  paused,
+  onPause,
+  onResume,
+  onStop,
+  onCancel,
+}: {
+  elapsed: number;
+  paused: boolean;
+  onPause: () => void;
+  onResume: () => void;
+  onStop: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full border border-red-200 bg-white px-3 py-2 shadow-2xl shadow-red-950/10 dark:border-red-900/60 dark:bg-neutral-900">
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white">
+        <Mic className="h-4 w-4" />
+      </span>
+      <span className="min-w-12 text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">
+        {formatVoiceTime(elapsed)}
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 rounded-full"
+        onClick={paused ? onResume : onPause}
+        title={paused ? "Reprendre" : "Pause"}
+      >
+        {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 rounded-full text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/40"
+        onClick={onStop}
+        title="Terminer"
+      >
+        <CircleStop className="h-4 w-4" />
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+        onClick={onCancel}
+        title="Annuler"
+      >
+        <X className="h-4 w-4" />
+      </Button>
     </div>
   );
 }

@@ -254,7 +254,7 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
           onRefreshTwitter={() => refreshTwitterMutation.mutate()}
         />
       </FloatingDock>
-      {isChatOpen && <ChatPanel onClose={() => setIsChatOpen(false)} />}
+      {isChatOpen && <ChatPanel boardId={actualBoardId || undefined} onClose={() => setIsChatOpen(false)} />}
       {showFredPanel && !readOnly && (
         <FredPanel
           onClose={() => setShowFredPanel(false)}

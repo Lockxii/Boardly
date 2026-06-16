@@ -609,6 +609,7 @@ export function CursorsPresence({
     window.addEventListener("wheel", onLocalActivity, { passive: true });
     window.addEventListener("touchstart", onLocalActivity, { passive: true });
     markRealtimeActivity();
+    const remoteLayerAnimations = remoteLayerAnimationsRef.current;
 
     return () => {
       cancelled = true;
@@ -630,7 +631,7 @@ export function CursorsPresence({
       window.clearTimeout(canvasEmitTimerRef.current);
       cancelAnimationFrame(remoteLayerAnimationFrameRef.current);
       remoteLayerAnimationFrameRef.current = 0;
-      remoteLayerAnimationsRef.current.clear();
+      remoteLayerAnimations.clear();
       unsubscribeCanvas();
       closePresence();
     };

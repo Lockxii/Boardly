@@ -17,10 +17,6 @@ import { NOTE_COLORS } from "@/lib/canvas-utils";
 import { refreshLinkLayerPreview } from "@/lib/link-paste-actions";
 import { useDraggable } from "@/lib/use-draggable";
 
-interface SelectionToolsProps {
-  camera: { x: number; y: number; zoom: number };
-}
-
 const FONTS = [
   { value: "font-sans", label: "Sans" },
   { value: "font-serif", label: "Serif" },
@@ -28,7 +24,7 @@ const FONTS = [
   { value: "font-handwriting", label: "Manuscrit" },
 ];
 
-export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
+export const SelectionTools = memo(() => {
   const selection = useCanvasStore((s) => s.selection);
   const layers = useCanvasStore((s) => s.layers);
   const updateLayer = useCanvasStore((s) => s.updateLayer);
@@ -137,6 +133,8 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
 
   const applyToSelection = useCallback((updates: Record<string, unknown>) => {
     const state = useCanvasStore.getState();
+    if (state.selection.length === 0) return;
+    state.pushHistory();
     state.selection.forEach((id) => state.updateLayer(id, updates));
   }, []);
 
@@ -150,6 +148,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
     if (sel && !sel.isCollapsed && sel.rangeCount > 0) {
       const anchor = sel.anchorNode?.parentElement;
       if ((anchor && anchor.isContentEditable) || (sel.anchorNode && (sel.anchorNode as HTMLElement).isContentEditable)) {
+        useCanvasStore.getState().pushHistory();
         document.execCommand("styleWithCSS", false, "true");
         document.execCommand(command, false, value);
         if (sel.rangeCount > 0) lastSelectionRange.current = sel.getRangeAt(0).cloneRange();
@@ -182,6 +181,8 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const toggleBold = useCallback(() => {
     if (applyDomStyle("bold")) return;
     const state = useCanvasStore.getState();
+    if (state.selection.length === 0) return;
+    state.pushHistory();
     state.selection.forEach((id) => {
       const layer = state.layers[id];
       if (layer) state.updateLayer(id, { fontWeight: layer.fontWeight === "bold" ? "normal" : "bold" });
@@ -191,6 +192,8 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const toggleItalic = useCallback(() => {
     if (applyDomStyle("italic")) return;
     const state = useCanvasStore.getState();
+    if (state.selection.length === 0) return;
+    state.pushHistory();
     state.selection.forEach((id) => {
       const layer = state.layers[id];
       if (layer) state.updateLayer(id, { fontStyle: layer.fontStyle === "italic" ? "normal" : "italic" });
@@ -200,6 +203,8 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   const toggleUnderline = useCallback(() => {
     if (applyDomStyle("underline")) return;
     const state = useCanvasStore.getState();
+    if (state.selection.length === 0) return;
+    state.pushHistory();
     state.selection.forEach((id) => {
       const layer = state.layers[id];
       if (layer) state.updateLayer(id, { textDecoration: layer.textDecoration === "underline" ? "none" : "underline" });
@@ -208,6 +213,8 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
 
   const toggleLock = useCallback(() => {
     const state = useCanvasStore.getState();
+    if (state.selection.length === 0) return;
+    state.pushHistory();
     state.selection.forEach((id) => {
       const layer = state.layers[id];
       if (layer) state.updateLayer(id, { locked: !layer.locked });
@@ -389,6 +396,7 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
               <Link2 className="h-3.5 w-3.5 shrink-0 text-blue-500" />
               <Input
                 value={selectedLinkLayer.url || ""}
+                onFocus={() => useCanvasStore.getState().pushHistory()}
                 onChange={(e) => updateLayer(selection[0], { url: e.target.value })}
                 className="h-8 w-44 sm:w-56 text-xs font-mono"
                 placeholder="https://..."

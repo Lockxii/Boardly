@@ -84,7 +84,6 @@ export function LinkCardImage({
   const videoId = provider === "youtube" ? youtubeIdFromUrl(url) : null;
   const resolved = resolveLinkProvider(provider, url);
   const imageHeightPx = heightOverride ?? getLinkImageHeight(resolved, width, imageWidth, imageHeight);
-  const isMusic = resolved === "spotify" || resolved === "apple-music" || resolved === "deezer" || resolved === "amazon-music" || resolved === "soundcloud";
 
   const brandBadge =
     resolved !== "generic" ? (
