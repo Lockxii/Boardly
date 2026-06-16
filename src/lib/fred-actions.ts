@@ -111,6 +111,7 @@ export function applyFredActions(actions: FredAction[], options: { linkedIds?: s
   let changedCanvas = false;
   let commentCount = 0;
   let organizedCount = 0;
+  let updatedCount = 0;
   let offset = 0;
 
   for (const action of actions) {
@@ -253,23 +254,38 @@ export function applyFredActions(actions: FredAction[], options: { linkedIds?: s
     if (action.type === "open_presentation") {
       state.setShowPresentation(true);
     }
+
+    if (action.type === "update_texts") {
+      // Rewrite/clean/translate the text of EXISTING layers in place.
+      for (const item of action.items) {
+        if (newLayers[item.id]) {
+          newLayers[item.id] = { ...newLayers[item.id], value: item.text };
+          updatedCount += 1;
+        }
+      }
+    }
   }
 
-  if (!createdIds.length) {
+  if (!createdIds.length && !updatedCount) {
     if (commentCount) toast.success(`${commentCount} annotation${commentCount > 1 ? "s" : ""} ajoutée${commentCount > 1 ? "s" : ""}`);
     if (organizedCount) toast.success(`${organizedCount} élément${organizedCount > 1 ? "s" : ""} rangé${organizedCount > 1 ? "s" : ""} par Fred`);
     return commentCount + organizedCount;
   }
 
-  if (changedCanvas) state.pushHistory();
+  if (changedCanvas || updatedCount) state.pushHistory();
 
   useCanvasStore.setState({
     layers: newLayers,
     layerIds: newLayerIds,
-    selection: createdIds,
+    ...(createdIds.length ? { selection: createdIds } : {}),
     canvasState: { mode: "none" },
   });
 
-  toast.success(`${createdIds.length} élément${createdIds.length > 1 ? "s" : ""} ajouté${createdIds.length > 1 ? "s" : ""} par Fred`);
-  return createdIds.length;
+  if (createdIds.length) {
+    toast.success(`${createdIds.length} élément${createdIds.length > 1 ? "s" : ""} ajouté${createdIds.length > 1 ? "s" : ""} par Fred`);
+  }
+  if (updatedCount) {
+    toast.success(`${updatedCount} texte${updatedCount > 1 ? "s" : ""} mis à jour par Fred`);
+  }
+  return createdIds.length + updatedCount;
 }

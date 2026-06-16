@@ -22,7 +22,8 @@ export type FredAction =
     }
   | { type: "set_brand_colors"; colors: string[] }
   | { type: "create_version"; label?: string }
-  | { type: "open_presentation" };
+  | { type: "open_presentation" }
+  | { type: "update_texts"; items: { id: string; text: string }[] };
 
 export type FredToolMode =
   | "chat"

@@ -74,6 +74,17 @@ const FredActionSchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("open_presentation"),
   }),
+  z.object({
+    type: z.literal("update_texts"),
+    items: z
+      .array(
+        z.object({
+          id: z.string().min(1),
+          text: z.string().min(1).max(2000),
+        }),
+      )
+      .max(40),
+  }),
 ]);
 
 const FredResponseSchema = z.object({
@@ -140,9 +151,11 @@ Actions autorisées :
 - { "type": "add_links", "items": [{ "url": "https://...", "title": "...", "description": "..." }] }
 - { "type": "create_version", "label": "Avant rangement Fred" }
 - { "type": "open_presentation" }
+- { "type": "update_texts", "items": [{ "id": "id exact", "text": "nouveau contenu" }] } — réécrit/corrige/traduit le texte d'éléments EXISTANTS (notes, textes). Utilise les ids exacts [id:...] du contexte.
 
 Ne invente pas d'autres types d'actions.
-Pour add_comments, utilise les ids exacts [id:...] présents dans le contexte si possible.`;
+Pour add_comments et update_texts, utilise les ids exacts [id:...] présents dans le contexte.
+Quand on te demande de corriger/raccourcir/traduire/réécrire des notes existantes, utilise update_texts (n'ajoute pas de nouvelles notes).`;
 
 const STREAM_SYSTEM_PROMPT = `${SYSTEM_PROMPT}
 
