@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Music, Play, Pause, SkipBack, SkipForward, X } from "lucide-react";
+import { Music, Play, Pause, SkipBack, SkipForward, X, GripVertical } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { apiFetch } from "@/lib/utils";
 import { isMusicLinkProvider } from "@/lib/link-providers";
 import { focusCameraOnLayer } from "@/lib/presentation-utils";
+import { useDraggable } from "@/lib/use-draggable";
 import type { Layer, MusicPreview } from "@/lib/types";
 
 type Track = { id: string; title: string; url: string; provider?: string };
@@ -38,6 +39,7 @@ export function MusicPlaylist() {
   const [current, setCurrent] = useState(-1);
   const [status, setStatus] = useState<"idle" | "loading" | "playing" | "paused" | "noPreview">("idle");
   const audioRef = useRef<HTMLAudioElement>(null);
+  const drag = useDraggable<HTMLDivElement>({ storageKey: "music-playlist" });
 
   useEffect(() => {
     const audio = audioRef.current;
@@ -123,7 +125,7 @@ export function MusicPlaylist() {
   const currentTrack = current >= 0 ? tracks[current] : null;
 
   return (
-    <div className="pointer-events-auto fixed bottom-4 left-4 z-40">
+    <div ref={drag.ref} style={drag.style} className="pointer-events-auto fixed bottom-4 left-4 z-40">
       <audio ref={audioRef} hidden />
       {!open ? (
         <button
@@ -136,7 +138,8 @@ export function MusicPlaylist() {
       ) : (
         <div className="w-64 rounded-2xl border border-neutral-200/80 bg-white/95 p-2.5 shadow-xl backdrop-blur dark:border-neutral-700/80 dark:bg-neutral-900/95">
           <div className="mb-1.5 flex items-center justify-between">
-            <span className="flex items-center gap-1.5 text-xs font-semibold">
+            <span {...drag.handleProps} className="flex items-center gap-1 text-xs font-semibold" title="Déplacer">
+              <GripVertical className="h-3.5 w-3.5 text-neutral-300 dark:text-neutral-600" />
               <Music className="h-3.5 w-3.5 text-blue-500" /> Playlist
             </span>
             <button type="button" onClick={close} aria-label="Fermer" className="rounded-full p-1 hover:bg-neutral-100 dark:hover:bg-neutral-800">

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, X, Paperclip, File as FileIcon, Loader2, Image as ImageIcon, Link2, MousePointer2 } from "lucide-react";
+import { Send, X, Paperclip, File as FileIcon, Loader2, Image as ImageIcon, Link2, MousePointer2, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { formatDistanceToNow } from "date-fns";
 import { fr } from "date-fns/locale";
 import { useCanvasStore } from "@/store/canvas-store";
+import { useDraggable } from "@/lib/use-draggable";
 import { toast } from "sonner";
 
 interface ChatPanelProps { onClose: () => void; }
@@ -21,6 +22,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   const [isUploading, setIsUploading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const drag = useDraggable<HTMLDivElement>({ storageKey: "chat-panel" });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,9 +76,12 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [chatMessages.length, attachment, linkedIds]);
 
   return (
-    <div className="absolute top-16 right-4 w-80 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 flex flex-col max-h-[calc(100vh-100px)] pointer-events-auto z-50">
+    <div ref={drag.ref} style={drag.style} className="absolute top-16 right-4 w-80 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 flex flex-col max-h-[calc(100vh-100px)] pointer-events-auto z-50">
       <div className="flex items-center justify-between p-3 border-b border-neutral-100 dark:border-neutral-700">
-        <h3 className="font-semibold text-sm dark:text-white">Discussion</h3>
+        <div className="flex items-center gap-1.5">
+          <div {...drag.handleProps} className="-ml-1 text-neutral-300 dark:text-neutral-600" title="Déplacer"><GripVertical className="h-4 w-4" /></div>
+          <h3 className="font-semibold text-sm dark:text-white">Discussion</h3>
+        </div>
         <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onClose}><X className="h-4 w-4" /></Button>
       </div>
 

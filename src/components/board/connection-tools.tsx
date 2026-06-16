@@ -1,8 +1,9 @@
 import { memo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Trash2, Link2, Minus, ArrowRight, Circle, Spline, MoveHorizontal, X } from "lucide-react";
+import { Trash2, Link2, Minus, ArrowRight, Circle, Spline, MoveHorizontal, X, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanvasStore } from "@/store/canvas-store";
+import { useDraggable } from "@/lib/use-draggable";
 import type { ConnectionLineStyle, ConnectionMarker, ConnectionRouting } from "@/lib/connection-utils";
 
 const LINE_STYLES: { id: ConnectionLineStyle; label: string }[] = [
@@ -32,6 +33,7 @@ export const ConnectionTools = memo(function ConnectionTools() {
   const removeConnection = useCanvasStore((s) => s.removeConnection);
   const dismissConnectionTools = useCanvasStore((s) => s.dismissConnectionTools);
   const readOnly = useCanvasStore((s) => s.readOnly);
+  const drag = useDraggable<HTMLDivElement>({ storageKey: "connection-tools" });
 
   const visible = !readOnly && (!!connectFromId || !!selectedConnectionId);
   const selected = selectedConnectionId ? connections.find((c) => c.id === selectedConnectionId) : null;
@@ -60,13 +62,16 @@ export const ConnectionTools = memo(function ConnectionTools() {
       {visible && (
         <motion.div
           key="connection-tools"
+          ref={drag.ref}
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
           transition={{ duration: 0.15 }}
+          style={drag.style}
           className="absolute top-22 left-1/2 z-[60] flex -translate-x-1/2 flex-nowrap items-center gap-0.5 rounded-lg border border-neutral-200 bg-white px-1.5 py-1 shadow-xl pointer-events-auto dark:border-neutral-700 dark:bg-neutral-800 max-w-[min(96vw,920px)] overflow-x-auto no-scrollbar"
           onPointerDown={(e) => e.stopPropagation()}
         >
+          <div {...drag.handleProps} className="shrink-0 px-0.5 text-neutral-300 dark:text-neutral-600" title="Déplacer"><GripVertical className="h-3.5 w-3.5" /></div>
           <div className="flex shrink-0 items-center gap-1 px-1 text-xs font-medium text-neutral-500">
             <Link2 className="h-3.5 w-3.5 text-blue-500" />
             <span className="hidden sm:inline">{connectFromId ? "Relier" : "Connecteur"}</span>

@@ -15,6 +15,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuLab
 import { useCanvasStore } from "@/store/canvas-store";
 import { NOTE_COLORS } from "@/lib/canvas-utils";
 import { refreshLinkLayerPreview } from "@/lib/link-paste-actions";
+import { useDraggable } from "@/lib/use-draggable";
 
 interface SelectionToolsProps {
   camera: { x: number; y: number; zoom: number };
@@ -214,18 +215,21 @@ export const SelectionTools = memo(({ camera }: SelectionToolsProps) => {
   }, []);
 
   const preventFocusLoss = (e: React.MouseEvent) => e.preventDefault();
+  const drag = useDraggable<HTMLDivElement>({ storageKey: "selection-tools" });
 
   return (
     <AnimatePresence>
       {selection && selection.length > 0 && !connectFromId && !selectedConnectionId && (
     <motion.div
       key="selection-tools"
+      ref={drag.ref}
       initial={{ opacity: 0, y: -8, scale: 0.96 }}
       animate={{ opacity: 1, y: 0, scale: 1 }}
       exit={{ opacity: 0, y: -8, scale: 0.96 }}
       transition={{ type: "spring", stiffness: 420, damping: 28 }}
+      style={drag.style}
       className="absolute top-22 right-4 md:right-auto md:left-1/2 md:-translate-x-1/2 flex flex-row items-center gap-1 p-1 bg-white dark:bg-neutral-800 rounded-lg shadow-xl border border-neutral-200 dark:border-neutral-700 pointer-events-auto overflow-hidden no-scrollbar transition-all z-50" onMouseDown={preventFocusLoss}>
-      <div className="px-1 cursor-grab text-neutral-300 dark:text-neutral-600"><GripVertical className="h-4 w-4" /></div>
+      <div {...drag.handleProps} className="px-1 text-neutral-300 dark:text-neutral-600" title="Déplacer la barre"><GripVertical className="h-4 w-4" /></div>
 
       {!isLocked && (
         <>
