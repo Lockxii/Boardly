@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import rateLimit from "express-rate-limit";
 import { createHash, randomBytes } from "crypto";
 import { existsSync } from "fs";
 import path from "path";
@@ -16,7 +17,29 @@ import { fetchMusicPreviewHandler } from "./music-preview.js";
 import { buildTemplateCanvas } from "./board-seeds.js";
 import { chatWithFred, isFredConfigured, streamChatWithFred } from "./fred-ai.js";
 import { getBoardAccess } from "./board-access.js";
+import {
+  ALLOWED_UPLOAD_MIMES,
+  MAX_UPLOAD_BYTES,
+  ValidationError,
+  boardContentSchema,
+  boardCreateSchema,
+  boardPatchSchema,
+  boardTitleSchema,
+  joinSchema,
+  parseOrThrow,
+  uploadSchema,
+} from "./validation.js";
 import type { BoardCanvasData, Layer, LinkMediaType, LinkPreview } from "../src/lib/types.js";
+
+/** Unguessable per-board invite secret embedded in collaboration links. */
+function generateShareToken() {
+  return nanoid(24);
+}
+
+/** Sanitize a filename for use in a Content-Disposition header. */
+function sanitizeFilename(name: string) {
+  return name.replace(/[^\w.\- ]+/g, "_").slice(0, 100) || "file";
+}
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -425,8 +448,11 @@ function requireAuth(handler: (req: express.Request, res: express.Response, user
       if (!user) return res.status(401).json({ error: "Non autorisé" });
       return await handler(req, res, user);
     } catch (error) {
-      console.error(`API ${req.method} ${req.path}:`, error);
       if (res.headersSent) return;
+      if (error instanceof ValidationError) {
+        return res.status(error.status).json({ error: error.message });
+      }
+      console.error(`API ${req.method} ${req.path}:`, error);
       res.status(500).json({
         error: error instanceof Error ? error.message : "Erreur serveur",
       });
@@ -444,6 +470,8 @@ function serializeBoard(
     folder?: string | null;
     tags?: string[];
     isPublic?: boolean;
+    shareToken?: string | null;
+    rev?: number;
     createdAt: Date;
     updatedAt: Date;
     author?: { name: string } | null;
@@ -459,6 +487,9 @@ function serializeBoard(
     folder: board.folder ?? null,
     tags: board.tags ?? [],
     isPublic: board.isPublic ?? false,
+    rev: board.rev ?? 0,
+    // The invite secret is only ever disclosed to the board owner.
+    shareToken: meta.isOwner ? board.shareToken ?? null : undefined,
     createdAt: board.createdAt,
     updatedAt: board.updatedAt,
     role: meta.role,
@@ -467,16 +498,42 @@ function serializeBoard(
   };
 }
 
+/** Lazily backfill (and persist) a share token for boards created before the feature existed. */
+async function ensureShareToken(board: { id: string; shareToken: string | null }): Promise<string> {
+  if (board.shareToken) return board.shareToken;
+  const shareToken = generateShareToken();
+  await prisma.board.update({ where: { id: board.id }, data: { shareToken } });
+  board.shareToken = shareToken;
+  return shareToken;
+}
+
 export function createApp() {
   const app = express();
   const origin = getAppOrigin();
 
+  // Trust the Vercel/proxy hop so rate-limit keys on the real client IP.
+  app.set("trust proxy", 1);
+
   app.use(cors({ origin, credentials: true }));
+
+  // Rate limiters. NOTE: the default store is in-memory, so on serverless these
+  // are per-instance — a meaningful mitigation, not a global guarantee. Better
+  // Auth additionally rate-limits credential endpoints (see auth.ts).
+  const makeLimiter = (windowMs: number, max: number) =>
+    rateLimit({ windowMs, max, standardHeaders: true, legacyHeaders: false });
+  const authLimiter = makeLimiter(15 * 60 * 1000, 50); // sign-in/up bursts
+  const aiLimiter = makeLimiter(5 * 60 * 1000, 40);
+  const previewLimiter = makeLimiter(5 * 60 * 1000, 120);
+  const uploadLimiter = makeLimiter(5 * 60 * 1000, 60);
+
+  app.use(["/api/auth/sign-in", "/api/auth/sign-up"], authLimiter);
 
   // Better Auth must be mounted before express.json()
   app.all("/api/auth/*splat", toNodeHandler(auth));
 
-  app.use(express.json({ limit: "50mb" }));
+  // Bounded body size: large enough for a capped canvas payload + thumbnail,
+  // far below the previous 50mb that enabled DB-bloat DoS.
+  app.use(express.json({ limit: "16mb" }));
 
   app.use("/api/boards", async (_req, _res, next) => {
     try {
@@ -695,18 +752,35 @@ export function createApp() {
     const email = user.email;
     if (!email) return res.status(400).json({ error: "Email utilisateur manquant" });
 
+    // Only the fields serializeBoard needs — never the multi-MB canvasData blob.
+    const listSelect = {
+      id: true,
+      title: true,
+      authorId: true,
+      template: true,
+      thumbnail: true,
+      folder: true,
+      tags: true,
+      isPublic: true,
+      shareToken: true,
+      rev: true,
+      createdAt: true,
+      updatedAt: true,
+    } satisfies Prisma.BoardSelect;
+
     const [ownedBoards, sharedBoards] = await Promise.all([
       prisma.board.findMany({
         where: { authorId: user.id },
         orderBy: { updatedAt: "desc" },
+        select: listSelect,
       }),
       prisma.board.findMany({
         where: {
           authorId: { not: user.id },
           members: { some: { email } },
         },
-        include: { author: { select: { name: true } } },
         orderBy: { updatedAt: "desc" },
+        select: { ...listSelect, author: { select: { name: true } } },
       }),
     ]);
 
@@ -717,20 +791,21 @@ export function createApp() {
   }));
 
   app.post("/api/boards", requireAuth(async (req, res, user) => {
-    const { title = "Untitled Board", template = "blank" } = req.body;
+    const { title = "Untitled Board", template = "blank" } = parseOrThrow(boardCreateSchema, req.body);
     const seed = buildTemplateCanvas(template);
     const board = await prisma.board.create({
       data: {
         title,
         template,
         authorId: user.id,
+        shareToken: generateShareToken(),
         canvasData: seed ?? undefined,
       },
     });
     res.json(serializeBoard(board, { role: "owner", isOwner: true }));
   }));
 
-  app.get("/api/link-preview", requireAuth(async (req, res) => {
+  app.get("/api/link-preview", previewLimiter, requireAuth(async (req, res) => {
     const url = String(req.query.url || "");
     if (!url) return res.status(400).json({ error: "URL requise" });
     try {
@@ -741,7 +816,7 @@ export function createApp() {
     }
   }));
 
-  app.get("/api/music-preview", requireAuth(async (req, res) => {
+  app.get("/api/music-preview", previewLimiter, requireAuth(async (req, res) => {
     const url = String(req.query.url || "");
     const title = String(req.query.title || "");
     if (!url) return res.status(400).json({ error: "URL requise" });
@@ -759,7 +834,7 @@ export function createApp() {
     res.json({ configured: isFredConfigured() });
   }));
 
-  app.post("/api/fred/chat", requireAuth(async (req, res, user) => {
+  app.post("/api/fred/chat", aiLimiter, requireAuth(async (req, res, user) => {
     const { message, history, boardContext, boardId, visionAssets, toolMode } = req.body as {
       message?: string;
       history?: { role: "user" | "assistant"; content: string }[];
@@ -792,7 +867,7 @@ export function createApp() {
     }
   }));
 
-  app.post("/api/fred/chat/stream", requireAuth(async (req, res, user) => {
+  app.post("/api/fred/chat/stream", aiLimiter, requireAuth(async (req, res, user) => {
     const { message, history, boardContext, boardId, visionAssets, toolMode } = req.body as {
       message?: string;
       history?: { role: "user" | "assistant"; content: string }[];
@@ -879,12 +954,14 @@ export function createApp() {
     const boardId = String(req.params.id);
     const access = await getBoardAccess(boardId, user as { id: string; email: string });
     if (!access) return res.status(403).json({ error: "Accès refusé" });
+    // The owner needs the invite token to build a collaboration link.
+    if (access.isOwner) await ensureShareToken(access.board);
     res.json(serializeBoard(access.board, { role: access.role, isOwner: access.isOwner }));
   }));
 
   app.put("/api/boards/:id/title", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
-    const { title } = req.body;
+    const { title } = parseOrThrow(boardTitleSchema, req.body);
     const access = await getBoardAccess(boardId, user as { id: string; email: string });
     if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut renommer ce tableau" });
     const updated = await prisma.board.update({ where: { id: boardId }, data: { title } });
@@ -895,7 +972,7 @@ export function createApp() {
     const boardId = String(req.params.id);
     const access = await getBoardAccess(boardId, user as { id: string; email: string });
     if (!access?.isOwner) return res.status(403).json({ error: "Seul le créateur peut modifier ce tableau" });
-    const { folder, tags, isPublic } = req.body as { folder?: string | null; tags?: string[]; isPublic?: boolean };
+    const { folder, tags, isPublic } = parseOrThrow(boardPatchSchema, req.body);
     const data: { folder?: string | null; tags?: string[]; isPublic?: boolean } = {};
     if (folder !== undefined) data.folder = folder || null;
     if (Array.isArray(tags)) data.tags = tags;
@@ -934,6 +1011,7 @@ export function createApp() {
       canvasData: canvasData ?? null,
       thumbnail: access.board.thumbnail,
       updatedAt: access.board.updatedAt,
+      rev: access.board.rev,
     });
   }));
 
@@ -942,21 +1020,48 @@ export function createApp() {
     const access = await getBoardAccess(boardId, user as { id: string; email: string });
     if (!access) return res.status(403).json({ error: "Accès refusé" });
 
-    const { canvasData, thumbnail } = req.body;
-    if (!canvasData || typeof canvasData !== "object") {
-      return res.status(400).json({ error: "canvasData requis" });
+    const { canvasData, thumbnail, baseRev } = parseOrThrow(boardContentSchema, req.body);
+    const data = {
+      canvasData: canvasData as unknown as Prisma.InputJsonValue,
+      thumbnail: typeof thumbnail === "string" ? thumbnail : access.board.thumbnail,
+      rev: { increment: 1 },
+    };
+
+    // Optimistic concurrency: if the client tells us which revision it edited
+    // from, only write when the board hasn't advanced underneath it. This stops
+    // a stale tab from silently clobbering a collaborator's changes.
+    if (typeof baseRev === "number") {
+      const result = await prisma.board.updateMany({
+        where: { id: boardId, rev: baseRev },
+        data,
+      });
+      if (result.count === 0) {
+        const current = await prisma.board.findUnique({
+          where: { id: boardId },
+          select: { rev: true, updatedAt: true },
+        });
+        return res.status(409).json({
+          error: "conflict",
+          rev: current?.rev ?? access.board.rev,
+          updatedAt: current?.updatedAt ?? access.board.updatedAt,
+        });
+      }
+      const updated = await prisma.board.findUnique({
+        where: { id: boardId },
+        select: { rev: true, updatedAt: true, thumbnail: true },
+      });
+      return res.json({
+        success: true,
+        rev: updated?.rev,
+        updatedAt: updated?.updatedAt,
+        thumbnail: updated?.thumbnail,
+      });
     }
 
-    const updated = await prisma.board.update({
-      where: { id: boardId },
-      data: {
-        canvasData,
-        thumbnail: typeof thumbnail === "string" ? thumbnail : access.board.thumbnail,
-      },
-    });
-
+    const updated = await prisma.board.update({ where: { id: boardId }, data });
     res.json({
       success: true,
+      rev: updated.rev,
       updatedAt: updated.updatedAt,
       thumbnail: updated.thumbnail,
     });
@@ -974,7 +1079,11 @@ export function createApp() {
 
   app.post("/api/boards/:id/join", requireAuth(async (req, res, user) => {
     const boardId = String(req.params.id);
-    const board = await prisma.board.findUnique({ where: { id: boardId } });
+    const { inviteToken } = parseOrThrow(joinSchema, req.body ?? {});
+    const board = await prisma.board.findUnique({
+      where: { id: boardId },
+      select: { id: true, authorId: true, shareToken: true },
+    });
     if (!board) return res.status(404).json({ error: "Tableau introuvable" });
 
     const authUser = user as { id: string; email: string };
@@ -983,10 +1092,22 @@ export function createApp() {
       return res.json({ success: true, role: "owner" });
     }
 
-    await prisma.boardMember.upsert({
+    // Already a member? Idempotently confirm — no token needed to re-open a link.
+    const existing = await prisma.boardMember.findUnique({
       where: { boardId_email: { boardId, email: authUser.email } },
-      update: {},
-      create: { boardId, email: authUser.email, role: "editor" },
+    });
+    if (existing) {
+      return res.json({ success: true, role: existing.role === "owner" ? "owner" : "editor" });
+    }
+
+    // Otherwise require a valid, owner-issued invite token. Knowing the board id
+    // (which leaks via public links/logs) is NOT sufficient to gain access.
+    if (!board.shareToken || !inviteToken || inviteToken !== board.shareToken) {
+      return res.status(403).json({ error: "Invitation invalide ou expirée" });
+    }
+
+    await prisma.boardMember.create({
+      data: { boardId, email: authUser.email, role: "editor" },
     });
     res.json({ success: true, role: "editor" });
   }));
@@ -1002,31 +1123,54 @@ export function createApp() {
 
   // --- FILE UPLOAD ---
 
-  app.post("/api/upload", requireAuth(async (req, res) => {
-    const { name, type, size, data } = req.body;
-    if (!data) return res.status(400).json({ error: "No data" });
+  app.post("/api/upload", uploadLimiter, requireAuth(async (req, res) => {
+    const { name, type, size, data } = parseOrThrow(uploadSchema, req.body);
+
+    // Resolve the real MIME + raw base64 from either a data URL or raw bytes.
+    let mime = type.toLowerCase();
+    let base64 = data;
+    const dataUrl = data.match(/^data:([^;]+);base64,(.+)$/);
+    if (dataUrl) {
+      mime = dataUrl[1].toLowerCase();
+      base64 = dataUrl[2];
+    }
+
+    if (!ALLOWED_UPLOAD_MIMES.has(mime)) {
+      return res.status(415).json({ error: "Type de fichier non autorisé" });
+    }
+    const bytes = Buffer.byteLength(base64, "base64");
+    if (bytes > MAX_UPLOAD_BYTES) {
+      return res.status(413).json({ error: "Fichier trop volumineux" });
+    }
+
     const attachment = await prisma.chatAttachment.create({
-      data: { name, type, size, data },
+      data: { name: name || "image", type: mime, size: size ?? bytes, data },
     });
     res.json({ url: `/api/file/${attachment.id}`, id: attachment.id });
   }));
 
-  app.get("/api/file/:fileId", async (req, res) => {
+  app.get("/api/file/:fileId", requireAuth(async (req, res) => {
     const fileId = String(req.params.fileId);
     const attachment = await prisma.chatAttachment.findUnique({ where: { id: fileId } });
     if (!attachment) return res.status(404).json({ error: "Not found" });
+
     const base64 = attachment.data;
     const matches = base64.match(/^data:([^;]+);base64,(.+)$/);
-    if (matches) {
-      const buffer = Buffer.from(matches[2], "base64");
-      res.setHeader("Content-Type", matches[1]);
-      res.setHeader("Content-Disposition", `inline; filename="${attachment.name}"`);
-      res.send(buffer);
-    } else {
-      res.setHeader("Content-Type", attachment.type);
-      res.send(Buffer.from(base64, "base64"));
-    }
-  });
+    const rawMime = (matches ? matches[1] : attachment.type || "").toLowerCase();
+    const buffer = Buffer.from(matches ? matches[2] : base64, "base64");
+
+    // Only serve known-safe image types inline. Anything else (e.g. an attacker
+    // storing text/html) is forced to a download with a neutral content-type,
+    // and nosniff prevents the browser from re-interpreting it as HTML/script.
+    const safeMime = ALLOWED_UPLOAD_MIMES.has(rawMime) ? rawMime : "application/octet-stream";
+    res.setHeader("Content-Type", safeMime);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader(
+      "Content-Disposition",
+      `${safeMime === "application/octet-stream" ? "attachment" : "inline"}; filename="${sanitizeFilename(attachment.name)}"`,
+    );
+    res.send(buffer);
+  }));
 
   if (process.env.SERVE_STATIC === "true") {
     const staticDir = path.resolve(__dirname, "../dist");

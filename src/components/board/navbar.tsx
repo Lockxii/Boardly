@@ -78,7 +78,7 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
     const svg = document.querySelector("#board-canvas") as SVGSVGElement;
     if (!svg) return;
     toast.promise(
-      new Promise(async (resolve, reject) => {
+      new Promise((resolve, reject) => {
         try {
           const clone = svg.cloneNode(true) as SVGSVGElement;
           const svgData = new XMLSerializer().serializeToString(clone);
@@ -113,7 +113,7 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
     const svg = document.querySelector("#board-canvas") as SVGSVGElement;
     if (!svg) return;
     toast.promise(
-      new Promise(async (resolve, reject) => {
+      new Promise((resolve, reject) => {
         try {
           const clone = svg.cloneNode(true) as SVGSVGElement;
           const svgData = new XMLSerializer().serializeToString(clone);

@@ -12,11 +12,15 @@
 Créez un fichier `.env` à la racine du projet :
 
 ```env
-DATABASE_URL="postgresql://..."  # Votre URL NeonDB
-BETTER_AUTH_SECRET="votre-secret-genere"
+DATABASE_URL="postgresql://..."          # URL NeonDB (pooled, ajouter ?pgbouncer=true en prod)
+DATABASE_URL_UNPOOLED="postgresql://..."  # URL directe Neon (migrations Prisma)
+BETTER_AUTH_SECRET="votre-secret-genere"  # openssl rand -base64 32 (≥ 16 caractères, requis en prod)
 BETTER_AUTH_URL="http://localhost:5173"
-GOOGLE_AI_API_KEY=""
+LIVEBLOCKS_SECRET_KEY="sk_..."            # Collaboration temps réel (serveur uniquement)
+GOOGLE_AI_API_KEY=""                       # Fred AI / Gemini (serveur uniquement)
 ```
+
+Voir `.env.example` pour la liste complète.
 
 ### 2. Base de Données
 Poussez le schéma vers votre base de données NeonDB :
@@ -32,16 +36,25 @@ Démarrez le serveur de développement :
 npm run dev
 ```
 
-Rendez-vous sur `http://localhost:3000`.
+Le client tourne sur `http://localhost:5173` (l'API Express sur `http://localhost:3001`, proxifiée via `/api`).
+
+## 🧪 Qualité
+
+```bash
+npm run typecheck   # tsc -b
+npm run lint        # eslint
+npm test            # vitest
+```
 
 ## 🏗️ Architecture
 
-- **Auth** : BetterAuth (Email/Mot de passe) avec Adaptateur Prisma.
+- **Auth** : BetterAuth (Email/Mot de passe) avec Adaptateur Prisma, rate-limiting activé.
 - **Base de données** : NeonDB (PostgreSQL) via Prisma ORM.
-- **Temps Réel** : Socket.io (curseurs + sync board instantanée). Fallback HTTP si WebSocket indisponible.
+- **Temps Réel** : Liveblocks (curseurs/présence + diffusion des patches canvas). Le client se connecte directement à l'infrastructure WebSocket de Liveblocks ; la Function serverless ne fait que signer un token d'accès court. Persistance du board via REST (`GET`/`PUT /api/boards/:id/content`) avec concurrence optimiste (`rev`).
 - **État** : Zustand (canvas local) + Prisma (persistance board).
-- **Canvas** : Moteur SVG performant avec transformations matricielles (Zoom/Pan).
-- **Styling** : Tailwind CSS + shadcn/ui.
+- **Canvas** : Moteur SVG performant avec transformations matricielles (Zoom/Pan) et viewport culling.
+- **Styling** : Tailwind CSS v4 (plugin Vite) + shadcn/ui.
+- **Sécurité** : validation Zod des requêtes, garde SSRF sur les fetchs d'URL, partage de board par token d'invitation.
 
 ## 🛠️ Fonctionnalités
 
@@ -61,26 +74,20 @@ Rendez-vous sur `http://localhost:3000`.
     - Suppression (Touche Suppr ou Bouton).
 - **Modèles** : Choix entre Vide, Grille ou Plan (Blueprint) à la création.
 
-## Déploiement Vercel + Railway Socket.io
+## 🚢 Déploiement (Vercel)
 
-Vercel déploie l'API Express comme une Function serverless, donc le serveur Socket.io local (`server/index.ts`) ne tourne pas en production Vercel. Par défaut, Boardly désactive donc Socket.io sur Vercel et garde la collaboration via fallback HTTP.
+Boardly se déploie entièrement sur Vercel — aucun serveur de sockets séparé n'est requis :
 
-Pour garder le frontend sur Vercel et mettre seulement le serveur Socket.io sur Railway :
+- L'API Express est packagée en une seule Function serverless (`api/index.ts`, `maxDuration` 30s).
+- Le temps réel passe par Liveblocks : le client se connecte directement à l'infra WebSocket de Liveblocks, donc la limite serverless de 30s n'affecte pas la collaboration.
+- `npm run vercel-build` lance `prisma generate` puis `tsc -b && vite build`.
 
-1. Railway → New Project → Deploy from GitHub repo → `Lockxii/Boardly`.
-2. Variables Railway :
-   - `DATABASE_URL`
-   - `BETTER_AUTH_SECRET` = même valeur que Vercel
-   - `BETTER_AUTH_URL=https://boardly-r3xr.vercel.app`
-   - `REALTIME_AUTH_SECRET` = même valeur que Vercel, optionnel si `BETTER_AUTH_SECRET` est partagé
-   - `GOOGLE_AI_API_KEY`, optionnel pour les routes IA si utilisées sur Railway
-3. Settings → Networking → Generate Domain.
-4. Dans Vercel, ajoutez :
-   - `VITE_SOCKET_URL=https://votre-domaine.up.railway.app`
-   - `REALTIME_SERVER_URL=https://votre-domaine.up.railway.app`
-   - `REALTIME_AUTH_SECRET` = même valeur que Railway, optionnel si `BETTER_AUTH_SECRET` est partagé
-5. Redeploy Railway, puis redeploy Vercel.
+Variables d'environnement Vercel (Production + Preview) :
 
-Le frontend Vercel récupère un token court via `/api/realtime/token`, puis se connecte à Socket.io sur Railway avec ce token. Quand une sauvegarde board passe par l'API Vercel, Vercel envoie aussi l'événement à Railway via `REALTIME_SERVER_URL`.
+- `DATABASE_URL` — URL Neon **pooled**, avec `?pgbouncer=true&connection_limit=1`.
+- `DATABASE_URL_UNPOOLED` — URL Neon directe (utilisée par Prisma comme `directUrl`).
+- `BETTER_AUTH_SECRET` — `openssl rand -base64 32` (le boot échoue si absent en prod).
+- `BETTER_AUTH_URL` — `https://<votre-domaine>.vercel.app`.
+- `LIVEBLOCKS_SECRET_KEY`, `GOOGLE_AI_API_KEY`.
 
-Railway lancera `npm run build`, puis `npm start`. Le script `start` démarre le serveur Node avec Socket.io.
+> Mise à jour du schéma : `npm run db:push` en local avec `DATABASE_URL` pointant sur la base cible. En production, `server/schema-sync.ts` applique des correctifs idempotents (colonnes/index) au démarrage.

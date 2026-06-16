@@ -19,7 +19,12 @@ export function BoardPage() {
       } catch (e) {
         const message = e instanceof Error ? e.message : "";
         if (message !== "Accès refusé") throw e;
-        await apiFetch(`/api/boards/${boardId}/join`, { method: "POST" });
+        // Join requires the owner-issued invite token carried in the link.
+        const inviteToken = new URLSearchParams(window.location.search).get("invite") || undefined;
+        await apiFetch(`/api/boards/${boardId}/join`, {
+          method: "POST",
+          body: JSON.stringify({ inviteToken }),
+        });
         return apiFetch<Board>(`/api/boards/${boardId}`);
       }
     },

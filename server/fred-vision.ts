@@ -1,4 +1,5 @@
 import { prisma } from "./prisma.js";
+import { safeFetch } from "./url-guard.js";
 
 export type VisionAssetInput = {
   label: string;
@@ -54,15 +55,13 @@ async function readFileAttachment(fileId: string): Promise<ResolvedVisionAsset |
 async function fetchRemoteImage(src: string): Promise<ResolvedVisionAsset | null> {
   if (!/^https?:\/\//i.test(src)) return null;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-
   try {
-    const res = await fetch(src, {
-      signal: controller.signal,
-      headers: { "User-Agent": "Boardly-Fred/1.0", Accept: "image/*" },
-      redirect: "follow",
-    });
+    // SSRF-protected: validates the host (and redirect hops) before connecting.
+    const res = await safeFetch(
+      src,
+      { headers: { "User-Agent": "Boardly-Fred/1.0", Accept: "image/*" } },
+      { timeoutMs: FETCH_TIMEOUT_MS },
+    );
     if (!res.ok) return null;
 
     const contentType = (res.headers.get("content-type") || "image/jpeg").split(";")[0].toLowerCase();
@@ -81,8 +80,6 @@ async function fetchRemoteImage(src: string): Promise<ResolvedVisionAsset | null
     };
   } catch {
     return null;
-  } finally {
-    clearTimeout(timer);
   }
 }
 

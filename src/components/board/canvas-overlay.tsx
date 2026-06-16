@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { buildConnectionPath, getConnectionEndpoints, getConnectionStyle, getStrokeDasharray, getLayerEdgePoint, markerUrl } from "@/lib/connection-utils";
 import type { Layer } from "@/lib/types";
@@ -7,7 +8,7 @@ type CanvasOverlayProps = {
   cursorPoint: { x: number; y: number } | null;
 };
 
-export function CanvasOverlay({ translateGhost, cursorPoint }: CanvasOverlayProps) {
+export const CanvasOverlay = memo(function CanvasOverlay({ translateGhost, cursorPoint }: CanvasOverlayProps) {
   const canvasState = useCanvasStore((s) => s.canvasState);
   const connectFromId = useCanvasStore((s) => s.connectFromId);
   const connectHoverId = useCanvasStore((s) => s.connectHoverId);
@@ -157,4 +158,4 @@ export function CanvasOverlay({ translateGhost, cursorPoint }: CanvasOverlayProp
       )}
     </g>
   );
-}
+});

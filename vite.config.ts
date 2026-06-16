@@ -17,10 +17,6 @@ export default defineConfig({
         target: "http://localhost:3001",
         ws: true,
       },
-      "/socket.io": {
-        target: "http://localhost:3001",
-        ws: true,
-      },
     },
   },
   build: {
@@ -30,7 +26,6 @@ export default defineConfig({
           "vendor-react": ["react", "react-dom"],
           "vendor-tanstack": ["@tanstack/react-router", "@tanstack/react-query"],
           "vendor-motion": ["framer-motion"],
-          "vendor-emoji": ["emoji-picker-react"],
         },
       },
     },

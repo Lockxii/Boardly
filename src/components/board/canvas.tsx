@@ -544,8 +544,13 @@ export function Canvas({
     };
     pastePointRef.current = current;
     syncCursor(current);
-    setCursorPoint(current);
     const state = useCanvasStore.getState();
+    // cursorPoint only drives the snap guides (translating + snapToGrid) and the
+    // in-progress connection line. Skipping it on idle hover avoids re-rendering
+    // the whole Canvas subtree on every pointer move.
+    if (state.connectFromId || (state.canvasState.mode === "translating" && state.snapToGrid)) {
+      setCursorPoint(current);
+    }
 
     if (state.connectFromId) {
       let hover: string | null = null;
@@ -978,7 +983,10 @@ export function Canvas({
         y: Math.round((e.clientY - cam.y) / cam.zoom),
       };
       syncCursor(point);
-      setCursorPoint(point);
+      const st = useCanvasStore.getState();
+      if (st.connectFromId || (st.canvasState.mode === "translating" && st.snapToGrid)) {
+        setCursorPoint(point);
+      }
     };
 
     const onPointerLeave = () => {

@@ -1,6 +1,7 @@
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 import { prisma } from "./prisma.js";
+import { env } from "./env.js";
 
 export function getAuthBaseURL() {
   if (process.env.BETTER_AUTH_URL) return process.env.BETTER_AUTH_URL.replace(/\/$/, "");
@@ -29,21 +30,21 @@ export function getTrustedOrigins() {
   return [...origins];
 }
 
-const authSecret = process.env.BETTER_AUTH_SECRET;
-if (!authSecret && process.env.NODE_ENV === "production") {
-  console.error("BETTER_AUTH_SECRET is missing — auth routes will fail on Vercel.");
-}
-
 export const auth = betterAuth({
   database: prismaAdapter(prisma, {
     provider: "postgresql",
   }),
-  secret: authSecret || "dev-only-insecure-secret",
+  secret: env.authSecret,
   baseURL: getAuthBaseURL(),
   trustedOrigins: getTrustedOrigins(),
   emailAndPassword: {
     enabled: true,
-    minPasswordLength: 6,
+    minPasswordLength: 10,
+  },
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 60,
   },
   user: {
     additionalFields: {},

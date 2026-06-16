@@ -27,7 +27,17 @@ export function ShareDialog({
   const [copiedPublic, setCopiedPublic] = useState(false);
   const queryClient = useQueryClient();
 
-  const inviteUrl = `${window.location.origin}/board/${boardId}`;
+  // Read the board (already cached by the board page) to embed the invite token.
+  const { data: board } = useQuery<Board>({
+    queryKey: ["boards", boardId],
+    queryFn: () => apiFetch<Board>(`/api/boards/${boardId}`),
+    enabled: !!boardId,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const inviteUrl = board?.shareToken
+    ? `${window.location.origin}/board/${boardId}?invite=${board.shareToken}`
+    : `${window.location.origin}/board/${boardId}`;
   const publicUrl = `${window.location.origin}/share/${boardId}`;
 
   useEffect(() => {

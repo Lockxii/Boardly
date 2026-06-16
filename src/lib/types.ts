@@ -162,6 +162,9 @@ export type Board = {
   folder?: string | null;
   tags?: string[];
   isPublic?: boolean;
+  rev?: number;
+  /** Owner-only: secret used to build the invite/collaboration link. */
+  shareToken?: string | null;
   role?: "owner" | "editor";
   isOwner?: boolean;
   authorName?: string | null;

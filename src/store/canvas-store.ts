@@ -54,6 +54,8 @@ interface CanvasStore {
   saveStatus: "idle" | "saving" | "saved" | "error";
   lastSavedAt: number | null;
   lastPersistedSnapshot: string | null;
+  /** Server revision the local board was loaded/last-persisted from (optimistic concurrency). */
+  boardRev: number;
   setSaveStatus: (status: "idle" | "saving" | "saved" | "error", at?: number) => void;
 
   // Connector tool
@@ -248,6 +250,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   saveStatus: "idle",
   lastSavedAt: null,
   lastPersistedSnapshot: null,
+  boardRev: 0,
   setSaveStatus: (saveStatus, at) =>
     set({
       saveStatus,
@@ -944,6 +947,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       saveStatus: "idle",
       lastSavedAt: null,
       lastPersistedSnapshot: null,
+      boardRev: 0,
     }),
 
   loadBoard: async (boardId) => {
@@ -988,14 +992,16 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
     const uploadCanvas = async (data: BoardCanvasData) => {
       const thumbnail = await generateBoardThumbnail(data.layers, data.layerIds);
-      await apiFetch(`/api/boards/${boardId}/content`, {
+      const result = await apiFetch<{ rev?: number }>(`/api/boards/${boardId}/content`, {
         method: "PUT",
         body: JSON.stringify({ canvasData: data, thumbnail }),
       });
+      if (typeof result?.rev === "number") set({ boardRev: result.rev });
     };
 
     try {
-      const remote = await apiFetch<{ canvasData: BoardCanvasData | null }>(`/api/boards/${boardId}/content`);
+      const remote = await apiFetch<{ canvasData: BoardCanvasData | null; rev?: number }>(`/api/boards/${boardId}/content`);
+      set({ boardRev: remote.rev ?? 0 });
       if (remote.canvasData?.layerIds?.length) {
         applyCanvasData(remote.canvasData);
         writeLocalCanvas(remote.canvasData);
@@ -1049,10 +1055,28 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
     try {
       const thumbnail = await generateBoardThumbnail(canvasData.layers, canvasData.layerIds);
-      await apiFetch(`/api/boards/${boardId}/content`, {
+      const res = await fetch(`/api/boards/${boardId}/content`, {
         method: "PUT",
-        body: JSON.stringify({ canvasData, thumbnail }),
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ canvasData, thumbnail, baseRev: get().boardRev }),
       });
+
+      if (res.status === 409) {
+        // A collaborator advanced the board first. Don't clobber: adopt the
+        // server revision and let the next remote poll reconcile local state.
+        const body = await res.json().catch(() => ({}));
+        if (typeof body.rev === "number") set({ boardRev: body.rev });
+        get().setSaveStatus("idle");
+        return;
+      }
+      if (!res.ok) {
+        get().setSaveStatus("error");
+        return;
+      }
+
+      const body = (await res.json().catch(() => ({}))) as { rev?: number };
+      if (typeof body.rev === "number") set({ boardRev: body.rev });
       set({ lastPersistedSnapshot: snapshot });
       get().setSaveStatus("saved", Date.now());
     } catch {

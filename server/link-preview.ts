@@ -10,6 +10,7 @@ import {
   vimeoIdFromUrl,
   youtubeIdFromUrl,
 } from "../src/lib/link-media-utils.js";
+import { readTextCapped, safeFetch } from "./url-guard.js";
 
 export type LinkPreviewResult = {
   url: string;
@@ -214,14 +215,21 @@ async function fetchOEmbedPreview(url: URL, provider: Exclude<LinkProviderId, "g
 }
 
 async function fetchOpenGraphPreview(url: URL, timeoutMs = 8000): Promise<LinkPreviewResult> {
-  const res = await fetch(url.toString(), {
-    headers: { "User-Agent": "BoardlyBot/1.0 (+https://boardly.app)" },
-    redirect: "follow",
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  // SSRF-protected fetch: resolves & validates the host (and every redirect hop)
+  // against private/loopback/link-local ranges before connecting.
+  const res = await safeFetch(
+    url.toString(),
+    { headers: { "User-Agent": "BoardlyBot/1.0 (+https://boardly.app)" } },
+    { timeoutMs },
+  );
   if (!res.ok) throw new Error("Impossible de récupérer la page");
 
-  const html = (await res.text()).slice(0, 500_000);
+  const contentType = (res.headers.get("content-type") || "").toLowerCase();
+  if (/^(image|video|audio|font)\//.test(contentType) || contentType.includes("application/octet-stream")) {
+    throw new Error("Type de contenu non supporté");
+  }
+
+  const html = await readTextCapped(res, 500_000);
   const provider = detectProvider(url);
   let title = pickTitle(html) || url.hostname;
   title = cleanMusicLinkTitle(title, provider);

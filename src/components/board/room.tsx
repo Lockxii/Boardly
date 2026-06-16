@@ -69,7 +69,7 @@ export function Room({ roomId, template, title, boardId, isPublic, isOwner = fal
 
     const pullRemote = async (options: { userId?: string; userName?: string; notify?: boolean } = {}) => {
       try {
-        const remote = await apiFetch<{ canvasData: import("@/lib/types").BoardCanvasData | null; updatedAt: string }>(
+        const remote = await apiFetch<{ canvasData: import("@/lib/types").BoardCanvasData | null; updatedAt: string; rev?: number }>(
           `/api/boards/${roomId}/content`
         );
         const updatedAt = new Date(remote.updatedAt).getTime();

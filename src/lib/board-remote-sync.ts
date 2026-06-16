@@ -192,12 +192,13 @@ export function applyLiveBoardPatch(
 }
 
 export async function applyRemoteBoardUpdate(
-  remote: { canvasData: BoardCanvasData | null; updatedAt: string },
+  remote: { canvasData: BoardCanvasData | null; updatedAt: string; rev?: number },
   options: { userId?: string; userName?: string; notify?: boolean; preserveSelection?: boolean } = {}
 ) {
   const updatedAt = new Date(remote.updatedAt).getTime();
   const state = useCanvasStore.getState();
   if (state.saveStatus === "saving") return false;
+  if (typeof remote.rev === "number") useCanvasStore.setState({ boardRev: remote.rev });
   if (!remote.canvasData || !Array.isArray(remote.canvasData.layerIds)) return false;
 
   const prevLayers = state.layers;
