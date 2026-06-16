@@ -19,10 +19,12 @@ export function buildTemplateCanvas(template: string) {
   const layers: Record<string, Layer> = {};
   const layerIds: string[] = [];
 
+  const connections: { id: string; fromId: string; toId: string; arrowEnd?: string; routing?: string }[] = [];
   const add = (layer: Layer) => {
     const id = nanoid();
     layers[id] = layer;
     layerIds.push(id);
+    return id;
   };
 
   if (template === "moodboard") {
@@ -47,6 +49,46 @@ export function buildTemplateCanvas(template: string) {
       add({ type: "Column", x: 40 + i * 320, y: 40, width: 300, height: 560, fill: "transparent", stroke: "#94A3B8", strokeWidth: 2, cornerRadius: 12, value: label });
       add({ type: "Note", x: 60 + i * 320, y: 100, width: 260, height: 120, fill: "#FEF3C7", value: "Ajouter une carte…", cornerRadius: 8 });
     });
+  } else if (template === "kanban") {
+    const fills = ["#FEE2E2", "#FEF3C7", "#DCFCE7"];
+    ["📋 À faire", "🔧 En cours", "✅ Terminé"].forEach((label, i) => {
+      add({ type: "Column", x: 40 + i * 320, y: 40, width: 300, height: 560, fill: "transparent", stroke: "#94A3B8", strokeWidth: 2, cornerRadius: 12, value: label });
+      add({ type: "Note", x: 60 + i * 320, y: 100, width: 260, height: 90, fill: fills[i], value: "Nouvelle carte…", cornerRadius: 8 });
+      add({ type: "Note", x: 60 + i * 320, y: 210, width: 260, height: 90, fill: fills[i], value: "Nouvelle carte…", cornerRadius: 8 });
+    });
+  } else if (template === "retro") {
+    add({ type: "Text", x: 40, y: 24, width: 400, height: 40, fill: "#111827", value: "Rétrospective", fontSize: 24, textColor: "#111827" });
+    const cols = [
+      { label: "😀 Continuer", fill: "#DCFCE7" },
+      { label: "🔧 Améliorer", fill: "#FEE2E2" },
+      { label: "💡 Idées & actions", fill: "#FEF3C7" },
+    ];
+    cols.forEach((c, i) => {
+      add({ type: "Column", x: 40 + i * 320, y: 80, width: 300, height: 520, fill: "transparent", stroke: "#94A3B8", strokeWidth: 2, cornerRadius: 12, value: c.label });
+      add({ type: "Note", x: 60 + i * 320, y: 140, width: 260, height: 90, fill: c.fill, value: "…", cornerRadius: 8 });
+    });
+  } else if (template === "mindmap") {
+    const center = add({ type: "Note", x: 420, y: 270, width: 200, height: 96, fill: "#DBEAFE", value: "<b>Idée centrale</b>", cornerRadius: 48 });
+    const spokes = [
+      { x: 120, y: 80, label: "Branche 1", fill: "#FCE7F3" },
+      { x: 760, y: 80, label: "Branche 2", fill: "#DCFCE7" },
+      { x: 120, y: 470, label: "Branche 3", fill: "#FEF3C7" },
+      { x: 760, y: 470, label: "Branche 4", fill: "#E9D5FF" },
+    ];
+    for (const s of spokes) {
+      const id = add({ type: "Note", x: s.x, y: s.y, width: 180, height: 80, fill: s.fill, value: s.label, cornerRadius: 16 });
+      connections.push({ id: nanoid(), fromId: center, toId: id, arrowEnd: "none", routing: "bezier" });
+    }
+  } else if (template === "flowchart") {
+    const start = add({ type: "Note", x: 400, y: 40, width: 240, height: 70, fill: "#DCFCE7", value: "<b>Début</b>", cornerRadius: 40 });
+    const step = add({ type: "Note", x: 400, y: 170, width: 240, height: 90, fill: "#DBEAFE", value: "Étape", cornerRadius: 8 });
+    const decision = add({ type: "Note", x: 400, y: 320, width: 240, height: 90, fill: "#FEF3C7", value: "Décision ?", cornerRadius: 8 });
+    const end = add({ type: "Note", x: 400, y: 470, width: 240, height: 70, fill: "#FEE2E2", value: "<b>Fin</b>", cornerRadius: 40 });
+    connections.push(
+      { id: nanoid(), fromId: start, toId: step, arrowEnd: "arrow", routing: "straight" },
+      { id: nanoid(), fromId: step, toId: decision, arrowEnd: "arrow", routing: "straight" },
+      { id: nanoid(), fromId: decision, toId: end, arrowEnd: "arrow", routing: "straight" },
+    );
   } else {
     return null;
   }
@@ -54,7 +96,7 @@ export function buildTemplateCanvas(template: string) {
   return {
     layers,
     layerIds,
-    connections: [],
+    connections,
     layerComments: {},
     reactions: {},
     trash: [],

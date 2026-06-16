@@ -7,6 +7,10 @@ export const BOARD_TEMPLATES = {
   storyboard: { label: "Storyboard" },
   brief: { label: "Brief client" },
   columns: { label: "Colonnes" },
+  kanban: { label: "Kanban" },
+  retro: { label: "Rétro" },
+  mindmap: { label: "Mind-map" },
+  flowchart: { label: "Flowchart" },
 } as const;
 
 export type BoardTemplateKey = keyof typeof BOARD_TEMPLATES;

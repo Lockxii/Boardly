@@ -1,4 +1,4 @@
-import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Presentation, RefreshCw } from "lucide-react";
+import { ChevronLeft, MoreHorizontal, Pencil, ShieldAlert, MessageSquare, Keyboard, Moon, Sun, FileImage, FileCode, Copy, Presentation, RefreshCw } from "lucide-react";
 import { FredIcon } from "@/components/fred-avatar";
 import { Button } from "@/components/ui/button";
 import { Link } from "@tanstack/react-router";
@@ -162,6 +162,47 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
     toast.success("SVG téléchargé !");
   };
 
+  const handleCopyImage = async () => {
+    const svg = document.querySelector("#board-canvas") as SVGSVGElement;
+    if (!svg || typeof ClipboardItem === "undefined" || !navigator.clipboard?.write) {
+      toast.error("Copie d'image non supportée par ce navigateur");
+      return;
+    }
+    // Render the board to a PNG blob (same pipeline as PNG export) and copy it.
+    // The blob is provided to ClipboardItem as a promise for Safari compatibility.
+    const renderPng = () =>
+      new Promise<Blob>((resolve, reject) => {
+        try {
+          const clone = svg.cloneNode(true) as SVGSVGElement;
+          const svgData = new XMLSerializer().serializeToString(clone);
+          const canvas = document.createElement("canvas");
+          const ctx = canvas.getContext("2d");
+          const img = new Image();
+          const { width, height } = svg.getBoundingClientRect();
+          canvas.width = width * 2;
+          canvas.height = height * 2;
+          img.onload = () => {
+            if (!ctx) return reject("No context");
+            ctx.fillStyle = "white";
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.scale(2, 2);
+            ctx.drawImage(img, 0, 0, width, height);
+            canvas.toBlob((blob) => (blob ? resolve(blob) : reject("No blob")), "image/png");
+          };
+          img.onerror = (e) => reject(e);
+          img.src = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgData)));
+        } catch (error) {
+          reject(error);
+        }
+      });
+    try {
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": renderPng() })]);
+      toast.success("Image copiée dans le presse-papiers");
+    } catch {
+      toast.error("Copie impossible");
+    }
+  };
+
   const onSubmit = async () => {
     if (newTitle === title || !newTitle.trim()) { setIsEditing(false); setNewTitle(title); return; }
     setIsEditing(false);
@@ -206,6 +247,7 @@ export function Navbar({ title, boardId, template, isPublic = false, readOnly = 
           handleExport={handleExport}
           handleExportPNG={handleExportPNG}
           handleExportSVG={handleExportSVG}
+          handleCopyImage={handleCopyImage}
           setShowPresentation={setShowPresentation}
           isTwitterBoard={template === TWITTER_BOARD_TEMPLATE}
           isRefreshingTwitter={refreshTwitterMutation.isPending}
@@ -247,6 +289,7 @@ function NavbarContent({
   handleExport,
   handleExportPNG,
   handleExportSVG,
+  handleCopyImage,
   setShowPresentation,
   isTwitterBoard,
   isRefreshingTwitter,
@@ -273,6 +316,7 @@ function NavbarContent({
   handleExport: () => void;
   handleExportPNG: () => void;
   handleExportSVG: () => void;
+  handleCopyImage: () => void;
   setShowPresentation: (show: boolean) => void;
   isTwitterBoard: boolean;
   isRefreshingTwitter: boolean;
@@ -402,6 +446,7 @@ function NavbarContent({
               <DropdownMenuItem onClick={handleExport} className="gap-2 cursor-pointer"><FileImage className="h-4 w-4" /> JPEG</DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportPNG} className="gap-2 cursor-pointer"><FileImage className="h-4 w-4" /> PNG</DropdownMenuItem>
               <DropdownMenuItem onClick={handleExportSVG} className="gap-2 cursor-pointer"><FileCode className="h-4 w-4" /> SVG</DropdownMenuItem>
+              <DropdownMenuItem onClick={handleCopyImage} className="gap-2 cursor-pointer"><Copy className="h-4 w-4" /> Copier l'image</DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem className="text-red-600 dark:text-red-400 gap-2 cursor-pointer"><ShieldAlert className="h-4 w-4" /> Signaler un abus</DropdownMenuItem>
             </DropdownMenuContent>
