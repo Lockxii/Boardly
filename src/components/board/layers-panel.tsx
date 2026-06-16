@@ -1,4 +1,3 @@
-import { useState } from "react";
 import { Reorder } from "framer-motion";
 import {
   Square, Circle, Type, StickyNote, Image as ImageIcon, Triangle, MoveRight,
@@ -33,7 +32,6 @@ export function LayersPanel() {
   const setSelection = useCanvasStore((s) => s.setSelection);
   const setCamera = useCanvasStore((s) => s.setCamera);
   const camera = useCanvasStore((s) => s.camera);
-  const [hoverId, setHoverId] = useState<string | null>(null);
   const drag = useDraggable<HTMLDivElement>({ storageKey: "layers-panel" });
 
   if (layerIds.length === 0) {
@@ -73,17 +71,6 @@ export function LayersPanel() {
         <GripVertical className="h-3.5 w-3.5 text-neutral-300 dark:text-neutral-600" />
         <span className="text-xs font-bold uppercase text-neutral-500">Calques</span>
       </div>
-      {hoverId && layers[hoverId] && (
-        <div className="mx-2 mb-2 rounded-lg border border-neutral-200 dark:border-neutral-700 bg-neutral-50 dark:bg-neutral-900 p-2 layer-hover-preview">
-          <div
-            className="h-12 rounded-md border border-neutral-200/70 dark:border-neutral-700"
-            style={{ backgroundColor: layers[hoverId].fill || "#fff" }}
-          />
-          <p className="mt-1 text-[10px] text-neutral-500 truncate">
-            {layerLabel(layers[hoverId])}
-          </p>
-        </div>
-      )}
       <Reorder.Group axis="y" values={displayIds} onReorder={handleReorder} className="overflow-y-auto pr-1 flex flex-col gap-1">
         {displayIds.map((id) => {
           const layer = layers[id];
@@ -93,8 +80,6 @@ export function LayersPanel() {
             <Reorder.Item
               key={id}
               value={id}
-              onMouseEnter={() => setHoverId(id)}
-              onMouseLeave={() => setHoverId((prev) => (prev === id ? null : prev))}
               onClick={() => focusLayer(id)}
               className="flex items-center gap-2 p-2 rounded-md hover:bg-neutral-100 dark:hover:bg-neutral-700 group cursor-pointer"
             >

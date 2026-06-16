@@ -50,11 +50,11 @@ export const LinkMediaPreview = memo(function LinkMediaPreview({
 }: LinkMediaPreviewProps) {
   const isMusic = isMusicLinkProvider(provider);
   const isNativeVideo = provider === "twitter" && !!videoSrc && (mediaType === "video" || mediaType === "animated_gif");
-  // Any Twitter card without a captured native mp4 falls back to the Twitter
-  // embed iframe on hover (covers videos imported before variants were captured,
-  // broadcasts/DRM, etc.). The embed plays the tweet's video; text/photo tweets
-  // just show the live tweet.
-  const isTwitterEmbedFallback = provider === "twitter" && !videoSrc;
+  // A Twitter VIDEO with no captured native mp4 falls back to the Twitter embed
+  // iframe on hover. Gated on mediaType so image/text tweets keep their plain
+  // thumbnail (no scrollable embed on hover).
+  const isTwitterEmbedFallback =
+    provider === "twitter" && !videoSrc && (mediaType === "video" || mediaType === "animated_gif");
   const isEmbedVideo = isVideoLinkProvider(provider);
   const isVideo = isEmbedVideo || isNativeVideo || isTwitterEmbedFallback;
   const isTwitterVideo = provider === "twitter";

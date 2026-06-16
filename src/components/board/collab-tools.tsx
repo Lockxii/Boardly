@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Timer, Play, Pause, RotateCcw, Zap, X } from "lucide-react";
+import { Timer, Play, Pause, RotateCcw, Zap, X, GripVertical } from "lucide-react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { cursorColorForUser, type TimerEventPayload } from "@/lib/board-socket";
 import { getInitials } from "@/lib/utils";
+import { useDraggable } from "@/lib/use-draggable";
 
 const PRESET_MINUTES = [1, 3, 5, 10];
 
@@ -21,6 +22,7 @@ function TimerWidget() {
   const liveTimer = useCanvasStore((s) => s.liveTimer);
   const [now, setNow] = useState(() => Date.now());
   const [open, setOpen] = useState(false);
+  const [customMin, setCustomMin] = useState("");
 
   const running = !!liveTimer && liveTimer.endsAt !== null && !liveTimer.paused;
 
@@ -56,17 +58,43 @@ function TimerWidget() {
           <Timer className="h-3.5 w-3.5" /> Minuteur
         </button>
         {open && (
-          <div className="absolute right-0 top-full mt-1.5 flex gap-1 rounded-xl border border-neutral-200/80 bg-white p-1 shadow-lg dark:border-neutral-700/80 dark:bg-neutral-900">
-            {PRESET_MINUTES.map((m) => (
-              <button
-                key={m}
-                type="button"
-                onClick={() => start(m)}
-                className="rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-blue-50 dark:hover:bg-blue-950/40"
-              >
-                {m}m
+          <div className="absolute right-0 top-full mt-1.5 flex flex-col gap-1.5 rounded-xl border border-neutral-200/80 bg-white p-1.5 shadow-lg dark:border-neutral-700/80 dark:bg-neutral-900">
+            <div className="flex gap-1">
+              {PRESET_MINUTES.map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => start(m)}
+                  className="rounded-lg px-2.5 py-1 text-xs font-medium hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                >
+                  {m}m
+                </button>
+              ))}
+            </div>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const m = Math.min(180, Math.max(1, Math.round(Number(customMin))));
+                if (m > 0) {
+                  start(m);
+                  setCustomMin("");
+                }
+              }}
+              className="flex items-center gap-1 border-t border-neutral-100 pt-1.5 dark:border-neutral-800"
+            >
+              <input
+                type="number"
+                min={1}
+                max={180}
+                value={customMin}
+                onChange={(e) => setCustomMin(e.target.value)}
+                placeholder="min"
+                className="w-14 rounded-lg border border-neutral-200 bg-transparent px-2 py-1 text-xs outline-none dark:border-neutral-700"
+              />
+              <button type="submit" className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-medium text-white hover:bg-blue-700">
+                Démarrer
               </button>
-            ))}
+            </form>
           </div>
         )}
       </div>
@@ -160,8 +188,17 @@ function PresenceBar() {
 
 /** Live-collaboration controls: shared timer + presence/follow + laser. */
 export function CollabTools() {
+  const drag = useDraggable<HTMLDivElement>({ storageKey: "collab-tools" });
   return (
-    <div className="pointer-events-auto fixed right-4 top-20 z-40 flex flex-col items-end gap-2">
+    <div ref={drag.ref} style={drag.style} className="pointer-events-auto fixed right-4 top-20 z-40 flex flex-col items-end gap-2">
+      <button
+        {...drag.handleProps}
+        type="button"
+        title="Déplacer"
+        className="flex h-5 items-center rounded-full border border-neutral-200/80 bg-white/90 px-1.5 text-neutral-300 shadow-sm backdrop-blur hover:text-neutral-500 dark:border-neutral-700/80 dark:bg-neutral-900/90 dark:text-neutral-600"
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </button>
       <PresenceBar />
       <TimerWidget />
     </div>
