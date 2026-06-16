@@ -148,6 +148,7 @@ interface CanvasStore {
   insertLinkLayer: (preview: LinkPreview, x: number, y: number) => string | null;
   insertLinkLayersBatch: (items: { preview: LinkPreview; x: number; y: number }[]) => string[];
   insertImageLayersBatch: (items: { src: string; x: number; y: number; width: number; height: number }[]) => string[];
+  insertColorCards: (colors: string[], point: { x: number; y: number }) => string[];
   fitLinkLayerToImage: (id: string, naturalWidth: number, naturalHeight: number) => void;
   deleteLayers: (ids?: string[]) => void;
   restoreTrashEntry: (entryId: string) => void;
@@ -595,6 +596,52 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       canvasState: { mode: "none" },
     });
     get().addAuditEntry("created", newIds.length === 1 ? "Image" : `Image x${newIds.length}`);
+    return newIds;
+  },
+
+  insertColorCards: (colors, point) => {
+    if (colors.length === 0) return [];
+    get().pushHistory();
+    const SIZE = 132;
+    const GAP = 16;
+    const cols = Math.min(colors.length, 5);
+    const rows = Math.ceil(colors.length / cols);
+    const startX = point.x - (cols * SIZE + (cols - 1) * GAP) / 2;
+    const startY = point.y - (rows * SIZE + (rows - 1) * GAP) / 2;
+
+    const newIds: string[] = [];
+    let nextLayers = get().layers;
+    let nextLayerIds = get().layerIds;
+
+    colors.forEach((hex, i) => {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      const id = nanoid();
+      nextLayers = {
+        ...nextLayers,
+        [id]: {
+          type: "Note",
+          x: startX + col * (SIZE + GAP),
+          y: startY + row * (SIZE + GAP),
+          width: SIZE,
+          height: SIZE,
+          fill: hex,
+          cornerRadius: 12,
+          // A readable hex pill pinned at the bottom — legible on any swatch color.
+          value: `<div style="display:flex;align-items:flex-end;justify-content:center;height:100%"><span style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;font-weight:600;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,0.9);color:#111">${hex}</span></div>`,
+        },
+      };
+      nextLayerIds = [...nextLayerIds, id];
+      newIds.push(id);
+    });
+
+    set({
+      layers: nextLayers,
+      layerIds: nextLayerIds,
+      selection: newIds,
+      canvasState: { mode: "none" },
+    });
+    get().addAuditEntry("created", newIds.length === 1 ? "Couleur" : `Couleur x${newIds.length}`);
     return newIds;
   },
 

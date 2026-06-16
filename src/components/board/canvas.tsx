@@ -31,6 +31,7 @@ import { BLUEPRINT } from "@/lib/template-styles";
 import { compressDataUrl } from "@/lib/canvas-utils";
 import { findColumnAtPoint, pointInLayer, rubberBand } from "@/lib/motion-utils";
 import { extractPlainTextFromClipboard, extractUrlsFromClipboard } from "@/lib/clipboard-utils";
+import { parsePastedHexColors } from "@/lib/color-utils";
 import { getDefaultPastePoint, pasteUrlsAt } from "@/lib/link-paste-actions";
 import { extractImageFilesFromClipboard, insertImagesAt } from "@/lib/image-insert-actions";
 import {
@@ -297,8 +298,14 @@ export function Canvas({
 
       const plainText = extractPlainTextFromClipboard(e.clipboardData);
       if (plainText) {
-        e.preventDefault();
         const point = pastePointRef.current ?? getDefaultPastePoint(camera);
+        const colors = parsePastedHexColors(plainText);
+        if (colors) {
+          e.preventDefault();
+          useCanvasStore.getState().insertColorCards(colors, point);
+          return;
+        }
+        e.preventDefault();
         insertTextAt(plainText, point);
         return;
       }
