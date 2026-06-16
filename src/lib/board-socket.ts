@@ -1,9 +1,21 @@
+export type PresenceCamera = { x: number; y: number; zoom: number };
+
+export type TimerEventPayload = {
+  endsAt: number | null;
+  paused: boolean;
+  remainingMs: number;
+  durationMs: number;
+};
+
 export type RemotePresence = {
   connectionId: string;
   userId: string;
   userName: string;
   cursorX: number | null;
   cursorY: number | null;
+  chat?: string | null;
+  laser?: boolean;
+  camera?: PresenceCamera | null;
 };
 
 const CURSOR_COLORS = ["#2563EB", "#DC2626", "#16A34A", "#D97706", "#9333EA", "#0891B2", "#DB2777"];

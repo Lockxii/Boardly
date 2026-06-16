@@ -1,7 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useCanvasStore } from "@/store/canvas-store";
 import { applyLiveBoardPatch, applyRemoteBoardUpdate, createBoardLivePatch, type BoardLivePatch } from "@/lib/board-remote-sync";
-import { cursorColorForUser, type RemotePresence } from "@/lib/board-socket";
+import { cursorColorForUser, type PresenceCamera, type RemotePresence } from "@/lib/board-socket";
 import { createPresenceConnection } from "@/lib/presence-ws";
 import type { BoardCanvasData, Layer } from "@/lib/types";
 
@@ -25,7 +25,14 @@ type Peer = {
   screenX: number | null;
   screenY: number | null;
   lastSeen: number;
+  chat: string | null;
+  laser: boolean;
+  camera: PresenceCamera | null;
   el: HTMLDivElement | null;
+  arrowEl: SVGSVGElement | null;
+  dotEl: HTMLDivElement | null;
+  labelEl: HTMLSpanElement | null;
+  chatEl: HTMLSpanElement | null;
 };
 
 type LayerGeometry = {
@@ -51,14 +58,20 @@ function normalizePresence(user: Partial<RemotePresence> & { userId: string }): 
     userName: user.userName || "Collaborateur",
     cursorX: user.cursorX ?? null,
     cursorY: user.cursorY ?? null,
+    chat: user.chat ?? null,
+    laser: user.laser ?? false,
+    camera: user.camera ?? null,
   };
 }
 
 function createCursorElement(peer: Peer) {
   const color = cursorColorForUser(peer.userId);
   const root = document.createElement("div");
-  root.className = "absolute flex items-start gap-1 remote-cursor";
+  root.className = "absolute flex flex-col items-start gap-1 remote-cursor";
   root.style.willChange = "transform";
+
+  const topRow = document.createElement("div");
+  topRow.className = "flex items-start gap-1";
 
   const svgNS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(svgNS, "svg");
@@ -72,13 +85,36 @@ function createCursorElement(peer: Peer) {
   path.setAttribute("fill", color);
   svg.appendChild(path);
 
+  // Laser dot (hidden unless the peer toggles laser mode).
+  const dot = document.createElement("div");
+  dot.style.display = "none";
+  dot.style.width = "14px";
+  dot.style.height = "14px";
+  dot.style.borderRadius = "9999px";
+  dot.style.background = "#EF4444";
+  dot.style.boxShadow = "0 0 12px 4px rgba(239,68,68,0.7)";
+
   const label = document.createElement("span");
-  label.className = "rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm";
+  label.className = "rounded-md px-1.5 py-0.5 text-[10px] font-medium text-white shadow-sm whitespace-nowrap";
   label.style.backgroundColor = color;
   label.textContent = peer.userName;
 
-  root.appendChild(svg);
-  root.appendChild(label);
+  topRow.appendChild(svg);
+  topRow.appendChild(dot);
+  topRow.appendChild(label);
+
+  // Cursor chat bubble (hidden unless the peer is typing).
+  const chat = document.createElement("span");
+  chat.className = "ml-4 max-w-[220px] rounded-xl rounded-tl-sm bg-neutral-900 px-2 py-1 text-[11px] text-white shadow-md dark:bg-neutral-100 dark:text-neutral-900";
+  chat.style.display = "none";
+
+  root.appendChild(topRow);
+  root.appendChild(chat);
+
+  peer.arrowEl = svg;
+  peer.dotEl = dot;
+  peer.labelEl = label;
+  peer.chatEl = chat;
   return root;
 }
 
@@ -181,6 +217,12 @@ export function CursorsPresence({
   const canvasEmitTimerRef = useRef(0);
   const burstContainerRef = useRef<HTMLDivElement>(null);
   const spawnReactionRef = useRef<(emoji: string) => void>(() => {});
+  const lastCameraSentAtRef = useRef(0);
+  const lastSentCameraRef = useRef<PresenceCamera | null>(null);
+  const chatDraftRef = useRef<string | null>(null);
+  const chatAnchorRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [chatDraft, setChatDraft] = useState<string | null>(null);
+  chatDraftRef.current = chatDraft;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -204,7 +246,14 @@ export function CursorsPresence({
           screenX: null,
           screenY: null,
           lastSeen: performance.now(),
+          chat: user.chat ?? null,
+          laser: user.laser ?? false,
+          camera: user.camera ?? null,
           el: null,
+          arrowEl: null,
+          dotEl: null,
+          labelEl: null,
+          chatEl: null,
         };
         peersRef.current.set(user.connectionId, peer);
       } else {
@@ -212,6 +261,9 @@ export function CursorsPresence({
         peer.targetX = user.cursorX;
         peer.targetY = user.cursorY;
         peer.lastSeen = performance.now();
+        peer.chat = user.chat ?? null;
+        peer.laser = user.laser ?? false;
+        peer.camera = user.camera ?? null;
       }
 
       if (!peer.el) {
@@ -262,6 +314,15 @@ export function CursorsPresence({
       idleTimer = window.setTimeout(closePresence, delay);
     };
 
+    const syncLivePeers = (users: RemotePresence[]) => {
+      const next = users.map((u) => ({ userId: u.userId, userName: u.userName, connectionId: u.connectionId }));
+      const prev = useCanvasStore.getState().livePeers;
+      const same =
+        prev.length === next.length &&
+        next.every((p, i) => prev[i]?.connectionId === p.connectionId && prev[i]?.userName === p.userName);
+      if (!same) useCanvasStore.getState().setLivePeers(next);
+    };
+
     const onPresenceState = (users: RemotePresence[]) => {
       if (cancelled) return;
       const activeConnectionIds = new Set(users.map((user) => user.connectionId));
@@ -271,6 +332,7 @@ export function CursorsPresence({
         peersRef.current.delete(connectionId);
       }
       for (const user of users) upsertPeer(user);
+      syncLivePeers(users);
       scheduleIdleDisconnect();
     };
 
@@ -411,6 +473,11 @@ export function CursorsPresence({
           spawnBurst(x * cam.zoom + cam.x, y * cam.zoom + cam.y, emoji);
           scheduleIdleDisconnect();
         },
+        onTimer: (timer) => {
+          if (cancelled) return;
+          useCanvasStore.getState().setLiveTimer(timer.endsAt === null && !timer.paused ? null : timer);
+          scheduleIdleDisconnect();
+        },
         onClose: () => {},
         onState: onPresenceState,
         onJoin: onPresenceJoin,
@@ -512,6 +579,22 @@ export function CursorsPresence({
       presenceRef.current?.sendReaction(emoji, canvas.x, canvas.y);
     };
 
+    useCanvasStore.getState().setLiveActions({
+      setLaser: (on) => {
+        markRealtimeActivity();
+        presenceRef.current?.patchPresence({ laser: on });
+      },
+      sendTimer: (timer) => {
+        markRealtimeActivity();
+        useCanvasStore.getState().setLiveTimer(timer.endsAt === null && !timer.paused ? null : timer);
+        presenceRef.current?.sendTimer(timer);
+      },
+      sendChat: (text) => {
+        markRealtimeActivity();
+        presenceRef.current?.patchPresence({ chat: text });
+      },
+    });
+
     publishedCanvasRef.current = canvasDataFromStore();
     const unsubscribeCanvas = useCanvasStore.subscribe((state) => {
       if (cancelled || readOnly || applyingRemoteCanvasRef.current) return;
@@ -555,6 +638,11 @@ export function CursorsPresence({
       cancelled = true;
       markRealtimeActivityRef.current = () => {};
       spawnReactionRef.current = () => {};
+      const store = useCanvasStore.getState();
+      store.setLiveActions(null);
+      store.setLivePeers([]);
+      store.setLiveTimer(null);
+      store.setFollowingUserId(null);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onLocalActivity);
       window.removeEventListener("pointerdown", onLocalActivity);
@@ -616,6 +704,32 @@ export function CursorsPresence({
         }
       }
 
+      // Follow a collaborator: lock our camera onto theirs.
+      const followingId = useCanvasStore.getState().followingUserId;
+      if (followingId) {
+        let followed: Peer | undefined;
+        for (const p of peersRef.current.values()) {
+          if (p.userId === followingId) {
+            followed = p;
+            break;
+          }
+        }
+        const fc = followed?.camera;
+        if (fc && (Math.abs(fc.x - cam.x) > 0.5 || Math.abs(fc.y - cam.y) > 0.5 || Math.abs(fc.zoom - cam.zoom) > 0.001)) {
+          useCanvasStore.getState().setCamera(fc);
+        }
+      }
+
+      // Broadcast our camera (throttled) so others can follow us.
+      if (presenceRef.current && now - lastCameraSentAtRef.current > 150) {
+        const last = lastSentCameraRef.current;
+        if (!last || Math.abs(last.x - cam.x) > 0.5 || Math.abs(last.y - cam.y) > 0.5 || Math.abs(last.zoom - cam.zoom) > 0.001) {
+          presenceRef.current.patchPresence({ camera: { x: cam.x, y: cam.y, zoom: cam.zoom } });
+          lastSentCameraRef.current = { x: cam.x, y: cam.y, zoom: cam.zoom };
+          lastCameraSentAtRef.current = now;
+        }
+      }
+
       for (const peer of peersRef.current.values()) {
         if (!peer.el) continue;
         if (now - peer.lastSeen > PEER_TIMEOUT_MS) {
@@ -632,6 +746,22 @@ export function CursorsPresence({
         peer.screenX = sx;
         peer.screenY = sy;
         peer.el.style.transform = `translate3d(${sx}px, ${sy}px, 0)`;
+
+        if (peer.chatEl) {
+          if (peer.chat) {
+            if (peer.chatEl.textContent !== peer.chat) peer.chatEl.textContent = peer.chat;
+            if (peer.chatEl.style.display === "none") peer.chatEl.style.display = "";
+          } else if (peer.chatEl.style.display !== "none") {
+            peer.chatEl.style.display = "none";
+          }
+        }
+        if (peer.dotEl && peer.arrowEl && peer.labelEl) {
+          const laserDisplay = peer.laser ? "" : "none";
+          const cursorDisplay = peer.laser ? "none" : "";
+          if (peer.dotEl.style.display !== laserDisplay) peer.dotEl.style.display = laserDisplay;
+          if (peer.arrowEl.style.display !== cursorDisplay) peer.arrowEl.style.display = cursorDisplay;
+          if (peer.labelEl.style.display !== cursorDisplay) peer.labelEl.style.display = cursorDisplay;
+        }
       }
 
       lastFrameAt = now;
@@ -642,11 +772,57 @@ export function CursorsPresence({
     return () => cancelAnimationFrame(raf);
   }, [boardId, readOnly]);
 
+  // Cursor chat: press "/" to open a bubble that floats by your cursor.
+  useEffect(() => {
+    if (readOnly) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "/") return;
+      const ae = document.activeElement as HTMLElement | null;
+      const inField = ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable);
+      if (inField || chatDraftRef.current !== null) return;
+      e.preventDefault();
+      const p = pointerRef.current;
+      const cam = useCanvasStore.getState().camera;
+      chatAnchorRef.current = p
+        ? { x: p.x * cam.zoom + cam.x, y: p.y * cam.zoom + cam.y }
+        : { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+      setChatDraft("");
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [readOnly]);
+
+  const closeChat = () => {
+    useCanvasStore.getState().liveActions?.sendChat(null);
+    setChatDraft(null);
+  };
+
   return (
     <>
       <div ref={containerRef} className="pointer-events-none fixed inset-0 z-[45] overflow-hidden" />
       <div ref={burstContainerRef} className="pointer-events-none fixed inset-0 z-[46] overflow-hidden" />
       {!readOnly && <ReactionTray onPick={(emoji) => spawnReactionRef.current(emoji)} />}
+      {!readOnly && chatDraft !== null && (
+        <input
+          autoFocus
+          value={chatDraft}
+          onChange={(e) => {
+            setChatDraft(e.target.value);
+            useCanvasStore.getState().liveActions?.sendChat(e.target.value || null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === "Escape") {
+              e.preventDefault();
+              closeChat();
+            }
+          }}
+          onBlur={closeChat}
+          placeholder="Dis quelque chose… (Échap pour fermer)"
+          maxLength={120}
+          className="pointer-events-auto fixed z-[47] w-56 -translate-y-7 rounded-xl border border-neutral-300 bg-white/95 px-2.5 py-1 text-xs shadow-lg outline-none ring-2 ring-blue-500/30 backdrop-blur dark:border-neutral-700 dark:bg-neutral-900/95"
+          style={{ left: chatAnchorRef.current.x, top: chatAnchorRef.current.y }}
+        />
+      )}
     </>
   );
 }

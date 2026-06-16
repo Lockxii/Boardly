@@ -5,6 +5,7 @@ import { getLinkLayerDimensions, getLinkLayerHeightFromLayer } from "@/lib/brand
 import { DEFAULT_CONNECTION_STYLE, type ConnectionStyle } from "@/lib/connection-utils";
 import { apiFetch } from "@/lib/utils";
 import { generateBoardThumbnail } from "@/lib/board-thumbnail";
+import type { TimerEventPayload } from "@/lib/board-socket";
 import {
   computeAlignedPositions,
   computeDistributedPositions,
@@ -57,6 +58,21 @@ interface CanvasStore {
   /** Server revision the local board was loaded/last-persisted from (optimistic concurrency). */
   boardRev: number;
   setSaveStatus: (status: "idle" | "saving" | "saved" | "error", at?: number) => void;
+
+  // Live collaboration (ephemeral, not persisted)
+  liveTimer: TimerEventPayload | null;
+  setLiveTimer: (timer: TimerEventPayload | null) => void;
+  followingUserId: string | null;
+  setFollowingUserId: (userId: string | null) => void;
+  livePeers: { userId: string; userName: string; connectionId: string }[];
+  setLivePeers: (peers: { userId: string; userName: string; connectionId: string }[]) => void;
+  /** Send hooks wired by the presence layer while connected (null when offline). */
+  liveActions: {
+    setLaser: (on: boolean) => void;
+    sendTimer: (timer: TimerEventPayload) => void;
+    sendChat: (text: string | null) => void;
+  } | null;
+  setLiveActions: (actions: CanvasStore["liveActions"]) => void;
 
   // Connector tool
   connectFromId: string | null;
@@ -256,6 +272,15 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       saveStatus,
       lastSavedAt: at ?? (saveStatus === "saved" ? Date.now() : get().lastSavedAt),
     }),
+
+  liveTimer: null,
+  setLiveTimer: (liveTimer) => set({ liveTimer }),
+  followingUserId: null,
+  setFollowingUserId: (followingUserId) => set({ followingUserId }),
+  livePeers: [],
+  setLivePeers: (livePeers) => set({ livePeers }),
+  liveActions: null,
+  setLiveActions: (liveActions) => set({ liveActions }),
 
   connectFromId: null,
   setConnectFromId: (connectFromId) => set({ connectFromId, selectedConnectionId: connectFromId ? null : get().selectedConnectionId }),

@@ -1,7 +1,9 @@
 import { createClient, type Client, type JsonObject, type Room, type User } from "@liveblocks/client";
 import type { BoardLivePatch } from "@/lib/board-remote-sync";
-import type { RemotePresence } from "@/lib/board-socket";
+import type { RemotePresence, TimerEventPayload } from "@/lib/board-socket";
 import type { BoardCanvasData } from "@/lib/types";
+
+export type { TimerEventPayload };
 
 export type LiveCanvasUpdate = {
   connectionId: string;
@@ -21,10 +23,14 @@ type PresenceHandlers = {
   onLeave?: (payload: { connectionId?: string; userId?: string }) => void;
   onCanvas?: (update: LiveCanvasUpdate) => void;
   onReaction?: (payload: { x: number; y: number; emoji: string }) => void;
+  onTimer?: (payload: TimerEventPayload) => void;
 };
 
 type LiveblocksPresence = {
   cursor: { x: number; y: number } | null;
+  chat?: string | null;
+  laser?: boolean;
+  camera?: { x: number; y: number; zoom: number } | null;
 };
 
 type LiveblocksStorage = Record<string, never>;
@@ -81,6 +87,9 @@ function toRemotePresence(user: BoardLiveblocksUser): RemotePresence {
     userName: userName(user),
     cursorX: cursor?.x ?? null,
     cursorY: cursor?.y ?? null,
+    chat: user.presence.chat ?? null,
+    laser: user.presence.laser ?? false,
+    camera: user.presence.camera ?? null,
   };
 }
 
@@ -89,7 +98,7 @@ export function createPresenceConnection(boardId: string, handlers: PresenceHand
   const { room, leave } = getClient().enterRoom<LiveblocksPresence, LiveblocksStorage, LiveblocksRoomEvent>(
     roomIdForBoard(boardId),
     {
-      initialPresence: { cursor: null },
+      initialPresence: { cursor: null, chat: null, laser: false, camera: null },
     }
   );
   const boardRoom = room;
@@ -173,6 +182,11 @@ export function createPresenceConnection(boardId: string, handlers: PresenceHand
         typeof event.emoji === "string"
       ) {
         handlers.onReaction?.({ x: event.x, y: event.y, emoji: event.emoji });
+        return;
+      }
+
+      if (event.type === "timer:set" && event.timer && typeof event.timer === "object") {
+        handlers.onTimer?.(event.timer as unknown as TimerEventPayload);
       }
     })
   );
@@ -205,6 +219,16 @@ export function createPresenceConnection(boardId: string, handlers: PresenceHand
     sendReaction: (emoji: string, x: number, y: number) => {
       if (boardRoom.getStatus() === "disconnected") return false;
       boardRoom.broadcastEvent({ type: "reaction:burst", emoji, x, y } as unknown as LiveblocksRoomEvent);
+      return true;
+    },
+    sendTimer: (timer: TimerEventPayload) => {
+      if (boardRoom.getStatus() === "disconnected") return false;
+      boardRoom.broadcastEvent({ type: "timer:set", timer } as unknown as LiveblocksRoomEvent);
+      return true;
+    },
+    patchPresence: (fields: Partial<LiveblocksPresence>) => {
+      if (boardRoom.getStatus() === "disconnected") return false;
+      boardRoom.updatePresence(fields);
       return true;
     },
     close: () => {

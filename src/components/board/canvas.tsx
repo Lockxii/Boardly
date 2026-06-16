@@ -16,6 +16,7 @@ import { ShortcutsHelp } from "./shortcuts-help";
 import { ConnectionsLayer } from "./connections-layer";
 import { ConnectionTools } from "./connection-tools";
 import { CursorsPresence } from "./cursors-presence";
+import { CollabTools } from "./collab-tools";
 import { BoardSearchDialog } from "./board-search-dialog";
 import { LayerCommentsPanel } from "./layer-comments-panel";
 import { HtmlLayerOverlay } from "./html-layer-overlay";
@@ -1166,6 +1167,7 @@ export function Canvas({
           readOnly={readOnly}
         />
       )}
+      {roomId && !readOnly && <CollabTools />}
     </main>
   );
 }
