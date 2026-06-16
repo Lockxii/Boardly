@@ -359,11 +359,7 @@ function ToolbarContent({ onOpenLinkDialog }: { onOpenLinkDialog: () => void }) 
 
       <div className="relative">
         <ToolButton isActive={openMenu === "layers"} onClick={() => toggleMenu("layers")} icon={Layers} title="Calques" />
-        {openMenu === "layers" && (
-          <div className={submenuClass}>
-            <LayersPanel />
-          </div>
-        )}
+        {openMenu === "layers" && <LayersPanel />}
       </div>
 
       <div className={`bg-neutral-200 dark:bg-neutral-700 ${vertical ? "h-px w-5 my-0.5" : "h-5 w-px mx-0.5"}`} />

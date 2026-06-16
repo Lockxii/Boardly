@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 
 type Pos = { x: number; y: number };
 
@@ -45,6 +45,12 @@ export function useDraggable<T extends HTMLElement = HTMLDivElement>(options: { 
   const offset = useRef<Pos>({ x: 0, y: 0 });
   const [pos, setPos] = useState<Pos | null>(() => loadPos(storageKey));
   const [dragging, setDragging] = useState(false);
+
+  useLayoutEffect(() => {
+    if (!pos || !ref.current || typeof window === "undefined") return;
+    const next = clampToViewport(pos, { w: ref.current.offsetWidth, h: ref.current.offsetHeight });
+    if (next.x !== pos.x || next.y !== pos.y) setPos(next);
+  }, [pos]);
 
   const onPointerDown = useCallback((e: ReactPointerEvent) => {
     if (e.button !== 0) return;
