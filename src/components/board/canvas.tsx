@@ -17,6 +17,7 @@ import { ConnectionsLayer } from "./connections-layer";
 import { ConnectionTools } from "./connection-tools";
 import { CursorsPresence } from "./cursors-presence";
 import { CollabTools } from "./collab-tools";
+import { MusicPlaylist } from "./music-playlist";
 import { BoardSearchDialog } from "./board-search-dialog";
 import { LayerCommentsPanel } from "./layer-comments-panel";
 import { HtmlLayerOverlay } from "./html-layer-overlay";
@@ -1175,6 +1176,7 @@ export function Canvas({
         />
       )}
       {roomId && !readOnly && <CollabTools />}
+      {!readOnly && <MusicPlaylist />}
     </main>
   );
 }
