@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { useVoiceRecorder } from "@/lib/use-voice-recorder";
 import { nanoid } from "nanoid";
 import { useRef, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { LayersPanel } from "./layers-panel";
 import { motion } from "framer-motion";
 import type { Layer, LayerType } from "@/lib/types";
@@ -441,42 +442,47 @@ function VoiceRecorderPanel({
   onStop: () => void;
   onCancel: () => void;
 }) {
+  if (typeof document === "undefined") return null;
+
   return (
-    <div className="fixed bottom-6 left-1/2 z-[60] flex -translate-x-1/2 items-center gap-2 rounded-full border border-red-200 bg-white px-3 py-2 shadow-2xl shadow-red-950/10 dark:border-red-900/60 dark:bg-neutral-900">
-      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white">
-        <Mic className="h-4 w-4" />
-      </span>
-      <span className="min-w-12 text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">
-        {formatVoiceTime(elapsed)}
-      </span>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 rounded-full"
-        onClick={paused ? onResume : onPause}
-        title={paused ? "Reprendre" : "Pause"}
-      >
-        {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 rounded-full text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/40"
-        onClick={onStop}
-        title="Terminer"
-      >
-        <CircleStop className="h-4 w-4" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
-        onClick={onCancel}
-        title="Annuler"
-      >
-        <X className="h-4 w-4" />
-      </Button>
-    </div>
+    createPortal(
+      <div className="fixed bottom-6 left-1/2 z-[80] flex max-w-[calc(100vw-2rem)] -translate-x-1/2 items-center gap-2 rounded-full border border-red-200 bg-white px-3 py-2 shadow-2xl shadow-red-950/10 dark:border-red-900/60 dark:bg-neutral-900">
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-red-500 text-white">
+          <Mic className="h-4 w-4" />
+        </span>
+        <span className="min-w-12 text-sm font-semibold tabular-nums text-neutral-900 dark:text-white">
+          {formatVoiceTime(elapsed)}
+        </span>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full"
+          onClick={paused ? onResume : onPause}
+          title={paused ? "Reprendre" : "Pause"}
+        >
+          {paused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950/40"
+          onClick={onStop}
+          title="Terminer"
+        >
+          <CircleStop className="h-4 w-4" />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-full text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+          onClick={onCancel}
+          title="Annuler"
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      </div>,
+      document.body,
+    )
   );
 }
 
